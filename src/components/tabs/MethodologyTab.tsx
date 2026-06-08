@@ -91,52 +91,57 @@ const SECTIONS: Section[] = [
     color: 'amber',
     metrics: [
       {
-        label: '% Повышенное КВ (NEW)',
+        label: '% Повышенное КВ',
         field: 'cross_incr_kv',
-        formula: 'CrossIsBought = "Да" И ChargedToIncreasedKV ≠ null и ≠ 0',
-        note: 'Проверяется первым по приоритету. % = cross_incr_kv / cross_total',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И ChargedToIncreasedKV ≠ null и ≠ 0',
+        note: 'Условие независимо от FinalPrice — одна строка может попасть и в КВ, и в скидку. % = cross_incr_kv / cross_total',
       },
       {
         label: '% Скидка (Рен-бонусы)',
         field: 'cross_discount',
-        formula: 'CrossIsBought = "Да" И FinalPrice ≠ 2490 (если не попал в КВ)',
-        note: '% = cross_discount / cross_total',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И FinalPrice ≠ PolicyPrice (2490)',
+        note: 'Условие независимо от ChargedToIncreasedKV. % = cross_discount / cross_total',
       },
       {
         label: '% Базовый «Каско от бесполисных»',
         field: 'cross_base',
-        formula: 'CrossIsBought = "Да" И FinalPrice = 2490 (или null) И ChargedToIncreasedKV = 0',
-        note: '% = cross_base / cross_total',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И FinalPrice = PolicyPrice (2490) И ChargedToIncreasedKV = 0',
+        note: 'Ни скидки, ни КВ не применялось. % = cross_base / cross_total',
       },
     ],
   },
   {
-    title: 'Рен-бонусы',
+    title: 'Рен-бонусы — правила расчёта',
     color: 'rose',
     metrics: [
       {
-        label: 'Всего начислено бонусов',
-        field: 'bonus_accrued',
-        formula: 'Сумма LoyaltyPointsInLK для строк где State = "PolicyIssued"',
-        note: 'Только оформленные полисы. Без аббревиатур — точное число.',
+        label: 'Правило НАЧИСЛЕНИЯ',
+        field: 'accrual_count / bonus_accrued',
+        formula: 'State = "PolicyIssued" И LoyaltyPointsInLK > 0',
+        note: 'accrual_count = кол-во таких строк. bonus_accrued = сумма LoyaltyPointsInLK по ним.',
+      },
+      {
+        label: 'Правило СПИСАНИЯ (любого)',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И (ChargedToIncreasedKV ≠ null ИЛИ FinalPrice ≠ 2490)',
+        note: 'Условия КВ и скидки проверяются независимо. Одна строка может попасть в обе категории.',
+      },
+      {
+        label: 'Правило СПИСАНИЯ → скидка КВ',
+        field: 'bonus_spent_discount',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И FinalPrice ≠ PolicyPrice (2490) → PolicyPrice − FinalPrice',
+        note: 'Сумма скидки = PolicyPrice − FinalPrice. Условие независимо от ChargedToIncreasedKV.',
+      },
+      {
+        label: 'Правило СПИСАНИЯ → повышенное КВ',
+        field: 'bonus_spent_kv',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да" И ChargedToIncreasedKV ≠ null/0 → значение ChargedToIncreasedKV',
+        note: 'Поле ChargedToIncreasedKV содержит точную сумму, списанную в повышенное КВ. Условие независимо от FinalPrice.',
       },
       {
         label: 'Всего списано бонусов',
         field: 'bonus_spent_total',
         formula: 'bonus_spent_discount + bonus_spent_kv',
-        note: '% = bonus_spent_total / bonus_accrued. Без аббревиатур — точное число.',
-      },
-      {
-        label: '— в скидку Кросс-Каско',
-        field: 'bonus_spent_discount',
-        formula: 'Сумма (2490 − FinalPrice) где CrossIsBought = "Да" И FinalPrice ≠ 2490 И ChargedToIncreasedKV = 0',
-        note: '% = bonus_spent_discount / bonus_spent_total',
-      },
-      {
-        label: '— в повышенное КВ Кросс-Каско',
-        field: 'bonus_spent_kv',
-        formula: 'Сумма ChargedToIncreasedKV где CrossIsBought = "Да" И ChargedToIncreasedKV ≠ 0',
-        note: '% = bonus_spent_kv / bonus_spent_total',
+        note: '% = bonus_spent_total / bonus_accrued',
       },
     ],
   },
@@ -165,6 +170,16 @@ export default function MethodologyTab() {
           &nbsp;и&nbsp;
           <code className="bg-red-100 px-1.5 py-0.5 rounded font-mono">PolicyTerminated</code>.
           Все остальные статусы учитываются.
+        </p>
+      </div>
+
+      {/* Важное замечание о независимости условий */}
+      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+        <h2 className="text-sm font-bold text-orange-800 uppercase tracking-wide mb-2">Важно: условия списания независимы</h2>
+        <p className="text-sm text-orange-700">
+          Начиная с текущей версии, условия списания в <strong>скидку КВ</strong> и в <strong>повышенное КВ</strong> проверяются независимо.
+          Одна строка может одновременно попасть в оба счётчика, если <code className="bg-orange-100 px-1 rounded font-mono">FinalPrice ≠ 2490</code> <strong>и</strong>{' '}
+          <code className="bg-orange-100 px-1 rounded font-mono">ChargedToIncreasedKV ≠ 0</code>.
         </p>
       </div>
 
@@ -224,10 +239,10 @@ export default function MethodologyTab() {
             {[
               ['I',  'CreateDate',            'Дата создания котировки'],
               ['J',  'State',                 'Статус: PolicyIssued / Refused / PolicyAnnulled и др.'],
-              ['T',  'LoyaltyPointsInLK',     'Баллы Рен-бонусов в ЛК — используется для определения наличия бонуса и как сумма начисленного'],
+              ['T',  'LoyaltyPointsInLK',     'Баллы Рен-бонусов в ЛК — текущий баланс агента на момент котировки'],
               ['AF', 'CrossIsBought',         '"Да" / "Нет" — куплен ли Кросс-Каско'],
-              ['AG', 'FinalPrice',            'Итоговая цена Кросс-Каско (руб.). Базовая = 2490'],
-              ['AH', 'ChargedToIncreasedKV',  'Сумма повышенного КВ (руб.), null если не применялось'],
+              ['AG', 'FinalPrice',            'Итоговая цена Кросс-Каско (руб.). PolicyPrice (базовая) = 2490'],
+              ['AH', 'ChargedToIncreasedKV',  'Сумма, списанная в повышенное КВ (руб.); null/0 если не применялось'],
             ].map(([col, field, desc]) => (
               <tr key={field} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
                 <td className="px-4 py-2.5 font-mono font-bold text-gray-400 text-center">{col}</td>

@@ -49,23 +49,26 @@ const ROWS: RowDef[] = [
   { kind: 'section', label: 'Из чего состоит Кросс-Каско' },
   { kind: 'sub', label: '% Базовый «Каско от бесполисных»', getCount: m => m.cross_base,     getPct: m => pct(m.cross_base,     m.cross_total), higherIsBetter: false },
   { kind: 'sub', label: '% Скидка (Рен-бонусы)',            getCount: m => m.cross_discount,  getPct: m => pct(m.cross_discount,  m.cross_total), hl: 'amber', higherIsBetter: true },
-  { kind: 'sub', label: '% Повышенное КВ (NEW)',            getCount: m => m.cross_incr_kv,   getPct: m => pct(m.cross_incr_kv,   m.cross_total), hl: 'green', higherIsBetter: true },
+  { kind: 'sub', label: '% Повышенное КВ',                  getCount: m => m.cross_incr_kv,   getPct: m => pct(m.cross_incr_kv,   m.cross_total), hl: 'green', higherIsBetter: true },
   { kind: 'sep', label: '' },
 
   { kind: 'section', label: 'Рен-бонусы' },
-  { kind: 'data', label: 'Всего начислено бонусов',         getCount: m => m.bonus_accrued },
-  { kind: 'data', label: 'Всего списано бонусов',           getCount: m => m.bonus_spent_total, getPct: m => pct(m.bonus_spent_total, m.bonus_accrued) },
-  { kind: 'sub',  label: '— в скидку Кросс-Каско',         getBig: m => m.bonus_spent_discount, getPct: m => pct(m.bonus_spent_discount, m.bonus_spent_total) },
-  { kind: 'sub',  label: '— в повышенное КВ Кросс-Каско',  getBig: m => m.bonus_spent_kv,       getPct: m => pct(m.bonus_spent_kv,       m.bonus_spent_total) },
+  { kind: 'data', label: 'Кол-во начислений (событий)',      getCount: m => m.accrual_count },
+  { kind: 'data', label: 'Всего начислено бонусов',          getBig: m => m.bonus_accrued },
+  { kind: 'data', label: 'Всего списано бонусов',            getBig: m => m.bonus_spent_total, getPct: m => pct(m.bonus_spent_total, m.bonus_accrued) },
+  { kind: 'sub',  label: '— в скидку Кросс-Каско',          getBig: m => m.bonus_spent_discount, getPct: m => pct(m.bonus_spent_discount, m.bonus_spent_total) },
+  { kind: 'sub',  label: '— в повышенное КВ Кросс-Каско',   getBig: m => m.bonus_spent_kv,       getPct: m => pct(m.bonus_spent_kv,       m.bonus_spent_total) },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtN = (v: number) => v.toLocaleString('ru-RU')
 const fmtBig = (v: number) =>
-  v >= 1_000_000 ? (v / 1_000_000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' млн'
-  : v >= 1_000   ? (v / 1_000).toLocaleString('ru-RU',     { maximumFractionDigits: 1 }) + ' тыс'
+  v >= 1_000_000 ? (v / 1_000_000).toLocaleString('ru-RU', { maximumFractionDigits: 1 }) + ' млн'
+  : v >= 1_000   ? (v / 1_000).toLocaleString('ru-RU',     { maximumFractionDigits: 1 }) + ' тыс'
   : fmtN(v)
 
+const fmtAvg = (v: number) =>
+  Number.isFinite(v) ? v.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) : '—'
 
 function calcTrend(cur: number | null, prev: number | null, higher: boolean): 'better' | 'worse' | null {
   if (cur == null || prev == null) return null
@@ -84,6 +87,16 @@ function partialLabel(m: MonthMetrics): string | undefined {
   return `${mn.getDate()}–${mx.getDate()} ${moRu}`
 }
 
+// ─── Блок средних значений ────────────────────────────────────────────────────
+function AvgCard({ title, value, sub }: { title: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-white rounded-xl border border-rose-200 p-4 flex flex-col gap-1">
+      <p className="text-xs text-rose-500 font-medium uppercase tracking-wide">{title}</p>
+      <p className="text-2xl font-bold text-gray-800">{value}</p>
+      {sub && <p className="text-xs text-gray-400">{sub}</p>}
+    </div>
+  )
+}
 
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function FunnelTab({ result }: { result: AggregateResult }) {
@@ -131,12 +144,20 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
     return out
   }, [years, byYear, collapsed, totals])
 
+  // ─── Средние показатели (пункт 5) ─────────────────────────────────────────
+  const n = months.length
+  const avgAccrualBalance = totals.accrual_count > 0
+    ? totals.bonus_accrued / totals.accrual_count
+    : 0
+  const avgAccrualCount   = n > 0 ? totals.accrual_count / n : 0
+  const avgSpendingCount  = n > 0 ? (totals.cross_total - totals.cross_base) / n : 0
+  const avgDiscountCount  = n > 0 ? totals.cross_discount / n : 0
+  const avgKvCount        = n > 0 ? totals.cross_incr_kv / n : 0
+
   // ─── cell background helpers ──────────────────────────────────────────────
-  // stickyBg: для STICKY ячеек — всегда непрозрачный фон, чтобы не просвечивал контент
   function stickyBg(col: ColSpec) {
     return col.isTotal ? 'bg-blue-50' : col.isYearSummary ? 'bg-violet-50' : 'bg-gray-50'
   }
-  // dataBg: для обычных (не sticky) ячеек данных — регулярные месяцы прозрачны (hover от <tr>)
   function dataBg(col: ColSpec) {
     return col.isTotal ? 'bg-blue-50' : col.isYearSummary ? 'bg-violet-50/40' : ''
   }
@@ -169,12 +190,11 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
         })}
       </div>
 
-      {/* ── Table — единый контейнер прокрутки (x+y), thead sticky top:0 ── */}
+      {/* ── Table ─────────────────────────────────────────────────────────── */}
       <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
         <table className="w-full text-sm border-collapse">
 
           <thead>
-            {/* Row 1: month / year / total headers */}
             <tr>
               <th className="sticky top-0 left-0 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[272px] border-b border-gray-200">
                 Метрика
@@ -194,7 +214,6 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
               ))}
             </tr>
 
-            {/* Row 2: кол-во | % sub-headers */}
             <tr>
               <th className="sticky top-[40px] left-0 z-30 bg-gray-50 border-b-2 border-gray-200" />
               {cols.map(col => (
@@ -215,16 +234,12 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
           <tbody>
             {ROWS.map((row, ri) => {
 
-              // ── Separator ──────────────────────────────────────────────────
               if (row.kind === 'sep') return (
                 <tr key={`sp${ri}`}>
                   <td colSpan={1 + cols.length * 2} className="h-px bg-gray-200" />
                 </tr>
               )
 
-              // ── Section header ──────────────────────────────────────────────
-              // Только sticky left-0 (горизонт.) — вертикальный sticky убран,
-              // иначе заголовок секции перекрывает строки данных при прокрутке
               if (row.kind === 'section') return (
                 <tr key={`sc${ri}`} className="border-t-2 border-yellow-200">
                   <td className="sticky left-0 z-10 bg-yellow-50 px-4 py-2 text-xs font-bold text-yellow-800 uppercase tracking-wider">
@@ -239,16 +254,12 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
                 </tr>
               )
 
-              // ── Data row ───────────────────────────────────────────────────
               const isIndent = row.kind === 'sub'
-              // 'data' rows = строки «ВСЕГО» — делаем sticky под заголовком секции
               const isTotalRow = row.kind === 'data'
               const pctCls = 'text-blue-700 font-semibold'
 
               return (
                 <tr key={`dr${ri}`} className="group border-t border-gray-100 hover:bg-gray-50/80 transition-colors">
-
-                  {/* Label — sticky left only (вертикальный sticky убран — он перекрывал sub-строки) */}
                   <td
                     className={`sticky left-0 z-10 bg-white group-hover:bg-gray-50/80 transition-colors px-4 py-2.5 text-gray-700
                       ${isIndent ? 'pl-8 text-xs text-gray-500' : 'font-medium'}
@@ -272,14 +283,11 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
 
                     return (
                       <Fragment key={col.key}>
-                        {/* кол-во */}
                         <td className={`px-3 py-2.5 text-right tabular-nums text-gray-700 ${bg} ${fw}`}>
                           {big  != null ? fmtBig(big)
                            : cnt != null ? fmtN(cnt)
                            : <span className="text-gray-300">—</span>}
                         </td>
-
-                        {/* % с трендом */}
                         <td className={`px-2 py-2.5 text-center tabular-nums ${bg} ${bl}`}>
                           {pctVal != null ? (
                             <span className="inline-flex items-center justify-center gap-0.5">
@@ -297,6 +305,93 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
                 </tr>
               )
             })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {/* ── Средние показатели Рен-бонусов (пункт 5) ─────────────────────── */}
+    <div className="bg-white rounded-xl border border-rose-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-rose-100 bg-rose-50">
+        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wide">
+          Средние показатели Рен-бонусов
+        </h3>
+        <p className="text-xs text-rose-400 mt-0.5">
+          Среднее арифметическое по {n} месяцам наблюдений
+        </p>
+      </div>
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
+        <AvgCard
+          title="Ср. баланс бонусов"
+          value={fmtAvg(avgAccrualBalance)}
+          sub="Рен-бонусов на 1 клиента с бонусами"
+        />
+        <AvgCard
+          title="Ср. начислений / мес."
+          value={fmtAvg(avgAccrualCount)}
+          sub="Событий начисления за месяц"
+        />
+        <AvgCard
+          title="Ср. списаний итого / мес."
+          value={fmtAvg(avgSpendingCount)}
+          sub="Событий списания (КВ или скидка) за месяц"
+        />
+        <AvgCard
+          title="Ср. списаний в скидку / мес."
+          value={fmtAvg(avgDiscountCount)}
+          sub="Событий списания в скидку КВ за месяц"
+        />
+        <AvgCard
+          title="Ср. списаний в КВ / мес."
+          value={fmtAvg(avgKvCount)}
+          sub="Событий списания в повышенное КВ за месяц"
+        />
+      </div>
+
+      {/* Детальная таблица средних */}
+      <div className="border-t border-rose-100 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-rose-50 text-xs text-rose-500 uppercase tracking-wide">
+            <tr>
+              <th className="px-4 py-2 text-left">Показатель</th>
+              <th className="px-4 py-2 text-right">Итого (за всё время)</th>
+              <th className="px-4 py-2 text-right">Среднее в месяц</th>
+            </tr>
+          </thead>
+          <tbody className="text-gray-700">
+            {[
+              {
+                label: 'Баланс Рен-бонусов (на клиента с бонусами)',
+                total: totals.accrual_count > 0 ? `${fmtN(Math.round(totals.bonus_accrued / totals.accrual_count))} баллов` : '—',
+                avg: `${fmtAvg(avgAccrualBalance)} баллов`,
+              },
+              {
+                label: 'Кол-во начислений',
+                total: fmtN(totals.accrual_count),
+                avg: fmtAvg(avgAccrualCount),
+              },
+              {
+                label: 'Кол-во списаний итого',
+                total: fmtN(totals.cross_total - totals.cross_base),
+                avg: fmtAvg(avgSpendingCount),
+              },
+              {
+                label: 'Кол-во списаний → скидка КВ',
+                total: fmtN(totals.cross_discount),
+                avg: fmtAvg(avgDiscountCount),
+              },
+              {
+                label: 'Кол-во списаний → повышенное КВ',
+                total: fmtN(totals.cross_incr_kv),
+                avg: fmtAvg(avgKvCount),
+              },
+            ].map((r, i) => (
+              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+                <td className="px-4 py-2.5">{r.label}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums font-medium">{r.total}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums text-rose-600 font-semibold">{r.avg}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>

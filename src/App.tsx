@@ -4,12 +4,18 @@ import type { AggregateResult } from './types'
 import UploadTab from './components/tabs/UploadTab'
 import FunnelTab from './components/tabs/FunnelTab'
 import MethodologyTab from './components/tabs/MethodologyTab'
+import DistributionTab from './components/tabs/DistributionTab'
+import AnomaliesTab from './components/tabs/AnomaliesTab'
+import EngagementTab from './components/tabs/EngagementTab'
 
-type Tab = 'upload' | 'funnel' | 'methodology'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'anomalies' | 'engagement' | 'methodology'
 
 const TABS: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload', label: '📂 Загрузка' },
-  { id: 'funnel', label: '📊 Воронка', needsData: true },
+  { id: 'upload',      label: '📂 Загрузка' },
+  { id: 'funnel',      label: '📊 Воронка',       needsData: true },
+  { id: 'distribution',label: '📈 Распределение', needsData: true },
+  { id: 'anomalies',   label: '⚠️ Аномалии',      needsData: true },
+  { id: 'engagement',  label: '👥 Вовлечённость',  needsData: true },
   { id: 'methodology', label: 'Методология' },
 ]
 
@@ -40,7 +46,6 @@ export default function App() {
     setLoading(true)
     setLoadingName(filename)
     setError(null)
-    // defer heavy work so React can render the spinner first
     setTimeout(() => {
       try {
         const rows = parseWorkbook(data)
@@ -112,9 +117,12 @@ export default function App() {
 
         {loading && <Spinner filename={loadingName} />}
 
-        {!loading && tab === 'upload'      && <UploadTab onFile={handleFile} />}
-        {!loading && tab === 'funnel'      && result && <FunnelTab result={result} />}
-        {!loading && tab === 'methodology' && <MethodologyTab />}
+        {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} />}
+        {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
+        {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
+        {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
+        {!loading && tab === 'engagement'    && result && <EngagementTab rawRows={result.rawRows} />}
+        {!loading && tab === 'methodology'   && <MethodologyTab />}
       </main>
     </div>
   )

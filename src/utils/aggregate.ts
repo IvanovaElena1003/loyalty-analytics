@@ -62,6 +62,7 @@ function emptyBucket(label: string, sortKey: string): MonthMetrics {
     cross_total: 0, cross_no_bonus: 0, cross_with_bonus: 0,
     conv_cross: null, conv_cross_nb: null, conv_cross_wb: null,
     cross_base: 0, cross_discount: 0, cross_incr_kv: 0,
+    accrual_count: 0,
     bonus_accrued: 0, bonus_spent_discount: 0, bonus_spent_kv: 0, bonus_spent_total: 0,
   }
 }
@@ -97,6 +98,7 @@ export function mergeMetrics(months: MonthMetrics[], label: string, sortKey: str
     b.cross_base += m.cross_base
     b.cross_discount += m.cross_discount
     b.cross_incr_kv += m.cross_incr_kv
+    b.accrual_count += m.accrual_count
     b.bonus_accrued += m.bonus_accrued
     b.bonus_spent_discount += m.bonus_spent_discount
     b.bonus_spent_kv += m.bonus_spent_kv
@@ -116,6 +118,8 @@ export function parseWorkbook(data: ArrayBuffer): RawRow[] {
 
 export function aggregate(rows: RawRow[]): AggregateResult {
   const buckets = new Map<string, MonthMetrics>()
+  const accrualValues: number[] = []
+  const spendingValues: number[] = []
 
   for (const row of rows) {
     const state = String(row.State ?? '')
@@ -141,32 +145,53 @@ export function aggregate(rows: RawRow[]): AggregateResult {
     b.total_quotes++
     if (bonus) b.quotes_with_bonus++; else b.quotes_no_bonus++
 
-    // Block 2 + 5 — только оформленные полисы (PolicyIssued)
+    // Block 2 — только оформленные полисы (PolicyIssued)
     if (issued) {
       b.issued_total++
       if (bonus) b.issued_with_bonus++; else b.issued_no_bonus++
 
-      // Block 5 — начислено бонусов (только PolicyIssued, поле LoyaltyPointsInLK)
-      b.bonus_accrued += toNumber(row.LoyaltyPointsInLK)
+      // Правило НАЧИСЛЕНИЯ: State = PolicyIssued И LoyaltyPointsInLK > 0
+      const loyPoints = toNumber(row.LoyaltyPointsInLK)
+      if (loyPoints > 0) {
+        b.accrual_count++
+        b.bonus_accrued += loyPoints
+        accrualValues.push(loyPoints)
+      }
 
-      // Block 3 + 4 — Кросс-Каско (PolicyIssued + CrossIsBought)
+      // Block 3+4 — Кросс-Каско (PolicyIssued + CrossIsBought = Да)
       if (crossBought) {
         b.cross_total++
         if (bonus) b.cross_with_bonus++; else b.cross_no_bonus++
 
+        // PolicyPrice: берём из данных, иначе базовая цена 2490
+        const policyPrice = !isNull(row.PolicyPrice) ? toNumber(row.PolicyPrice) : BASE_PRICE
         const incrKV = toNumber(row.ChargedToIncreasedKV)
         const finalPrice = toNumber(row.FinalPrice)
 
-        // Block 5 — списано бонусов (только PolicyIssued + CrossIsBought)
-        if (!isNull(row.ChargedToIncreasedKV) && incrKV !== 0) {
+        // Правило СПИСАНИЯ В ПОВЫШЕННОЕ КВ: ChargedToIncreasedKV ≠ null/0
+        const hasKV = !isNull(row.ChargedToIncreasedKV) && incrKV !== 0
+
+        // Правило СПИСАНИЯ В СКИДКУ КВ: FinalPrice ≠ PolicyPrice (условие независимо от КВ)
+        const hasDiscount = !isNull(row.FinalPrice) && finalPrice !== policyPrice
+
+        if (hasKV) {
           b.cross_incr_kv++
           b.bonus_spent_kv += incrKV
-        } else if (!isNull(row.FinalPrice) && finalPrice !== BASE_PRICE) {
+        }
+
+        if (hasDiscount) {
           b.cross_discount++
-          b.bonus_spent_discount += (BASE_PRICE - finalPrice)
-        } else {
+          b.bonus_spent_discount += (policyPrice - finalPrice)
+        }
+
+        // Базовый: ни скидки, ни КВ
+        if (!hasKV && !hasDiscount) {
           b.cross_base++
         }
+
+        // Для распределения: суммарное списание по данной строке
+        const rowSpend = (hasKV ? incrKV : 0) + (hasDiscount ? policyPrice - finalPrice : 0)
+        if (rowSpend > 0) spendingValues.push(rowSpend)
       }
     }
   }
@@ -189,10 +214,11 @@ export function aggregate(rows: RawRow[]): AggregateResult {
     tot.cross_base += m.cross_base
     tot.cross_discount += m.cross_discount
     tot.cross_incr_kv += m.cross_incr_kv
+    tot.accrual_count += m.accrual_count
     tot.bonus_accrued += m.bonus_accrued
     tot.bonus_spent_discount += m.bonus_spent_discount
     tot.bonus_spent_kv += m.bonus_spent_kv
   }
 
-  return { months, totals: finalise(tot) }
+  return { months, totals: finalise(tot), accrualValues, spendingValues, rawRows: rows }
 }

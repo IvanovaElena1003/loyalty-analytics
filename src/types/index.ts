@@ -2,8 +2,10 @@ export interface RawRow {
   CreateDate: number | string | Date
   State: string
   LoyaltyPointsInLK: number | string | null
+  LoyaltyPointsScoring: number | string | null  // значение с дробной частью; InLK = floor(Scoring)
   CrossIsBought: string
   FinalPrice: number | string | null
+  PolicyPrice?: number | string | null   // базовая цена полиса (если есть в данных, иначе 2490)
   ChargedToIncreasedKV: number | string | null
   [key: string]: unknown
 }
@@ -35,19 +37,38 @@ export interface MonthMetrics {
   conv_cross_nb: number | null
   conv_cross_wb: number | null
 
-  // Block 4 — Состав Кросс-Каско
-  cross_base: number
-  cross_discount: number
-  cross_incr_kv: number
+  // Block 4 — Состав Кросс-Каско (условия независимы: строка может попасть в обе категории)
+  cross_base: number      // FinalPrice = PolicyPrice И ChargedToIncreasedKV = 0
+  cross_discount: number  // FinalPrice ≠ PolicyPrice (независимо от КВ)
+  cross_incr_kv: number   // ChargedToIncreasedKV ≠ 0 (независимо от скидки)
 
   // Block 5 — Рен-бонусы
-  bonus_accrued: number
+  accrual_count: number       // кол-во событий начисления: PolicyIssued И LoyaltyPointsInLK > 0
+  bonus_accrued: number       // сумма LoyaltyPointsInLK для тех же строк
   bonus_spent_discount: number
   bonus_spent_kv: number
   bonus_spent_total: number
 }
 
+export interface DistributionBucket {
+  label: string
+  from: number
+  to: number
+  count: number
+  pct: number
+}
+
+export interface DistributionData {
+  count: number
+  mean: number
+  std: number
+  buckets: DistributionBucket[]
+}
+
 export interface AggregateResult {
   months: MonthMetrics[]
   totals: MonthMetrics
+  accrualValues: number[]   // LoyaltyPointsInLK per qualifying PolicyIssued row
+  spendingValues: number[]  // total spend per CrossIsBought row with spending
+  rawRows: RawRow[]         // все исходные строки для вкладки Аномалии
 }
