@@ -54,6 +54,17 @@ function anomalyNote(row: RawRow): string | null {
   return null
 }
 
+// ─── Секция 0: двойное списание (FinalPrice ≠ PolicyPrice И ChargedToIncreasedKV ≠ 0) ──
+const BASE_PRICE = 2490
+
+function isDoubleSpend(row: RawRow): boolean {
+  const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE
+  const fp  = toNum(row.FinalPrice)
+  const kv  = toNum(row.ChargedToIncreasedKV)
+  return !isNullVal(row.FinalPrice) && fp !== policyPrice &&
+         !isNullVal(row.ChargedToIncreasedKV) && kv !== 0
+}
+
 // ─── Секция 2: все 10 ценовых колонок = 0 ───────────────────────────────────
 function allZero(row: RawRow): boolean {
   return ZERO_COLS.every(col => toNum(row[col]) === 0)
@@ -122,6 +133,27 @@ export default function AnomaliesTab({ rawRows }: Props) {
     const allAnomalyRows = months.flatMap(m => m.anomaly)
 
     return { months, totalAll, allAnomalyRows, noteMap }
+  }, [rawRows])
+
+  // ── Секция 0: двойное списание ──────────────────────────────────────────
+  const doubleSpendData = useMemo(() => {
+    const byMonth = new Map<string, { label: string; rows: RawRow[] }>()
+
+    for (const row of rawRows) {
+      if (!isDoubleSpend(row)) continue
+      const date = parseDate(row.CreateDate)
+      if (!date) continue
+      const key = mKey(date)
+      if (!byMonth.has(key)) byMonth.set(key, { label: mLabel(date), rows: [] })
+      byMonth.get(key)!.rows.push(row)
+    }
+
+    const months = Array.from(byMonth.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, v]) => ({ key, ...v }))
+
+    const allRows = months.flatMap(m => m.rows)
+    return { months, allRows }
   }, [rawRows])
 
   // ── Секция 2: все нули в ценовых колонках (State × Month) ───────────────
@@ -204,6 +236,130 @@ export default function AnomaliesTab({ rawRows }: Props) {
 
   return (
     <div className="space-y-8">
+
+      {/* ── Секция 0: двойное списание ── */}
+      <div className="bg-white rounded-xl border border-red-200 overflow-hidden">
+        <div className="px-5 py-4 bg-red-50 border-b border-red-200 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-bold text-red-800 text-base">
+              Строки с двойным списанием: FinalPrice ≠ 2490 И ChargedToIncreasedKV ≠ 0
+            </h2>
+            <p className="text-xs text-red-600 mt-1">
+              Одна строка попала в обе категории одновременно — и скидка КВ, и повышенное КВ.
+              Нажмите на число для скачивания xlsx с QuotationNumber и деталями.
+            </p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <div className={`text-3xl font-bold tabular-nums ${doubleSpendData.allRows.length > 0 ? 'text-red-600' : 'text-gray-300'}`}>
+              {fmtN(doubleSpendData.allRows.length)}
+            </div>
+            <div className="text-xs text-red-400">строк всего</div>
+          </div>
+        </div>
+
+        {doubleSpendData.allRows.length === 0 ? (
+          <div className="px-5 py-6 text-center text-green-600 text-sm font-medium">
+            Пересечений не найдено — данные корректны.
+          </div>
+        ) : (
+          <>
+            {/* Разбивка по месяцам */}
+            <div className="border-b border-gray-100">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left">Месяц</th>
+                    <th className="px-4 py-2 text-right">Строк</th>
+                    <th className="px-4 py-2 text-center">Скачать</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doubleSpendData.months.map(m => (
+                    <tr key={m.key} className="border-t border-gray-100 hover:bg-red-50/30">
+                      <td className="px-4 py-2 text-gray-700">{m.label}</td>
+                      <td className="px-4 py-2 text-right tabular-nums">
+                        <button
+                          onClick={() => downloadXlsx(m.rows, `double_spend_${m.key}.xlsx`)}
+                          className="text-red-600 font-semibold hover:underline inline-flex items-center gap-1"
+                        >
+                          {fmtN(m.rows.length)}
+                          <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded-full font-normal">↓ xlsx</span>
+                        </button>
+                      </td>
+                      <td className="px-4 py-2 text-center">
+                        <button
+                          onClick={() => downloadXlsx(m.rows, `double_spend_${m.key}.xlsx`)}
+                          className="text-xs bg-red-100 text-red-700 hover:bg-red-200 px-3 py-1 rounded-full"
+                        >
+                          ↓ xlsx
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="border-t-2 border-red-200 bg-red-50 font-semibold">
+                    <td className="px-4 py-2 text-red-800">ИТОГО</td>
+                    <td className="px-4 py-2 text-right tabular-nums">
+                      <button
+                        onClick={() => downloadXlsx(doubleSpendData.allRows, 'double_spend_all.xlsx')}
+                        className="text-red-700 hover:underline inline-flex items-center gap-1"
+                      >
+                        {fmtN(doubleSpendData.allRows.length)}
+                        <span className="text-[10px] bg-red-200 text-red-700 px-1.5 py-0.5 rounded-full font-normal">↓ xlsx</span>
+                      </button>
+                    </td>
+                    <td className="px-4 py-2 text-center">
+                      <button
+                        onClick={() => downloadXlsx(doubleSpendData.allRows, 'double_spend_all.xlsx')}
+                        className="text-xs bg-red-200 text-red-800 hover:bg-red-300 px-3 py-1 rounded-full"
+                      >
+                        ↓ все xlsx
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Таблица строк — QuotationNumber + детали */}
+            <div className="overflow-auto" style={{ maxHeight: '420px' }}>
+              <table className="w-full text-sm border-collapse">
+                <thead className="sticky top-0 bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200 z-10">
+                  <tr>
+                    <th className="px-3 py-2 text-left whitespace-nowrap">QuotationNumber</th>
+                    <th className="px-3 py-2 text-left whitespace-nowrap">CreateDate</th>
+                    <th className="px-3 py-2 text-left whitespace-nowrap">State</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">FinalPrice</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">Скидка (2490−FP)</th>
+                    <th className="px-3 py-2 text-right whitespace-nowrap">ChargedToIncreasedKV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {doubleSpendData.allRows.map((row, i) => {
+                    const fp        = toNum(row.FinalPrice)
+                    const kv        = toNum(row.ChargedToIncreasedKV)
+                    const discount  = BASE_PRICE - fp
+                    const date      = parseDate(row.CreateDate)
+                    const dateStr   = date ? date.toLocaleDateString('ru-RU') : '—'
+                    const qn        = String(row.QuotationNumber ?? row['QuotationNumber'] ?? '—')
+                    return (
+                      <tr key={i} className="border-t border-gray-100 hover:bg-red-50/40">
+                        <td className="px-3 py-2 font-mono text-xs text-gray-800">{qn}</td>
+                        <td className="px-3 py-2 text-gray-500 text-xs whitespace-nowrap">{dateStr}</td>
+                        <td className="px-3 py-2 text-gray-600 text-xs">{String(row.State ?? '—')}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-amber-700">{fmtN(fp)}</td>
+                        <td className="px-3 py-2 text-right tabular-nums text-purple-600">
+                          {discount > 0 ? `−${fmtN(discount)}` : fmtN(discount)}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums text-blue-600">{fmtN(kv)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Секция 1 ── */}
       <div className="bg-white rounded-xl border border-orange-200 overflow-hidden">
