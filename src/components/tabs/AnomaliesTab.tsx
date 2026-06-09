@@ -10,7 +10,11 @@ const ZERO_COLS = [
 ]
 
 // Строки с 01.03.2026 для Секции 1
-const CUTOFF = new Date(2026, 2, 1) // March 1, 2026
+const CUTOFF = new Date(2026, 2, 1) // March 1, 2026 local time
+
+// Отсечка для Секции 4: CreateDate ≤ 25.02.2026
+// Используем < Feb 26 (exclusive) = ≤ Feb 25 (inclusive) в локальном времени
+const AVAIL_CUTOFF = new Date(2026, 1, 26)
 
 // ─── Вспомогательные функции ─────────────────────────────────────────────────
 function isNullVal(v: unknown): boolean {
@@ -66,8 +70,25 @@ function isDoubleSpend(row: RawRow): boolean {
 }
 
 // ─── Секция 2: все 10 ценовых колонок = 0 ───────────────────────────────────
+// Задачи 2+3: исключаем строки где 2490 = 0 или AvailableForUsePoints = 0
 function allZero(row: RawRow): boolean {
+  // Исключаем строки, где поле 2490 имеет реальное значение = 0
+  if (!isNullVal(row['2490']) && toNum(row['2490']) === 0) return false
+  // Исключаем строки, где AvailableForUsePoints имеет реальное значение = 0
+  if (!isNullVal(row['AvailableForUsePoints']) && toNum(row['AvailableForUsePoints']) === 0) return false
   return ZERO_COLS.every(col => toNum(row[col]) === 0)
+}
+
+// ─── Секция 3: поле 2490 = 0 ────────────────────────────────────────────────
+function is2490Zero(row: RawRow): boolean {
+  return toNum(row['2490']) === 0
+}
+
+// ─── Секция 4: AvailableForUsePoints > LoyaltyPointsInLK ────────────────────
+function isAvailExcess(row: RawRow): boolean {
+  const avail = toNum(row['AvailableForUsePoints'])
+  const lk    = toNum(row['LoyaltyPointsInLK'])
+  return avail > lk
 }
 
 // ─── Excel download ──────────────────────────────────────────────────────────
@@ -93,6 +114,92 @@ function downloadAnomalyRows(rows: RawRow[], notes: Map<RawRow, string>, filenam
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
 const fmtPct = (n: number, d: number) =>
   d > 0 ? `${((n / d) * 100).toFixed(1)}%` : '—'
+
+// ─── Построение матрицы State × Month ────────────────────────────────────────
+// matchFn  — условие для «аномальных» строк
+// scopeFn  — ограничивает набор строк для знаменателя доли (по умолчанию все строки)
+type MatrixData = {
+  states: string[]
+  months: { key: string; label: string }[]
+  totalByStateMonth: Map<string, Map<string, number>>
+  totalByState: Map<string, number>
+  totalByMonth: Map<string, number>
+  grandTotalAll: number
+  matchByStateMonth: Map<string, Map<string, RawRow[]>>
+  matchByState: Map<string, RawRow[]>
+  matchByMonth: Map<string, RawRow[]>
+  matchAllRows: RawRow[]
+}
+
+function buildMatrix(
+  rawRows: RawRow[],
+  matchFn: (row: RawRow) => boolean,
+  scopeFn: (row: RawRow) => boolean = () => true,
+): MatrixData {
+  const totalByStateMonth = new Map<string, Map<string, number>>()
+  const totalByState      = new Map<string, number>()
+  const totalByMonth      = new Map<string, number>()
+  let grandTotalAll = 0
+  const monthLabels = new Map<string, string>()
+  const stateSet    = new Set<string>()
+
+  for (const row of rawRows) {
+    if (!scopeFn(row)) continue
+    const date = parseDate(row.CreateDate)
+    if (!date) continue
+    const key   = mKey(date)
+    const state = String(row.State ?? 'Unknown')
+    stateSet.add(state)
+    if (!monthLabels.has(key)) monthLabels.set(key, mLabel(date))
+
+    if (!totalByStateMonth.has(state)) totalByStateMonth.set(state, new Map())
+    const sm = totalByStateMonth.get(state)!
+    sm.set(key, (sm.get(key) ?? 0) + 1)
+    totalByState.set(state, (totalByState.get(state) ?? 0) + 1)
+    totalByMonth.set(key,   (totalByMonth.get(key)   ?? 0) + 1)
+    grandTotalAll++
+  }
+
+  const matchByStateMonth = new Map<string, Map<string, RawRow[]>>()
+  const matchByState      = new Map<string, RawRow[]>()
+  const matchByMonth      = new Map<string, RawRow[]>()
+  const matchAllRows: RawRow[] = []
+
+  for (const row of rawRows) {
+    if (!scopeFn(row)) continue
+    if (!matchFn(row)) continue
+    const date = parseDate(row.CreateDate)
+    if (!date) continue
+    const key   = mKey(date)
+    const state = String(row.State ?? 'Unknown')
+
+    if (!matchByStateMonth.has(state)) matchByStateMonth.set(state, new Map())
+    const sm2 = matchByStateMonth.get(state)!
+    if (!sm2.has(key)) sm2.set(key, [])
+    sm2.get(key)!.push(row)
+
+    if (!matchByState.has(state)) matchByState.set(state, [])
+    matchByState.get(state)!.push(row)
+    if (!matchByMonth.has(key)) matchByMonth.set(key, [])
+    matchByMonth.get(key)!.push(row)
+    matchAllRows.push(row)
+  }
+
+  const states = Array.from(stateSet).sort((a, b) => {
+    if (a === 'PolicyIssued') return -1
+    if (b === 'PolicyIssued') return 1
+    return a.localeCompare(b)
+  })
+  const months = Array.from(monthLabels.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, label]) => ({ key, label }))
+
+  return {
+    states, months,
+    totalByStateMonth, totalByState, totalByMonth, grandTotalAll,
+    matchByStateMonth, matchByState, matchByMonth, matchAllRows,
+  }
+}
 
 // ─── Props ───────────────────────────────────────────────────────────────────
 interface Props { rawRows: RawRow[] }
@@ -156,82 +263,28 @@ export default function AnomaliesTab({ rawRows }: Props) {
     return { months, allRows }
   }, [rawRows])
 
-  // ── Секция 2: все нули в ценовых колонках (State × Month) ───────────────
+  // ── Секция 2: все нули в ценовых колонках (без 2490=0 и без AvailableForUsePoints=0) ──
   const zeroData = useMemo(() => {
-    // Сначала считаем ОБЩЕЕ кол-во строк по (state, month) — для знаменателя доли
-    const totalByStateMonth = new Map<string, Map<string, number>>() // state → monthKey → count
-    const totalByState      = new Map<string, number>()              // state → total
-    const totalByMonth      = new Map<string, number>()              // monthKey → total
-    let grandTotalAll = 0
-
-    const monthLabels = new Map<string, string>() // monthKey → label
-    const stateSet    = new Set<string>()
-
-    for (const row of rawRows) {
-      const date = parseDate(row.CreateDate)
-      if (!date) continue
-      const key   = mKey(date)
-      const state = String(row.State ?? 'Unknown')
-      stateSet.add(state)
-      if (!monthLabels.has(key)) monthLabels.set(key, mLabel(date))
-
-      if (!totalByStateMonth.has(state)) totalByStateMonth.set(state, new Map())
-      const sm = totalByStateMonth.get(state)!
-      sm.set(key, (sm.get(key) ?? 0) + 1)
-
-      totalByState.set(state, (totalByState.get(state) ?? 0) + 1)
-      totalByMonth.set(key,   (totalByMonth.get(key)   ?? 0) + 1)
-      grandTotalAll++
-    }
-
-    // Строки где все нули — по (state, month)
-    const zeroByStateMonth = new Map<string, Map<string, RawRow[]>>() // state → monthKey → rows
-    const zeroByState      = new Map<string, RawRow[]>()              // state → rows
-    const zeroByMonth      = new Map<string, RawRow[]>()              // monthKey → rows
-    let   zeroAllRows: RawRow[] = []
-
-    for (const row of rawRows) {
-      if (!allZero(row)) continue
-      const date = parseDate(row.CreateDate)
-      if (!date) continue
-      const key   = mKey(date)
-      const state = String(row.State ?? 'Unknown')
-
-      if (!zeroByStateMonth.has(state)) zeroByStateMonth.set(state, new Map())
-      const sm = zeroByStateMonth.get(state)!
-      if (!sm.has(key)) sm.set(key, [])
-      sm.get(key)!.push(row)
-
-      if (!zeroByState.has(state)) zeroByState.set(state, [])
-      zeroByState.get(state)!.push(row)
-
-      if (!zeroByMonth.has(key)) zeroByMonth.set(key, [])
-      zeroByMonth.get(key)!.push(row)
-
-      zeroAllRows.push(row)
-    }
-
-    // Упорядоченные списки
-    const states = Array.from(stateSet).sort((a, b) => {
-      if (a === 'PolicyIssued') return -1
-      if (b === 'PolicyIssued') return 1
-      return a.localeCompare(b)
-    })
-    const months = Array.from(monthLabels.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([key, label]) => ({ key, label }))
-
-    // Проверяем, нашлись ли ценовые колонки в данных
+    const d = buildMatrix(rawRows, allZero)
     const foundCols = rawRows.length > 0
       ? ZERO_COLS.filter(col => rawRows.some(r => r[col] !== undefined))
       : []
+    return { ...d, foundCols }
+  }, [rawRows])
 
-    return {
-      states, months,
-      totalByStateMonth, totalByState, totalByMonth, grandTotalAll,
-      zeroByStateMonth, zeroByState, zeroByMonth, zeroAllRows,
-      foundCols,
-    }
+  // ── Секция 3: строки где 2490 = 0 ──────────────────────────────────────
+  const price2490Data = useMemo(() => buildMatrix(rawRows, is2490Zero), [rawRows])
+
+  // ── Секция 4: AvailableForUsePoints > LoyaltyPointsInLK (CreateDate ≤ 25.02.2026) ──
+  const availExcessData = useMemo(() => {
+    return buildMatrix(
+      rawRows,
+      isAvailExcess,
+      (row) => {
+        const d = parseDate(row.CreateDate)
+        return d !== null && d < AVAIL_CUTOFF
+      },
+    )
   }, [rawRows])
 
   return (
@@ -442,7 +495,7 @@ export default function AnomaliesTab({ rawRows }: Props) {
         )}
       </div>
 
-      {/* ── Секция 2 ── */}
+      {/* ── Секция 2: все ценовые колонки = 0 (без строк 2490=0 и AvailableForUsePoints=0) ── */}
       <div className="bg-white rounded-xl border border-purple-200 overflow-hidden">
         <div className="px-5 py-4 bg-purple-50 border-b border-purple-200">
           <h2 className="font-bold text-purple-800 text-base">
@@ -457,6 +510,8 @@ export default function AnomaliesTab({ rawRows }: Props) {
               </span>
             ))}
             {' '}— все = 0.{' '}
+            Исключены строки, где <code className="bg-purple-100 px-1 rounded text-[11px]">2490 = 0</code> или{' '}
+            <code className="bg-purple-100 px-1 rounded text-[11px]">AvailableForUsePoints = 0</code>.{' '}
             По вертикали — статусы (State), по горизонтали — месяцы.
             Каждая ячейка: <strong>кол-во</strong> таких строк и <strong>доля</strong> от всех котировок в этом статусе/месяце.
             Нажмите на ячейку для скачивания.
@@ -470,15 +525,14 @@ export default function AnomaliesTab({ rawRows }: Props) {
           )}
         </div>
 
-        {zeroData.zeroAllRows.length === 0 ? (
+        {zeroData.matchAllRows.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">
-            Нет строк, где все 10 ценовых колонок = 0
+            Нет строк, где все 10 ценовых колонок = 0 (с учётом исключений)
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
-                {/* Строка месяцев */}
                 <tr>
                   <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b-2 border-gray-200 min-w-[160px]">
                     Статус (State)
@@ -498,20 +552,17 @@ export default function AnomaliesTab({ rawRows }: Props) {
               </thead>
               <tbody>
                 {zeroData.states.map(state => {
-                  const stateZeroByMonth = zeroData.zeroByStateMonth.get(state)
-                  const stateZeroAll     = zeroData.zeroByState.get(state) ?? []
-                  const stateTotalAll    = zeroData.totalByState.get(state) ?? 0
+                  const stateMatchByMonth = zeroData.matchByStateMonth.get(state)
+                  const stateMatchAll     = zeroData.matchByState.get(state) ?? []
+                  const stateTotalAll     = zeroData.totalByState.get(state) ?? 0
 
                   return (
                     <tr key={state} className="border-t border-gray-100 hover:bg-purple-50/30 transition-colors">
-                      {/* Статус */}
                       <td className="sticky left-0 bg-white px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">
                         {state}
                       </td>
-
-                      {/* Ячейки по месяцам */}
                       {zeroData.months.map(m => {
-                        const rows  = stateZeroByMonth?.get(m.key) ?? []
+                        const rows  = stateMatchByMonth?.get(m.key) ?? []
                         const total = zeroData.totalByStateMonth.get(state)?.get(m.key) ?? 0
                         if (rows.length === 0) return (
                           <td key={m.key} className="px-3 py-2.5 text-center">
@@ -535,19 +586,17 @@ export default function AnomaliesTab({ rawRows }: Props) {
                           </td>
                         )
                       })}
-
-                      {/* ИТОГО по статусу */}
                       <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-100">
-                        {stateZeroAll.length > 0 ? (
+                        {stateMatchAll.length > 0 ? (
                           <button
-                            onClick={() => downloadXlsx(stateZeroAll, `zeros_${state}_all.xlsx`)}
+                            onClick={() => downloadXlsx(stateMatchAll, `zeros_${state}_all.xlsx`)}
                             className="inline-flex flex-col items-center gap-0.5 group"
                           >
                             <span className="font-semibold text-blue-700 group-hover:underline tabular-nums">
-                              {fmtN(stateZeroAll.length)}
+                              {fmtN(stateMatchAll.length)}
                             </span>
                             <span className="text-[10px] text-blue-400 tabular-nums">
-                              {fmtPct(stateZeroAll.length, stateTotalAll)}
+                              {fmtPct(stateMatchAll.length, stateTotalAll)}
                             </span>
                           </button>
                         ) : <span className="text-gray-200">—</span>}
@@ -555,14 +604,12 @@ export default function AnomaliesTab({ rawRows }: Props) {
                     </tr>
                   )
                 })}
-
-                {/* ИТОГО по всем статусам */}
                 <tr className="border-t-2 border-purple-300 bg-purple-50 font-semibold">
                   <td className="sticky left-0 bg-purple-50 px-4 py-2.5 text-purple-800">
                     ИТОГО (все статусы)
                   </td>
                   {zeroData.months.map(m => {
-                    const rows  = zeroData.zeroByMonth.get(m.key) ?? []
+                    const rows  = zeroData.matchByMonth.get(m.key) ?? []
                     const total = zeroData.totalByMonth.get(m.key) ?? 0
                     return (
                       <td key={m.key} className="px-3 py-2.5 text-center">
@@ -582,18 +629,305 @@ export default function AnomaliesTab({ rawRows }: Props) {
                       </td>
                     )
                   })}
-                  {/* Угловая ячейка ИТОГО × ИТОГО */}
                   <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-200">
-                    {zeroData.zeroAllRows.length > 0 ? (
+                    {zeroData.matchAllRows.length > 0 ? (
                       <button
-                        onClick={() => downloadXlsx(zeroData.zeroAllRows, 'zeros_all.xlsx')}
+                        onClick={() => downloadXlsx(zeroData.matchAllRows, 'zeros_all.xlsx')}
                         className="inline-flex flex-col items-center gap-0.5 group"
                       >
                         <span className="text-gray-800 group-hover:underline tabular-nums">
-                          {fmtN(zeroData.zeroAllRows.length)}
+                          {fmtN(zeroData.matchAllRows.length)}
                         </span>
                         <span className="text-[10px] text-gray-500 tabular-nums">
-                          {fmtPct(zeroData.zeroAllRows.length, zeroData.grandTotalAll)}
+                          {fmtPct(zeroData.matchAllRows.length, zeroData.grandTotalAll)}
+                        </span>
+                      </button>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Секция 3: строки где 2490 = 0 ── */}
+      <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+        <div className="px-5 py-4 bg-amber-50 border-b border-amber-200">
+          <h2 className="font-bold text-amber-800 text-base">
+            Котировки, где поле 2490 = 0
+          </h2>
+          <p className="text-xs text-amber-700 mt-1 leading-relaxed">
+            Строки, где значение поля <code className="bg-amber-100 px-1 rounded text-[11px]">2490</code> равно 0.
+            По вертикали — статусы (State), по горизонтали — месяцы.
+            Каждая ячейка: <strong>кол-во</strong> таких строк и <strong>доля</strong> от всех котировок в этом статусе/месяце.
+            Нажмите на ячейку для скачивания.
+          </p>
+        </div>
+
+        {price2490Data.matchAllRows.length === 0 ? (
+          <div className="p-8 text-center text-gray-400 text-sm">
+            Нет строк, где поле 2490 = 0
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b-2 border-gray-200 min-w-[160px]">
+                    Статус (State)
+                  </th>
+                  {price2490Data.months.map(m => (
+                    <th
+                      key={m.key}
+                      className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide border-b-2 border-gray-200 whitespace-nowrap min-w-[110px]"
+                    >
+                      {m.label}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-wide border-b-2 border-gray-200 border-l-2 border-l-blue-200 min-w-[110px]">
+                    ИТОГО
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {price2490Data.states.map(state => {
+                  const stateMatchByMonth = price2490Data.matchByStateMonth.get(state)
+                  const stateMatchAll     = price2490Data.matchByState.get(state) ?? []
+                  const stateTotalAll     = price2490Data.totalByState.get(state) ?? 0
+
+                  return (
+                    <tr key={state} className="border-t border-gray-100 hover:bg-amber-50/30 transition-colors">
+                      <td className="sticky left-0 bg-white px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">
+                        {state}
+                      </td>
+                      {price2490Data.months.map(m => {
+                        const rows  = stateMatchByMonth?.get(m.key) ?? []
+                        const total = price2490Data.totalByStateMonth.get(state)?.get(m.key) ?? 0
+                        if (rows.length === 0) return (
+                          <td key={m.key} className="px-3 py-2.5 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        return (
+                          <td key={m.key} className="px-3 py-2.5 text-center">
+                            <button
+                              onClick={() => downloadXlsx(rows, `p2490_${state}_${m.key}.xlsx`)}
+                              className="inline-flex flex-col items-center gap-0.5 group"
+                              title={`Скачать ${fmtN(rows.length)} строк`}
+                            >
+                              <span className="font-semibold text-amber-700 group-hover:underline tabular-nums">
+                                {fmtN(rows.length)}
+                              </span>
+                              <span className="text-[10px] text-amber-500 tabular-nums">
+                                {fmtPct(rows.length, total)}
+                              </span>
+                            </button>
+                          </td>
+                        )
+                      })}
+                      <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-100">
+                        {stateMatchAll.length > 0 ? (
+                          <button
+                            onClick={() => downloadXlsx(stateMatchAll, `p2490_${state}_all.xlsx`)}
+                            className="inline-flex flex-col items-center gap-0.5 group"
+                          >
+                            <span className="font-semibold text-blue-700 group-hover:underline tabular-nums">
+                              {fmtN(stateMatchAll.length)}
+                            </span>
+                            <span className="text-[10px] text-blue-400 tabular-nums">
+                              {fmtPct(stateMatchAll.length, stateTotalAll)}
+                            </span>
+                          </button>
+                        ) : <span className="text-gray-200">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+                <tr className="border-t-2 border-amber-300 bg-amber-50 font-semibold">
+                  <td className="sticky left-0 bg-amber-50 px-4 py-2.5 text-amber-800">
+                    ИТОГО (все статусы)
+                  </td>
+                  {price2490Data.months.map(m => {
+                    const rows  = price2490Data.matchByMonth.get(m.key) ?? []
+                    const total = price2490Data.totalByMonth.get(m.key) ?? 0
+                    return (
+                      <td key={m.key} className="px-3 py-2.5 text-center">
+                        {rows.length > 0 ? (
+                          <button
+                            onClick={() => downloadXlsx(rows, `p2490_all_${m.key}.xlsx`)}
+                            className="inline-flex flex-col items-center gap-0.5 group"
+                          >
+                            <span className="text-amber-800 group-hover:underline tabular-nums">
+                              {fmtN(rows.length)}
+                            </span>
+                            <span className="text-[10px] text-amber-600 tabular-nums">
+                              {fmtPct(rows.length, total)}
+                            </span>
+                          </button>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-200">
+                    {price2490Data.matchAllRows.length > 0 ? (
+                      <button
+                        onClick={() => downloadXlsx(price2490Data.matchAllRows, 'p2490_all.xlsx')}
+                        className="inline-flex flex-col items-center gap-0.5 group"
+                      >
+                        <span className="text-gray-800 group-hover:underline tabular-nums">
+                          {fmtN(price2490Data.matchAllRows.length)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 tabular-nums">
+                          {fmtPct(price2490Data.matchAllRows.length, price2490Data.grandTotalAll)}
+                        </span>
+                      </button>
+                    ) : <span className="text-gray-300">—</span>}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* ── Секция 4: AvailableForUsePoints > LoyaltyPointsInLK (CreateDate ≤ 25.02.2026) ── */}
+      <div className="bg-white rounded-xl border border-teal-200 overflow-hidden">
+        <div className="px-5 py-4 bg-teal-50 border-b border-teal-200">
+          <h2 className="font-bold text-teal-800 text-base">
+            AvailableForUsePoints &gt; LoyaltyPointsInLK (CreateDate ≤ 25.02.2026)
+          </h2>
+          <p className="text-xs text-teal-700 mt-1 leading-relaxed">
+            Среди строк с <code className="bg-teal-100 px-1 rounded text-[11px]">CreateDate ≤ 25 февраля 2026</code> —
+            найдены строки, где{' '}
+            <code className="bg-teal-100 px-1 rounded text-[11px]">AvailableForUsePoints</code> &gt;{' '}
+            <code className="bg-teal-100 px-1 rounded text-[11px]">LoyaltyPointsInLK</code>.
+            По вертикали — статусы (State), по горизонтали — месяцы.
+            Каждая ячейка: <strong>кол-во</strong> таких строк и <strong>доля</strong> от всех строк в этом
+            статусе/месяце с датой ≤ 25.02.2026.
+            Нажмите на ячейку для скачивания.
+          </p>
+        </div>
+
+        {availExcessData.grandTotalAll === 0 ? (
+          <div className="p-8 text-center text-gray-400 text-sm">
+            Нет строк с CreateDate ≤ 25.02.2026
+          </div>
+        ) : availExcessData.matchAllRows.length === 0 ? (
+          <div className="p-8 text-center text-green-600 text-sm font-medium">
+            Среди строк с CreateDate ≤ 25.02.2026 не найдено случаев AvailableForUsePoints &gt; LoyaltyPointsInLK
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm border-collapse">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-10 bg-gray-50 px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide border-b-2 border-gray-200 min-w-[160px]">
+                    Статус (State)
+                  </th>
+                  {availExcessData.months.map(m => (
+                    <th
+                      key={m.key}
+                      className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase tracking-wide border-b-2 border-gray-200 whitespace-nowrap min-w-[110px]"
+                    >
+                      {m.label}
+                    </th>
+                  ))}
+                  <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700 uppercase tracking-wide border-b-2 border-gray-200 border-l-2 border-l-blue-200 min-w-[110px]">
+                    ИТОГО
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {availExcessData.states.map(state => {
+                  const stateMatchByMonth = availExcessData.matchByStateMonth.get(state)
+                  const stateMatchAll     = availExcessData.matchByState.get(state) ?? []
+                  const stateTotalAll     = availExcessData.totalByState.get(state) ?? 0
+
+                  return (
+                    <tr key={state} className="border-t border-gray-100 hover:bg-teal-50/30 transition-colors">
+                      <td className="sticky left-0 bg-white px-4 py-2.5 font-medium text-gray-700 whitespace-nowrap">
+                        {state}
+                      </td>
+                      {availExcessData.months.map(m => {
+                        const rows  = stateMatchByMonth?.get(m.key) ?? []
+                        const total = availExcessData.totalByStateMonth.get(state)?.get(m.key) ?? 0
+                        if (rows.length === 0) return (
+                          <td key={m.key} className="px-3 py-2.5 text-center">
+                            <span className="text-gray-200">—</span>
+                          </td>
+                        )
+                        return (
+                          <td key={m.key} className="px-3 py-2.5 text-center">
+                            <button
+                              onClick={() => downloadXlsx(rows, `avail_excess_${state}_${m.key}.xlsx`)}
+                              className="inline-flex flex-col items-center gap-0.5 group"
+                              title={`Скачать ${fmtN(rows.length)} строк`}
+                            >
+                              <span className="font-semibold text-teal-700 group-hover:underline tabular-nums">
+                                {fmtN(rows.length)}
+                              </span>
+                              <span className="text-[10px] text-teal-500 tabular-nums">
+                                {fmtPct(rows.length, total)}
+                              </span>
+                            </button>
+                          </td>
+                        )
+                      })}
+                      <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-100">
+                        {stateMatchAll.length > 0 ? (
+                          <button
+                            onClick={() => downloadXlsx(stateMatchAll, `avail_excess_${state}_all.xlsx`)}
+                            className="inline-flex flex-col items-center gap-0.5 group"
+                          >
+                            <span className="font-semibold text-blue-700 group-hover:underline tabular-nums">
+                              {fmtN(stateMatchAll.length)}
+                            </span>
+                            <span className="text-[10px] text-blue-400 tabular-nums">
+                              {fmtPct(stateMatchAll.length, stateTotalAll)}
+                            </span>
+                          </button>
+                        ) : <span className="text-gray-200">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+                <tr className="border-t-2 border-teal-300 bg-teal-50 font-semibold">
+                  <td className="sticky left-0 bg-teal-50 px-4 py-2.5 text-teal-800">
+                    ИТОГО (все статусы)
+                  </td>
+                  {availExcessData.months.map(m => {
+                    const rows  = availExcessData.matchByMonth.get(m.key) ?? []
+                    const total = availExcessData.totalByMonth.get(m.key) ?? 0
+                    return (
+                      <td key={m.key} className="px-3 py-2.5 text-center">
+                        {rows.length > 0 ? (
+                          <button
+                            onClick={() => downloadXlsx(rows, `avail_excess_all_${m.key}.xlsx`)}
+                            className="inline-flex flex-col items-center gap-0.5 group"
+                          >
+                            <span className="text-teal-800 group-hover:underline tabular-nums">
+                              {fmtN(rows.length)}
+                            </span>
+                            <span className="text-[10px] text-teal-600 tabular-nums">
+                              {fmtPct(rows.length, total)}
+                            </span>
+                          </button>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                    )
+                  })}
+                  <td className="px-3 py-2.5 text-center border-l-2 border-l-blue-200">
+                    {availExcessData.matchAllRows.length > 0 ? (
+                      <button
+                        onClick={() => downloadXlsx(availExcessData.matchAllRows, 'avail_excess_all.xlsx')}
+                        className="inline-flex flex-col items-center gap-0.5 group"
+                      >
+                        <span className="text-gray-800 group-hover:underline tabular-nums">
+                          {fmtN(availExcessData.matchAllRows.length)}
+                        </span>
+                        <span className="text-[10px] text-gray-500 tabular-nums">
+                          {fmtPct(availExcessData.matchAllRows.length, availExcessData.grandTotalAll)}
                         </span>
                       </button>
                     ) : <span className="text-gray-300">—</span>}

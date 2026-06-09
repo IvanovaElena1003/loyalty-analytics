@@ -8,15 +8,15 @@ import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import EngagementTab from './components/tabs/EngagementTab'
 
-type Tab = 'upload' | 'funnel' | 'distribution' | 'anomalies' | 'engagement' | 'methodology'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'methodology' | 'anomalies'
 
 const TABS: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload',      label: '📂 Загрузка' },
-  { id: 'funnel',      label: '📊 Воронка',       needsData: true },
-  { id: 'distribution',label: '📈 Распределение', needsData: true },
-  { id: 'anomalies',   label: '⚠️ Аномалии',      needsData: true },
-  { id: 'engagement',  label: '👥 Вовлечённость',  needsData: true },
-  { id: 'methodology', label: 'Методология' },
+  { id: 'upload',       label: '📂 Загрузка' },
+  { id: 'funnel',       label: '📊 Воронка',        needsData: true },
+  { id: 'distribution', label: '📈 Распределение',  needsData: true },
+  { id: 'engagement',   label: '👥 Вовлечённость',   needsData: true },
+  { id: 'methodology',  label: 'Методология' },
+  { id: 'anomalies',    label: '⚠️ Аномалии',       needsData: true },
 ]
 
 function Spinner({ filename }: { filename: string }) {
@@ -120,9 +120,9 @@ export default function App() {
         {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
-        {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
         {!loading && tab === 'engagement'    && result && <EngagementTab rawRows={result.rawRows} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
+        {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
       </main>
     </div>
   )

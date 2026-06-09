@@ -34,7 +34,7 @@ function addCalMonths(d: Date, n: number): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1))
 }
 
-// ─── Bonus check (consistent with aggregate.ts) ───────────────────────────────
+// ─── Bonus / spending checks ──────────────────────────────────────────────────
 
 export function hasBonus(row: RawRow): boolean {
   const v = row.LoyaltyPointsInLK
@@ -42,6 +42,20 @@ export function hasBonus(row: RawRow): boolean {
   const s = String(v).trim()
   if (s === '' || s === '[NULL]') return false
   return Number(s) !== 0
+}
+
+/** Была ли строка «событием списания»: CrossIsBought = Да И (ChargedToIncreasedKV ≠ 0 ИЛИ FinalPrice ≠ PolicyPrice) */
+function hasSpending(row: RawRow): boolean {
+  if (String(row.CrossIsBought ?? '').trim() !== 'Да') return false
+  // Проверяем повышенное КВ
+  const kv = parseFloat(String(row.ChargedToIncreasedKV ?? ''))
+  if (!isNaN(kv) && kv !== 0) return true
+  // Проверяем скидку
+  const fp = parseFloat(String(row.FinalPrice ?? ''))
+  if (isNaN(fp)) return false
+  const ppRaw = row.PolicyPrice
+  const pp = ppRaw != null ? parseFloat(String(ppRaw)) : 2490
+  return !isNaN(pp) && fp !== pp
 }
 
 // ─── Statistics ───────────────────────────────────────────────────────────────
@@ -69,8 +83,10 @@ interface AgentInfo {
   fullName: string
   role: string
   rows: RawRow[]
-  t0: Date | null          // min date with bonus
-  bonusMonths: Set<string> // month keys where agent had LoyaltyPointsInLK > 0
+  t0: Date | null            // первая дата НАЧИСЛЕНИЯ (LoyaltyPointsInLK > 0)
+  t0Spending: Date | null    // первая дата СПИСАНИЯ (ChargedToIncreasedKV ≠ 0 ИЛИ FinalPrice ≠ PolicyPrice)
+  bonusMonths: Set<string>              // month keys where agent had LoyaltyPointsInLK > 0
+  bonusMonthCounts: Map<string, number> // month key → кол-во строк с LoyaltyPointsInLK > 0
 }
 
 function buildAgentMap(rawRows: RawRow[]): Map<string, AgentInfo> {
@@ -83,7 +99,7 @@ function buildAgentMap(rawRows: RawRow[]): Map<string, AgentInfo> {
     if (!map.has(renId)) {
       map.set(renId, {
         renId, fullName: '', role: '',
-        rows: [], t0: null, bonusMonths: new Set(),
+        rows: [], t0: null, t0Spending: null, bonusMonths: new Set(), bonusMonthCounts: new Map(),
       })
     }
     const a = map.get(renId)!
@@ -92,9 +108,16 @@ function buildAgentMap(rawRows: RawRow[]): Map<string, AgentInfo> {
     if (row.Role     && !a.role)     a.role     = String(row.Role)
 
     const d = parseEngDate(row.CreateDate)
-    if (hasBonus(row) && d) {
-      if (!a.t0 || d.getTime() < a.t0.getTime()) a.t0 = d
-      a.bonusMonths.add(toMonthKey(d))
+    if (d) {
+      if (hasBonus(row)) {
+        if (!a.t0 || d.getTime() < a.t0.getTime()) a.t0 = d
+        const mk = toMonthKey(d)
+        a.bonusMonths.add(mk)
+        a.bonusMonthCounts.set(mk, (a.bonusMonthCounts.get(mk) ?? 0) + 1)
+      }
+      if (hasSpending(row)) {
+        if (!a.t0Spending || d.getTime() < a.t0Spending.getTime()) a.t0Spending = d
+      }
     }
   }
   return map
@@ -109,7 +132,20 @@ function lastDate(rows: RawRow[]): string {
   return max ? new Date(max).toLocaleDateString('ru-RU') : '—'
 }
 
+// ─── T₀ mode ─────────────────────────────────────────────────────────────────
+/**
+ * 'accrual'  — T₀ = дата первого начисления (первая строка с LoyaltyPointsInLK > 0)
+ * 'spending' — T₀ = дата первого списания (первая строка c CrossIsBought=Да и KV ≠ 0 ИЛИ FinalPrice ≠ PolicyPrice)
+ */
+export type T0Mode = 'accrual' | 'spending'
+
 // ─── Section 1 types + compute ────────────────────────────────────────────────
+/**
+ * 'default'     — пул: есть ≥1 PolicyIssued; «попробовал» = любая строка с LoyaltyPointsInLK > 0
+ * 'all_agents'  — пул: все агенты;             «попробовал» = любая строка с LoyaltyPointsInLK > 0
+ * 'issued_only' — пул: есть ≥1 PolicyIssued;  «попробовал» = ≥1 PolicyIssued строка с LoyaltyPointsInLK > 0
+ */
+export type Section1Mode = 'default' | 'all_agents' | 'issued_only'
 
 export interface AgentExportRow {
   RenId: string
@@ -133,15 +169,22 @@ export interface Section1Result {
   allNotTried: AgentExportRow[]
 }
 
-export function computeSection1(rawRows: RawRow[]): Section1Result {
+export function computeSection1(rawRows: RawRow[], mode: Section1Mode = 'default'): Section1Result {
   const agentMap = buildAgentMap(rawRows)
   const roleMap  = new Map<string, RoleStats>()
 
   for (const a of agentMap.values()) {
-    if (!a.rows.some(r => r.State === 'PolicyIssued')) continue
+    const hasIssuedPolicy = a.rows.some(r => r.State === 'PolicyIssued')
+
+    // Фильтр пула
+    if (mode !== 'all_agents' && !hasIssuedPolicy) continue
+
+    // Критерий «попробовал»
+    const tried = mode === 'issued_only'
+      ? a.rows.some(r => r.State === 'PolicyIssued' && hasBonus(r))
+      : a.bonusMonths.size > 0
 
     const role  = a.role || 'Не указана'
-    const tried = a.bonusMonths.size > 0
     if (!roleMap.has(role)) roleMap.set(role, { role, total: 0, tried: 0, notTriedAgents: [] })
     const b = roleMap.get(role)!
     b.total++
@@ -187,7 +230,7 @@ export interface Section2Result {
   medianByOffset: (number | null)[]
 }
 
-export function computeSection2(rawRows: RawRow[]): Section2Result {
+export function computeSection2(rawRows: RawRow[], retentionThreshold = 1): Section2Result {
   const agentMap  = buildAgentMap(rawRows)
   const allMonths = new Set<string>()
   for (const row of rawRows) {
@@ -216,7 +259,9 @@ export function computeSection2(rawRows: RawRow[]): Section2Result {
     const retention = Array.from({ length: MAX }, (_, mo): number | null => {
       const targetKey = toMonthKey(addCalMonths(base, mo))
       if (!allMonths.has(targetKey)) return null
-      const active = cohort.agents.filter(a => a.bonusMonths.has(targetKey)).length
+      const active = cohort.agents.filter(
+        a => (a.bonusMonthCounts.get(targetKey) ?? 0) >= retentionThreshold
+      ).length
       return (active / cohort.agents.length) * 100
     })
 
@@ -233,7 +278,7 @@ export function computeSection2(rawRows: RawRow[]): Section2Result {
   return { cohorts, maxOffset: MAX, medianByOffset }
 }
 
-// ─── Section 3 types + compute ────────────────────────────────────────────────
+// ─── Section 3 types + compute ───────────────────────────────────────────────
 
 export interface WindowMetrics { quotations: number; issued: number; conversion: number; cross: number }
 export interface Section3Result {
@@ -244,7 +289,7 @@ export interface Section3Result {
   agentsTotal:    number
 }
 
-export function computeSection3(rawRows: RawRow[]): Section3Result | null {
+export function computeSection3(rawRows: RawRow[], t0Mode: T0Mode = 'accrual'): Section3Result | null {
   const agentMap = buildAgentMap(rawRows)
   const WIN_MS   = 60 * 86400000
 
@@ -255,9 +300,10 @@ export function computeSection3(rawRows: RawRow[]): Section3Result | null {
   let included = 0, total = 0
 
   for (const a of agentMap.values()) {
-    if (!a.t0) continue
+    const t0date = t0Mode === 'spending' ? a.t0Spending : a.t0
+    if (!t0date) continue
     total++
-    const t0 = a.t0.getTime()
+    const t0 = t0date.getTime()
 
     const before = a.rows.filter(r => {
       const d = parseEngDate(r.CreateDate)
@@ -298,4 +344,80 @@ export function computeSection3(rawRows: RawRow[]): Section3Result | null {
     agentsIncluded: included,
     agentsTotal:    total,
   }
+}
+
+// ─── Section 4 types + compute ───────────────────────────────────────────────
+// Кто первый раз получил баллы и после этого участил продажу полисов
+
+export interface Section4AgentRow {
+  RenId: string
+  ФИО: string
+  Роль: string
+  'Полисов до T₀ (60 дн.)': number
+  'Полисов после T₀ (60 дн.)': number
+  'Прирост': number
+}
+
+export interface Section4Result {
+  agentsTotal:    number   // всего агентов с t0
+  agentsAnalyzed: number   // с ≥ 3 строками в обоих окнах
+  agentsIncreased: number  // issued_after > issued_before
+  agentsSame:     number   // issued_after == issued_before
+  agentsDecreased: number  // issued_after < issued_before
+  increasedRows: Section4AgentRow[]  // отсортированы по приросту убыванию
+}
+
+export function computeSection4(rawRows: RawRow[], t0Mode: T0Mode = 'accrual'): Section4Result | null {
+  const agentMap = buildAgentMap(rawRows)
+  const WIN_MS   = 60 * 86400000
+
+  let agentsTotal = 0, agentsAnalyzed = 0
+  let agentsIncreased = 0, agentsSame = 0, agentsDecreased = 0
+  const increasedRows: Section4AgentRow[] = []
+
+  for (const a of agentMap.values()) {
+    const t0date = t0Mode === 'spending' ? a.t0Spending : a.t0
+    if (!t0date) continue
+    agentsTotal++
+    const t0 = t0date.getTime()
+
+    const before = a.rows.filter(r => {
+      const d = parseEngDate(r.CreateDate)
+      return d && d.getTime() >= t0 - WIN_MS && d.getTime() < t0
+    })
+    const after = a.rows.filter(r => {
+      const d = parseEngDate(r.CreateDate)
+      return d && d.getTime() >= t0 && d.getTime() < t0 + WIN_MS
+    })
+    if (before.length < 3 || after.length < 3) continue
+    agentsAnalyzed++
+
+    const countIssued = (rows: RawRow[]) =>
+      rows.filter(r => !EXCLUDED.has(String(r.State ?? '')) && r.State === 'PolicyIssued').length
+
+    const issuedBefore = countIssued(before)
+    const issuedAfter  = countIssued(after)
+
+    if (issuedAfter > issuedBefore) {
+      agentsIncreased++
+      increasedRows.push({
+        RenId: a.renId,
+        ФИО:   a.fullName || '—',
+        Роль:  a.role     || 'Не указана',
+        'Полисов до T₀ (60 дн.)':   issuedBefore,
+        'Полисов после T₀ (60 дн.)': issuedAfter,
+        'Прирост': issuedAfter - issuedBefore,
+      })
+    } else if (issuedAfter === issuedBefore) {
+      agentsSame++
+    } else {
+      agentsDecreased++
+    }
+  }
+
+  if (!agentsAnalyzed) return null
+
+  increasedRows.sort((a, b) => b['Прирост'] - a['Прирост'])
+
+  return { agentsTotal, agentsAnalyzed, agentsIncreased, agentsSame, agentsDecreased, increasedRows }
 }
