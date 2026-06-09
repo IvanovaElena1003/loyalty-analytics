@@ -133,11 +133,15 @@ function bucketName(from: number, to: number, mean: number, std: number): string
   return 'Около среднего'
 }
 
-/** keepEmptyNames — имена бакетов, которые остаются в таблице даже при count = 0 */
+/**
+ * keepEmptyNames — имена бакетов, которые остаются даже при count = 0
+ * maxBucketPct   — если бакет занимает > X% от total, он разбивается на два по медиане значений внутри
+ */
 function computeDist(
   values: number[],
   zeroCount: number,
   keepEmptyNames: string[] = [],
+  maxBucketPct = 100,
 ): LocalDistData {
   const total = values.length + zeroCount
   if (values.length === 0) {
@@ -159,6 +163,36 @@ function computeDist(
   const pts: number[] = [0]
   for (const p of rawPts) {
     if (p > pts[pts.length - 1] + 0.5) pts.push(p)
+  }
+
+  // Авто-сплит: если бакет > maxBucketPct% от total, делим его на две части по медиане
+  if (maxBucketPct < 100 && total > 0) {
+    const threshold = maxBucketPct / 100
+    const extraPts: number[] = []
+
+    // Конечные диапазоны (pts[i] – pts[i+1])
+    for (let i = 0; i < pts.length - 1; i++) {
+      const from = pts[i], to = pts[i + 1]
+      const inBucket = values.filter(v => v > from && v <= to)
+      if (inBucket.length / total > threshold) {
+        const sorted = [...inBucket].sort((a, b) => a - b)
+        const med = sorted[Math.floor((sorted.length - 1) / 2)]
+        if (med > from + 0.5 && med < to - 0.5) extraPts.push(med)
+      }
+    }
+    // Открытый диапазон (pts[last] – ∞)
+    const lastPt = pts[pts.length - 1]
+    const inLast = values.filter(v => v > lastPt)
+    if (inLast.length / total > threshold) {
+      const sorted = [...inLast].sort((a, b) => a - b)
+      const med = sorted[Math.floor((sorted.length - 1) / 2)]
+      if (med > lastPt + 0.5) extraPts.push(med)
+    }
+
+    for (const p of extraPts) {
+      if (!pts.some(x => Math.abs(x - p) < 0.5)) pts.push(p)
+    }
+    pts.sort((a, b) => a - b)
   }
 
   const ranges: { from: number; to: number }[] = []
@@ -484,9 +518,9 @@ export default function DistributionTab({ result }: Props) {
     () => computeDist(distData.accrualValues,  distData.accrualZeroCount),
     [distData]
   )
-  // п.7: всегда показываем бакет «Выше среднего» (даже если пустой)
+  // п.7: всегда показываем бакет «Выше среднего» + авто-сплит бакетов > 40%
   const spendingDist = useMemo(
-    () => computeDist(distData.spendingValues, distData.spendingZeroCount, ['Выше среднего']),
+    () => computeDist(distData.spendingValues, distData.spendingZeroCount, ['Выше среднего'], 40),
     [distData]
   )
 
@@ -495,9 +529,9 @@ export default function DistributionTab({ result }: Props) {
     () => extractPartnerAccrualValues(rawRows, selectedMonth),
     [rawRows, selectedMonth]
   )
-  // п.6: всегда показываем бакет «Ниже среднего» (даже если пустой)
+  // п.6: всегда показываем бакет «Ниже среднего» + авто-сплит бакетов > 40%
   const partnerAccrualDist = useMemo(
-    () => computeDist(partnerAccrualData.values, partnerAccrualData.zeroCount, ['Ниже среднего']),
+    () => computeDist(partnerAccrualData.values, partnerAccrualData.zeroCount, ['Ниже среднего'], 40),
     [partnerAccrualData]
   )
 
@@ -505,9 +539,9 @@ export default function DistributionTab({ result }: Props) {
     () => extractPartnerSpendingValues(rawRows, selectedMonth),
     [rawRows, selectedMonth]
   )
-  // п.6: всегда показываем бакет «Ниже среднего» (даже если пустой)
+  // п.6: всегда показываем бакет «Ниже среднего» + авто-сплит бакетов > 40%
   const partnerSpendingDist = useMemo(
-    () => computeDist(partnerSpendingData.values, partnerSpendingData.zeroCount, ['Ниже среднего']),
+    () => computeDist(partnerSpendingData.values, partnerSpendingData.zeroCount, ['Ниже среднего'], 40),
     [partnerSpendingData]
   )
 
@@ -548,10 +582,12 @@ export default function DistributionTab({ result }: Props) {
       </div>
 
       {/* ── В разрезе партнёров ── */}
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">В разрезе партнёров</span>
-        <div className="h-px flex-1 bg-gray-200" />
+      <div className="flex items-center gap-4">
+        <div className="h-0.5 flex-1 bg-blue-300" />
+        <span className="text-sm font-bold text-blue-700 uppercase tracking-wider whitespace-nowrap bg-blue-50 border border-blue-300 rounded-full px-5 py-1.5 shadow-sm">
+          👥 В разрезе партнёров
+        </span>
+        <div className="h-0.5 flex-1 bg-blue-300" />
       </div>
 
       {/* п.6 (был п.6 в чередовании): начисления в разрезе партнёров */}
@@ -579,10 +615,12 @@ export default function DistributionTab({ result }: Props) {
       />
 
       {/* ── В разрезе полисов ── */}
-      <div className="flex items-center gap-3">
-        <div className="h-px flex-1 bg-gray-200" />
-        <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider whitespace-nowrap">В разрезе полисов</span>
-        <div className="h-px flex-1 bg-gray-200" />
+      <div className="flex items-center gap-4">
+        <div className="h-0.5 flex-1 bg-emerald-300" />
+        <span className="text-sm font-bold text-emerald-700 uppercase tracking-wider whitespace-nowrap bg-emerald-50 border border-emerald-300 rounded-full px-5 py-1.5 shadow-sm">
+          📋 В разрезе полисов
+        </span>
+        <div className="h-0.5 flex-1 bg-emerald-300" />
       </div>
 
       {/* п.5: Распределение начислений по полису ОСАГО ФЛ */}
