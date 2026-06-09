@@ -7,14 +7,16 @@ import MethodologyTab from './components/tabs/MethodologyTab'
 import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import EngagementTab from './components/tabs/EngagementTab'
+import InsightsTab from './components/tabs/InsightsTab'
 
-type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'methodology' | 'anomalies'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'insights' | 'methodology' | 'anomalies'
 
 const TABS: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: '📂 Загрузка' },
   { id: 'funnel',       label: '📊 Воронка',        needsData: true },
   { id: 'distribution', label: '📈 Распределение',  needsData: true },
   { id: 'engagement',   label: '👥 Вовлечённость',   needsData: true },
+  { id: 'insights',     label: '💡 Выводы',          needsData: true },
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: '⚠️ Аномалии',       needsData: true },
 ]
@@ -121,6 +123,7 @@ export default function App() {
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
         {!loading && tab === 'engagement'    && result && <EngagementTab rawRows={result.rawRows} />}
+        {!loading && tab === 'insights'      && result && <InsightsTab result={result} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
       </main>
