@@ -8,8 +8,9 @@ import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import EngagementTab from './components/tabs/EngagementTab'
 import InsightsTab from './components/tabs/InsightsTab'
+import KeyMetricsTab from './components/tabs/KeyMetricsTab'
 
-type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'insights' | 'methodology' | 'anomalies'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'insights' | 'keymetrics' | 'methodology' | 'anomalies'
 
 const TABS: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: '📂 Загрузка' },
@@ -17,6 +18,7 @@ const TABS: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'distribution', label: '📈 Распределение',  needsData: true },
   { id: 'engagement',   label: '👥 Вовлечённость',   needsData: true },
   { id: 'insights',     label: '💡 Выводы',          needsData: true },
+  { id: 'keymetrics',   label: '🔑 Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: '🔧 Тех. вкладка',    needsData: true },
 ]
@@ -124,6 +126,7 @@ export default function App() {
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
         {!loading && tab === 'engagement'    && result && <EngagementTab rawRows={result.rawRows} />}
         {!loading && tab === 'insights'      && result && <InsightsTab result={result} />}
+        {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
       </main>
