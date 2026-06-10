@@ -84,17 +84,27 @@ function extractPartnerAccrualValues(rows: RawRow[], monthKey: string | null) {
   return { values, zeroCount }
 }
 
-/** Суммарные списанные Рен-бонусы по каждому партнёру (RenId) */
+/** Суммарные списанные Рен-бонусы по каждому партнёру (RenId) + доп. знаменатели для средних */
 function extractPartnerSpendingValues(rows: RawRow[], monthKey: string | null) {
-  const partnerTotals = new Map<string, number>()
+  const partnerTotals   = new Map<string, number>() // spending per partner
+  const accrualPartners = new Set<string>()          // партнёры с ≥1 начислением
+  const allPartners     = new Set<string>()          // все уникальные партнёры в периоде
 
   for (const row of rows) {
     const state = String(row.State ?? '')
     if (EXCLUDED_DIST.has(state)) continue
-    if (String(row.CrossIsBought ?? '') !== 'Да') continue
     if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
     const renId = String(row['RenId'] ?? '').trim()
     if (!renId) continue
+
+    allPartners.add(renId)
+
+    if (state === 'PolicyIssued') {
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
+    }
+
+    if (String(row.CrossIsBought ?? '') !== 'Да') continue
     const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE_DIST
     const fp  = toNum(row.FinalPrice)
     const kv  = toNum(row.ChargedToIncreasedKV)
@@ -106,11 +116,77 @@ function extractPartnerSpendingValues(rows: RawRow[], monthKey: string | null) {
 
   const values: number[] = []
   let zeroCount = 0
+  let totalSum = 0
   for (const total of partnerTotals.values()) {
-    if (total > 0) values.push(total)
+    if (total > 0) { values.push(total); totalSum += total }
     else zeroCount++
   }
-  return { values, zeroCount }
+
+  const accrualCount = accrualPartners.size
+  const allCount     = allPartners.size
+  // Средние: знаменатель — партнёры с начислениями / все партнёры в периоде
+  const meanAmongAccrual = accrualCount > 0 ? totalSum / accrualCount : 0
+  const meanAmongAll     = allCount     > 0 ? totalSum / allCount     : 0
+
+  return { values, zeroCount, meanAmongAccrual, meanAmongAll }
+}
+
+/** Для партнёров, у которых есть хотя бы одно начисление — их данные по списаниям */
+function extractAccrualPartnerSpending(rows: RawRow[], monthKey: string | null) {
+  // 1. Собираем партнёров с начислениями
+  const accrualPartners = new Set<string>()
+  for (const row of rows) {
+    if (String(row.State ?? '') !== 'PolicyIssued') continue
+    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
+    const renId = String(row['RenId'] ?? '').trim()
+    if (!renId) continue
+    const lp = toNum(row.LoyaltyPointsInLK)
+    if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
+  }
+
+  // 2. Считаем списания только для этих партнёров
+  const partnerAmount = new Map<string, number>()
+  const partnerEvents = new Map<string, number>()
+  for (const renId of accrualPartners) { partnerAmount.set(renId, 0); partnerEvents.set(renId, 0) }
+
+  for (const row of rows) {
+    const state = String(row.State ?? '')
+    if (EXCLUDED_DIST.has(state)) continue
+    if (String(row.CrossIsBought ?? '') !== 'Да') continue
+    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
+    const renId = String(row['RenId'] ?? '').trim()
+    if (!renId || !accrualPartners.has(renId)) continue
+    const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE_DIST
+    const fp  = toNum(row.FinalPrice)
+    const kv  = toNum(row.ChargedToIncreasedKV)
+    const hasKV       = !isNullVal(row.ChargedToIncreasedKV) && kv !== 0
+    const hasDiscount = !isNullVal(row.FinalPrice) && fp !== policyPrice
+    const spend = (hasKV ? kv : 0) + (hasDiscount ? policyPrice - fp : 0)
+    if (spend > 0) {
+      partnerAmount.set(renId, (partnerAmount.get(renId) ?? 0) + spend)
+      partnerEvents.set(renId, (partnerEvents.get(renId) ?? 0) + 1)
+    }
+  }
+
+  const values: number[] = []
+  let zeroCount = 0
+  let totalEvents = 0
+  for (const [renId, amount] of partnerAmount.entries()) {
+    if (amount > 0) values.push(amount)
+    else zeroCount++
+    totalEvents += partnerEvents.get(renId) ?? 0
+  }
+  const totalRb = values.reduce((s, v) => s + v, 0)
+  const spentAtLeastOnce = values.length
+
+  return {
+    values,
+    zeroCount,
+    accrualPartnersCount: accrualPartners.size,
+    spentAtLeastOnce,
+    totalEvents,
+    totalRb,
+  }
 }
 
 // ─── Тип распределения ───────────────────────────────────────────────────────
@@ -236,16 +312,19 @@ const BAR_COLORS = [
 function DistBlock({
   title, subtitle, dist, unit,
   hideZeroChip, showSumColumn, showMeanAll, meanNonZeroLabel, meanAllLabel,
+  meanNonZeroOverride, meanAllOverride,
 }: {
   title: string
   subtitle: string
   dist: LocalDistData
   unit: string
-  hideZeroChip?: boolean       // скрыть плашку «Нулевое значение»
-  showSumColumn?: boolean      // колонка «Рен-бонусов» с суммой по диапазону
-  showMeanAll?: boolean        // плашка «Среднее (включая нулевые)»
-  meanNonZeroLabel?: string    // переопределить подпись среднего (ненулевые)
-  meanAllLabel?: string        // переопределить подпись среднего (все, включая нули)
+  hideZeroChip?: boolean
+  showSumColumn?: boolean
+  showMeanAll?: boolean
+  meanNonZeroLabel?: string
+  meanAllLabel?: string
+  meanNonZeroOverride?: number  // если задан — показываем вместо dist.mean
+  meanAllOverride?: number      // если задан — показываем вместо dist.meanAll
 }) {
   if (dist.total === 0) {
     return (
@@ -259,6 +338,8 @@ function DistBlock({
   const maxCount = Math.max(...dist.buckets.map(b => b.count), dist.zeroCount, 1)
   const meanLabel    = meanNonZeroLabel ?? 'Среднее (ненулевые)'
   const meanAllLabelResolved = meanAllLabel ?? 'Среднее (включая нулевые)'
+  const meanNonZeroValue = meanNonZeroOverride !== undefined ? meanNonZeroOverride : dist.mean
+  const meanAllValue     = meanAllOverride     !== undefined ? meanAllOverride     : dist.meanAll
   // Сумма всех значений (для ИТОГО строки)
   const totalBucketSum = dist.buckets.reduce((s, b) => s + b.sum, 0)
 
@@ -285,13 +366,13 @@ function DistBlock({
             {/* Среднее ненулевые — п.2/п.3: целое число + «Рен-бонусов» */}
             <div>
               <span className="text-xs text-gray-500">{meanLabel}</span>
-              <p className="text-lg font-bold text-blue-700">{fmtN(Math.round(dist.mean))} {unit}</p>
+              <p className="text-lg font-bold text-blue-700">{fmtN(Math.round(meanNonZeroValue))} {unit}</p>
             </div>
             {/* Среднее все (включая нули) — только для блоков с showMeanAll */}
             {showMeanAll && (
               <div>
                 <span className="text-xs text-gray-500">{meanAllLabelResolved}</span>
-                <p className="text-lg font-bold text-indigo-600">{fmtN(Math.round(dist.meanAll))} {unit}</p>
+                <p className="text-lg font-bold text-indigo-600">{fmtN(Math.round(meanAllValue))} {unit}</p>
               </div>
             )}
           </>
@@ -504,6 +585,82 @@ function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: Month
   )
 }
 
+// ─── Блок: начисляющие партнёры → их списания ────────────────────────────────
+type AccrualSpendingData = ReturnType<typeof extractAccrualPartnerSpending>
+
+function AccrualSpendingBlock({
+  data, dist,
+}: { data: AccrualSpendingData; dist: LocalDistData }) {
+  if (data.accrualPartnersCount === 0) return null
+  const spentPct = (data.spentAtLeastOnce / data.accrualPartnersCount) * 100
+  const neverPct = ((data.accrualPartnersCount - data.spentAtLeastOnce) / data.accrualPartnersCount) * 100
+  const meanAmongSpent = data.spentAtLeastOnce > 0 ? data.totalRb / data.spentAtLeastOnce : 0
+  const meanAmongAll   = data.accrualPartnersCount > 0 ? data.totalRb / data.accrualPartnersCount : 0
+
+  return (
+    <div className="space-y-3">
+      {/* Сводка по воронке */}
+      <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
+        <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100">
+          <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-wide">
+            Из начисляющих партнёров — кто списывал?
+          </h3>
+          <p className="text-xs text-indigo-500 mt-0.5">
+            База: партнёры, у которых есть хотя бы одно начисление (State = PolicyIssued, LoyaltyPointsInLK &gt; 0)
+          </p>
+        </div>
+        <div className="px-5 py-4 flex flex-wrap gap-6">
+          <div>
+            <p className="text-xs text-gray-500">Партнёров с начислениями</p>
+            <p className="text-3xl font-bold text-indigo-700">{fmtN(data.accrualPartnersCount)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Из них списали хоть раз</p>
+            <p className="text-3xl font-bold text-green-600">{fmtN(data.spentAtLeastOnce)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{fmtF(spentPct)}% от начисляющих</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Ни разу не списали</p>
+            <p className="text-3xl font-bold text-amber-500">{fmtN(data.accrualPartnersCount - data.spentAtLeastOnce)}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{fmtF(neverPct)}% от начисляющих</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Событий списания, шт.</p>
+            <p className="text-3xl font-bold text-gray-800">{fmtN(data.totalEvents)}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Списали итого, РБ</p>
+            <p className="text-3xl font-bold text-indigo-600">{fmtN(Math.round(data.totalRb))}</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Ср. списание на 1 (кто списывал)</p>
+            <p className="text-3xl font-bold text-gray-700">{fmtN(Math.round(meanAmongSpent))}</p>
+            <p className="text-xs text-gray-400 mt-0.5">РБ</p>
+          </div>
+          <div>
+            <p className="text-xs text-gray-500">Ср. списание на 1 (все начисляющие)</p>
+            <p className="text-3xl font-bold text-gray-500">{fmtN(Math.round(meanAmongAll))}</p>
+            <p className="text-xs text-gray-400 mt-0.5">РБ</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Распределение сумм списания среди начисляющих партнёров */}
+      <DistBlock
+        title="Суммарные списания: среди партнёров с начислениями"
+        subtitle="Только партнёры с ≥1 начислением. 0 = никогда не списывали. Значение = суммарные списанные РБ."
+        dist={dist}
+        unit="Рен-бонусов"
+        showSumColumn
+        showMeanAll
+        meanNonZeroLabel="В среднем списал 1 партнёр (из тех, кто списывал)"
+        meanAllLabel="В среднем списал 1 партнёр (из всех с начислениями)"
+        meanAllOverride={meanAmongAll}
+      />
+    </div>
+  )
+}
+
 // ─── Главный компонент ────────────────────────────────────────────────────────
 export default function DistributionTab({ result }: Props) {
   const { rawRows, totals, months } = result
@@ -539,10 +696,19 @@ export default function DistributionTab({ result }: Props) {
     () => extractPartnerSpendingValues(rawRows, selectedMonth),
     [rawRows, selectedMonth]
   )
-  // п.6: всегда показываем бакет «Ниже среднего» + авто-сплит бакетов > 40%
   const partnerSpendingDist = useMemo(
     () => computeDist(partnerSpendingData.values, partnerSpendingData.zeroCount, ['Ниже среднего'], 40),
     [partnerSpendingData]
+  )
+
+  // Новый блок: начисляющие партнёры → их списания
+  const accrualSpendData = useMemo(
+    () => extractAccrualPartnerSpending(rawRows, selectedMonth),
+    [rawRows, selectedMonth]
+  )
+  const accrualSpendDist = useMemo(
+    () => computeDist(accrualSpendData.values, accrualSpendData.zeroCount, ['Ниже среднего'], 40),
+    [accrualSpendData]
   )
 
   return (
@@ -603,7 +769,7 @@ export default function DistributionTab({ result }: Props) {
         meanAllLabel="Средние накопления партнера (включая нулевые)"
       />
 
-      {/* п.8 (был п.8): списания в разрезе партнёров */}
+      {/* Суммарные списания в разрезе партнёров */}
       <DistBlock
         title="Суммарные списания Рен-бонусов: в разрезе партнёров"
         subtitle="Каждое событие = 1 партнёр (RenId). Значение = суммарные списанные Рен-бонусы по всем его полисам Кросс-Каско."
@@ -611,8 +777,15 @@ export default function DistributionTab({ result }: Props) {
         unit="Рен-бонусов"
         hideZeroChip
         showSumColumn
-        meanNonZeroLabel="В среднем списал 1 партнёр"
+        showMeanAll
+        meanNonZeroLabel="В среднем списал 1 партнёр (у которого были хоть раз начисления)"
+        meanNonZeroOverride={partnerSpendingData.meanAmongAccrual}
+        meanAllLabel="В среднем списал 1 партнёр (с и без начислений)"
+        meanAllOverride={partnerSpendingData.meanAmongAll}
       />
+
+      {/* Новый блок: из начисляющих — кто и сколько списывал */}
+      <AccrualSpendingBlock data={accrualSpendData} dist={accrualSpendDist} />
 
       {/* ── В разрезе полисов ── */}
       <div className="flex items-center gap-4">
