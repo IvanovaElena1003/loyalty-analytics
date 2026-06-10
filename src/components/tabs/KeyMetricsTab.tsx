@@ -102,10 +102,36 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     return { threeOrMore, lessThanThree }
   }, [rawRows])
 
+  // Поля уровня полиса — исключаем из партнёрской сводки
+  const POLICY_LEVEL_FIELDS = new Set([
+    'CreateDate', 'State', 'CrossIsBought', 'FinalPrice', 'PolicyPrice',
+    'ChargedToIncreasedKV', 'LoyaltyPointsInLK', 'LoyaltyPointsScoring',
+    'AvailableForUsePoints', 'QuotationNumber', '2490',
+  ])
+
+  function buildPartnerRow(p: typeof threeOrMore[number]): Record<string, unknown> {
+    // Берём первую строку как источник статичных партнёрских полей
+    const base = p.rows[0] as Record<string, unknown>
+    const out: Record<string, unknown> = {}
+    // Сначала — ключевые идентификаторы (чтобы они шли в начале листа)
+    out['RenId']    = p.renId
+    out['ФИО']      = p.fullName
+    out['Роль']     = p.role
+    // Остальные статичные поля из исходника (кроме поля-уровня-полиса)
+    for (const [k, v] of Object.entries(base)) {
+      if (POLICY_LEVEL_FIELDS.has(k)) continue
+      if (k === 'RenId' || k === 'FullName' || k === 'Role') continue // уже добавлены
+      out[k] = v
+    }
+    // Вычисленные агрегаты
+    out['Кол-во_списаний_2026'] = p.rows.length
+    out['Сумма_РБ_2026']        = Math.round(p.totalSpend)
+    return out
+  }
+
   function handleDownload(group: typeof threeOrMore, filename: string) {
-    // Выгружаем все qualifying-строки с полями как в исходнике
-    const rows = group.flatMap(p => p.rows)
-    downloadXlsx(rows as unknown as Record<string, unknown>[], filename)
+    const rows = group.map(p => buildPartnerRow(p))
+    downloadXlsx(rows, filename)
   }
 
   function SummaryTable({ data }: { data: typeof threeOrMore }) {
