@@ -18,7 +18,7 @@ const TABS: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'engagement',   label: '👥 Вовлечённость',   needsData: true },
   { id: 'insights',     label: '💡 Выводы',          needsData: true },
   { id: 'methodology',  label: 'Методология' },
-  { id: 'anomalies',    label: '⚠️ Аномалии',       needsData: true },
+  { id: 'anomalies',    label: '🔧 Тех. вкладка',    needsData: true },
 ]
 
 function Spinner({ filename }: { filename: string }) {
