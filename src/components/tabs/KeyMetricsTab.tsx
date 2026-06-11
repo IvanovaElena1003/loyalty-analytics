@@ -54,7 +54,7 @@ const fmtN = (v: number) => Math.round(v).toLocaleString('ru-RU')
 // ─── Компонент ────────────────────────────────────────────────────────────────
 export default function KeyMetricsTab({ rawRows }: Props) {
 
-  const { threeOrMore, oneOrTwo, neverSpent } = useMemo(() => {
+  const { tenOrMore, threeToNine, oneOrTwo, neverSpent } = useMemo(() => {
     type PartnerData = {
       renId: string
       fullName: string
@@ -108,8 +108,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     }
 
     const all = Array.from(partnerMap.values())
-    const threeOrMore = all
-      .filter(p => p.spendRows.length >= 3)
+    const tenOrMore = all
+      .filter(p => p.spendRows.length >= 10)
+      .sort((a, b) => b.spendRows.length - a.spendRows.length)
+
+    const threeToNine = all
+      .filter(p => p.spendRows.length >= 3 && p.spendRows.length <= 9)
       .sort((a, b) => b.spendRows.length - a.spendRows.length)
 
     const oneOrTwo = all
@@ -121,7 +125,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       .filter(p => p.spendRows.length === 0 && everAccrued.has(p.renId))
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 
-    return { threeOrMore, oneOrTwo, neverSpent }
+    return { tenOrMore, threeToNine, oneOrTwo, neverSpent }
   }, [rawRows])
 
   const POLICY_LEVEL_FIELDS = new Set([
@@ -187,10 +191,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     )
   }
 
-  const totalEventsA = threeOrMore.reduce((s, p) => s + p.spendRows.length, 0)
-  const totalSpendA  = threeOrMore.reduce((s, p) => s + p.totalSpend, 0)
-  const totalEventsB = oneOrTwo.reduce((s, p) => s + p.spendRows.length, 0)
-  const totalSpendB  = oneOrTwo.reduce((s, p) => s + p.totalSpend, 0)
+  const totalEventsTen   = tenOrMore.reduce((s, p) => s + p.spendRows.length, 0)
+  const totalSpendTen    = tenOrMore.reduce((s, p) => s + p.totalSpend, 0)
+  const totalEventsThree = threeToNine.reduce((s, p) => s + p.spendRows.length, 0)
+  const totalSpendThree  = threeToNine.reduce((s, p) => s + p.totalSpend, 0)
+  const totalEventsB     = oneOrTwo.reduce((s, p) => s + p.spendRows.length, 0)
+  const totalSpendB      = oneOrTwo.reduce((s, p) => s + p.totalSpend, 0)
 
   return (
     <div className="space-y-6">
@@ -203,37 +209,67 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         Группа «Списали 0 раз» — только партнёры, у которых за всю историю было хотя бы одно начисление.
       </div>
 
-      {/* ── Три группы ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+      {/* ── Четыре группы ──────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-        {/* Группа A: ≥ 3 списания */}
+        {/* Группа 10+: супер-активные */}
+        <div className="bg-white rounded-xl border border-emerald-300 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-bold text-emerald-800 text-base">🏆 Списали 10+ раз</h3>
+              <p className="text-xs text-emerald-600 mt-0.5">Супер-активные пользователи (2026)</p>
+            </div>
+            <button
+              onClick={() => handleDownload(tenOrMore, 'spent_10plus_2026.xlsx')}
+              disabled={tenOrMore.length === 0}
+              className="shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
+            >↓ xlsx</button>
+          </div>
+          <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-emerald-50/30">
+            <div>
+              <p className="text-xs text-gray-500">Партнёров</p>
+              <p className="text-3xl font-bold text-emerald-700">{fmtN(tenOrMore.length)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Событий</p>
+              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsTen)}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-500">Сумма, РБ</p>
+              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendTen)}</p>
+            </div>
+          </div>
+          <SummaryTable data={tenOrMore} />
+        </div>
+
+        {/* Группа 3–9: активные */}
         <div className="bg-white rounded-xl border border-green-200 overflow-hidden shadow-sm">
           <div className="px-5 py-4 bg-green-50 border-b border-green-200 flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-green-800 text-base">✅ Списали 3+ раз</h3>
+              <h3 className="font-bold text-green-800 text-base">✅ Списали 3–9 раз</h3>
               <p className="text-xs text-green-600 mt-0.5">Активные пользователи (2026)</p>
             </div>
             <button
-              onClick={() => handleDownload(threeOrMore, 'spent_3plus_2026.xlsx')}
-              disabled={threeOrMore.length === 0}
+              onClick={() => handleDownload(threeToNine, 'spent_3_9_2026.xlsx')}
+              disabled={threeToNine.length === 0}
               className="shrink-0 text-xs bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
             >↓ xlsx</button>
           </div>
           <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-green-50/30">
             <div>
               <p className="text-xs text-gray-500">Партнёров</p>
-              <p className="text-3xl font-bold text-green-700">{fmtN(threeOrMore.length)}</p>
+              <p className="text-3xl font-bold text-green-700">{fmtN(threeToNine.length)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Событий</p>
-              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsA)}</p>
+              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsThree)}</p>
             </div>
             <div>
               <p className="text-xs text-gray-500">Сумма, РБ</p>
-              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendA)}</p>
+              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendThree)}</p>
             </div>
           </div>
-          <SummaryTable data={threeOrMore} />
+          <SummaryTable data={threeToNine} />
         </div>
 
         {/* Группа B: 1–2 списания */}
