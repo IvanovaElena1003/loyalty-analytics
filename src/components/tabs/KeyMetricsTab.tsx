@@ -134,7 +134,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     'AvailableForUsePoints', 'QuotationNumber', '2490',
   ])
 
-  function buildPartnerRow(p: typeof threeOrMore[number]): Record<string, unknown> {
+  function buildPartnerRow(p: typeof tenOrMore[number]): Record<string, unknown> {
     const base = p.anyRow as Record<string, unknown>
     const out: Record<string, unknown> = {}
     out['RenId'] = p.renId
@@ -150,11 +150,11 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     return out
   }
 
-  function handleDownload(group: typeof threeOrMore, filename: string) {
+  function handleDownload(group: typeof tenOrMore, filename: string) {
     downloadXlsx(group.map(p => buildPartnerRow(p)), filename)
   }
 
-  function SummaryTable({ data }: { data: typeof threeOrMore }) {
+  function SummaryTable({ data }: { data: typeof tenOrMore }) {
     if (data.length === 0) return (
       <p className="text-sm text-gray-400 italic px-4 py-3">Нет данных</p>
     )
