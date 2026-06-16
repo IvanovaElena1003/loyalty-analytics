@@ -197,8 +197,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     }
 
     return Array.from(map.values())
-      .filter(s => s.totalAccrual > 0)                          // только те, у кого есть начисления
-      .sort((a, b) => (b.totalAccrual - b.totalSpend) - (a.totalAccrual - a.totalSpend))  // по неиспользованному остатку
+      .filter(s =>
+        s.totalAccrual > 0 &&
+        s.role.trim() !== 'Продавец' &&
+        (s.totalSpend / s.totalAccrual) <= 0.05   // утилизация ≤ 5%
+      )
+      .sort((a, b) => (b.totalAccrual - b.totalSpend) - (a.totalAccrual - a.totalSpend))
   }, [rawRows])
 
   // Контактные поля — ищем в первой строке данных
@@ -457,7 +461,7 @@ function UnderutilizersBlock({
   contactFields: string[]
   onDownload: (rows: UEntry[]) => void
 }) {
-  const TOP = 10
+  const TOP = 15
   const top = data.slice(0, TOP)
   if (top.length === 0) return null
 
