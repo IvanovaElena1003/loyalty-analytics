@@ -556,11 +556,18 @@ function SummaryDashboard({ G }: { G: Record<string, GStats> }) {
 
   return (
     <div className="bg-white rounded-xl border border-blue-200 overflow-hidden shadow-sm">
-      <div className="px-5 py-4 bg-blue-50 border-b border-blue-100">
+      <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-3">
         <h3 className="font-bold text-blue-800 text-base">Агенты 2026: сводка по группам списания</h3>
-        <p className="text-xs text-blue-500 mt-0.5">
-          Учитываются роли: Агент, Субагент, Директор партнера, Продавец внутри партнера, Куратор внутри партнера
-        </p>
+        <div className="text-xs text-blue-700 space-y-1.5">
+          <p><strong>Роли:</strong> Агент, Субагент, Директор партнера, Продавец внутри партнера, Куратор внутри партнера. Партнёры из данных 2026 года.</p>
+          <p><strong>«Списали»</strong> — партнёр, у которого в 2026 г. есть хотя бы одна строка с CrossIsBought = Да <em>и</em> (ChargedToIncreasedKV ≠ 0 <em>или</em> FinalPrice ≠ PolicyPrice). Каждая такая строка = 1 событие списания Рен-бонусов в Каско от бесполисных.</p>
+          <p><strong>Нет баллов</strong> — партнёры, у которых за всю историю нет ни одного начисления Рен-бонусов (нет строк с State = PolicyIssued и LoyaltyPointsInLK &gt; 0).</p>
+          <p><strong>0 раз списали</strong> — есть начисления Рен-бонусов за всю историю, но в 2026 году ни одного события списания.</p>
+          <p><strong>1–2 / 3–9 / 10+ раз</strong> — количество событий списания в 2026 году.</p>
+          <p><strong>ОСАГО, шт.</strong> — оформленные полисы ОСАГО ФЛ (State = PolicyIssued) партнёров группы в 2026 г.</p>
+          <p><strong>Каско от бесполисных, шт.</strong> — из полисов ОСАГО этих же партнёров дополнительно куплен Каско от бесполисных (CrossIsBought = Да).</p>
+          <p><strong>Конверсия Бесполис</strong> — доля полисов ОСАГО, по которым куплен Каско от бесполисных: Каско / ОСАГО × 100%.</p>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
@@ -571,7 +578,6 @@ function SummaryDashboard({ G }: { G: Record<string, GStats> }) {
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Доля</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО, шт.</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско от бесполисных, шт.</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Все кроссы, шт.</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2025</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2026</th>
             </tr>
@@ -587,7 +593,6 @@ function SummaryDashboard({ G }: { G: Record<string, GStats> }) {
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmtPct2(cnt, total.partners)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(g.osago26)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">{fmtN(g.kasko26)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fmtN(g.cross26)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct2(g.kasko25, g.osago25)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-blue-700 font-semibold">{fmtPct2(g.kasko26, g.osago26)}</td>
                 </tr>
@@ -600,7 +605,6 @@ function SummaryDashboard({ G }: { G: Record<string, GStats> }) {
               <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">100,00%</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-gray-800">{fmtN(total.osago26)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-indigo-700">{fmtN(total.kasko26)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(total.cross26)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct2(total.kasko25, total.osago25)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-blue-700">{fmtPct2(total.kasko26, total.osago26)}</td>
             </tr>
