@@ -472,15 +472,11 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
     const roleSet = new Set(selectedRoles)
     const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
 
-    // Партнёры, у которых хоть раз был PolicyIssued (за всю историю, любая роль)
-    const everIssued = new Set<string>()
-    // Партнёры, у которых было начисление РБ (PolicyIssued + LoyaltyPointsInLK > 0)
     const everAccrued = new Set<string>()
     for (const row of rawRows) {
       if (String(row.State ?? '') !== 'PolicyIssued') continue
       const renId = String(row['RenId'] ?? '').trim()
       if (!renId) continue
-      everIssued.add(renId)
       const lp = toNum(row.LoyaltyPointsInLK)
       if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(renId)
     }
@@ -495,9 +491,8 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       if (isSpendingRow(row)) spendCnt.set(renId, (spendCnt.get(renId) ?? 0) + 1)
     }
 
-    function grp(renId: string): 'ten' | 'three' | 'oneTwo' | 'zero' | 'noBal' | 'noIssued' | null {
+    function grp(renId: string): 'ten' | 'three' | 'oneTwo' | 'zero' | 'noBal' | null {
       if (!partners2026.has(renId)) return null
-      if (!everIssued.has(renId)) return 'noIssued'   // никогда не оформляли ОСАГО
       const c = spendCnt.get(renId) ?? 0
       if (c >= 10) return 'ten'
       if (c >= 3)  return 'three'
@@ -506,7 +501,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
     }
 
     const mk = (): GStats => ({ partners: new Set(), osago25: 0, kasko25: 0, cross25: 0, osago26: 0, kasko26: 0, cross26: 0 })
-    const result: Record<string, GStats> = { ten: mk(), three: mk(), oneTwo: mk(), zero: mk(), noBal: mk(), noIssued: mk() }
+    const result: Record<string, GStats> = { ten: mk(), three: mk(), oneTwo: mk(), zero: mk(), noBal: mk() }
 
     for (const renId of partners2026) {
       const g = grp(renId)
@@ -540,8 +535,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
   }, [rawRows, selectedRoles])
 
   const tableRows: { key: string; label: string; color: string }[] = [
-    { key: 'noIssued', label: 'Нет оформленных полисов ОСАГО',   color: 'text-gray-400' },
-    { key: 'noBal',    label: 'Не было начислений за все время',  color: 'text-gray-500' },
+    { key: 'noBal',  label: 'Не было начислений за все время', color: 'text-gray-500' },
     { key: 'zero',     label: '0 раз списали в 2026',             color: 'text-slate-600' },
     { key: 'oneTwo',   label: '1–2 раза списали в 2026',          color: 'text-amber-700' },
     { key: 'three',    label: '3–9 раз списали в 2026',           color: 'text-green-700' },
@@ -589,8 +583,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 
         <div className="text-xs text-blue-700 space-y-1.5">
           <p><strong>«Списали»</strong> — партнёр, у которого в 2026 г. есть хотя бы одна строка с CrossIsBought = Да <em>и</em> (ChargedToIncreasedKV ≠ 0 <em>или</em> FinalPrice ≠ PolicyPrice). Каждая такая строка = 1 событие списания Рен-бонусов в Каско от бесполисных.</p>
-          <p><strong>Нет оформленных полисов ОСАГО</strong> — у партнёра за всю историю нет ни одной строки с State = PolicyIssued (только котировки или незавершённые полисы).</p>
-          <p><strong>Не было начислений за все время</strong> — есть оформленные ОСАГО (State = PolicyIssued), но LoyaltyPointsInLK никогда не был &gt; 0: баллы не начислялись.</p>
+          <p><strong>Не было начислений за все время</strong> — у партнёра за всю историю нет ни одной строки с State = PolicyIssued и LoyaltyPointsInLK &gt; 0 (баллы Рен-бонусов никогда не начислялись).</p>
           <p><strong>0 раз списали в 2026</strong> — есть начисления Рен-бонусов за всю историю, но в 2026 году ни одного события списания.</p>
           <p><strong>1–2 / 3–9 / 10+ раз в 2026</strong> — количество событий списания в 2026 году.</p>
           <p><strong>ОСАГО, шт.</strong> — оформленные полисы ОСАГО ФЛ (State = PolicyIssued) партнёров группы в 2026 г.</p>
