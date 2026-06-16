@@ -49,7 +49,24 @@ function calcSpend(row: RawRow): number {
   return (hasKV ? kv : 0) + (hasDiscount ? pp - fp : 0)
 }
 
-const fmtN = (v: number) => Math.round(v).toLocaleString('ru-RU')
+function parseDate(v: unknown): Date | null {
+  if (v == null) return null
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v
+  if (typeof v === 'number' && v > 0) return new Date((v - 25569) * 86400000)
+  if (typeof v === 'string') {
+    const n = Number(v)
+    if (!isNaN(n) && n > 0) return new Date((n - 25569) * 86400000)
+    const d = new Date(v)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+const fmtN    = (v: number) => Math.round(v).toLocaleString('ru-RU')
+const fmtDate = (d: Date | null) =>
+  d ? d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+const fmtPct  = (num: number, den: number) =>
+  den > 0 ? `${Math.round((num / den) * 100)}%` : '—'
 
 // ─── Компонент ────────────────────────────────────────────────────────────────
 export default function KeyMetricsTab({ rawRows }: Props) {
@@ -126,6 +143,70 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 
     return { tenOrMore, threeToNine, oneOrTwo, neverSpent }
+  }, [rawRows])
+
+  // ── Топ «копят, но не тратят» ─────────────────────────────────────────────
+  const underutilizers = useMemo(() => {
+    type UStats = {
+      renId: string
+      fullName: string
+      role: string
+      anyRow: RawRow
+      totalAccrual: number   // сумма LP за всю историю
+      accrualCount: number   // кол-во событий начисления
+      totalSpend: number     // сумма списаний за всю историю
+      spendCount: number
+      lastAccrualDate: Date | null
+    }
+    const map = new Map<string, UStats>()
+
+    for (const row of rawRows) {
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId) continue
+
+      if (!map.has(renId)) {
+        map.set(renId, {
+          renId,
+          fullName: String(row['FullName'] ?? row['AgentName'] ?? '').trim() || '—',
+          role:     String(row['Role'] ?? '').trim() || '—',
+          anyRow:   row,
+          totalAccrual: 0, accrualCount: 0,
+          totalSpend:   0, spendCount:   0,
+          lastAccrualDate: null,
+        })
+      }
+      const s = map.get(renId)!
+      if ((!s.fullName || s.fullName === '—') && row['FullName']) s.fullName = String(row['FullName']).trim()
+
+      // начисление
+      if (String(row.State ?? '') === 'PolicyIssued') {
+        const lp = toNum(row.LoyaltyPointsInLK)
+        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+          s.totalAccrual += lp
+          s.accrualCount++
+          const d = parseDate(row.CreateDate)
+          if (d && (!s.lastAccrualDate || d > s.lastAccrualDate)) s.lastAccrualDate = d
+        }
+      }
+
+      // списание
+      if (isSpendingRow(row)) {
+        s.totalSpend += calcSpend(row)
+        s.spendCount++
+      }
+    }
+
+    return Array.from(map.values())
+      .filter(s => s.totalAccrual > 0)                          // только те, у кого есть начисления
+      .sort((a, b) => (b.totalAccrual - b.totalSpend) - (a.totalAccrual - a.totalSpend))  // по неиспользованному остатку
+  }, [rawRows])
+
+  // Контактные поля — ищем в первой строке данных
+  const contactFields = useMemo(() => {
+    if (rawRows.length === 0) return []
+    const firstRow = rawRows[0] as Record<string, unknown>
+    const CONTACT_PATTERNS = /phone|email|телефон|мобил|почт|контакт|contact/i
+    return Object.keys(firstRow).filter(k => CONTACT_PATTERNS.test(k))
   }, [rawRows])
 
   const POLICY_LEVEL_FIELDS = new Set([
@@ -334,6 +415,142 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         Excel-выгрузка: одна строка на партнёра со всеми идентификационными полями из исходника
         + Кол-во_списаний_2026 и Сумма_РБ_2026.
       </p>
+
+      {/* ── Топ: копят, но не тратят ──────────────────────────────────── */}
+      <UnderutilizersBlock
+        data={underutilizers}
+        contactFields={contactFields}
+        onDownload={(rows) => {
+          const out = rows.map(s => {
+            const base = s.anyRow as Record<string, unknown>
+            const r: Record<string, unknown> = {
+              RenId: s.renId, ФИО: s.fullName, Роль: s.role,
+            }
+            for (const cf of contactFields) r[cf] = base[cf] ?? '—'
+            r['Накоплено_РБ_всего']     = Math.round(s.totalAccrual)
+            r['Событий_начисления']      = s.accrualCount
+            r['Списано_РБ_всего']        = Math.round(s.totalSpend)
+            r['Утилизация_%']            = s.totalAccrual > 0 ? Math.round((s.totalSpend / s.totalAccrual) * 100) : 0
+            r['Последнее_начисление']    = fmtDate(s.lastAccrualDate)
+            return r
+          })
+          downloadXlsx(out, 'underutilizers_top.xlsx')
+        }}
+      />
+
+    </div>
+  )
+}
+
+// ── Компонент «Копят, но не тратят» ────────────────────────────────────────
+type UEntry = {
+  renId: string; fullName: string; role: string; anyRow: RawRow
+  totalAccrual: number; accrualCount: number
+  totalSpend: number; spendCount: number
+  lastAccrualDate: Date | null
+}
+
+function UnderutilizersBlock({
+  data, contactFields, onDownload,
+}: {
+  data: UEntry[]
+  contactFields: string[]
+  onDownload: (rows: UEntry[]) => void
+}) {
+  const TOP = 10
+  const top = data.slice(0, TOP)
+  if (top.length === 0) return null
+
+  return (
+    <div className="bg-white rounded-xl border border-purple-200 overflow-hidden shadow-sm">
+
+      {/* Шапка */}
+      <div className="px-5 py-4 bg-purple-50 border-b border-purple-200 flex items-center justify-between gap-3">
+        <div>
+          <h3 className="font-bold text-purple-800 text-base">
+            💡 Топ-{TOP}: копят, но не используют баллы
+          </h3>
+          <p className="text-xs text-purple-500 mt-0.5">
+            Ранжированы по неиспользованному остатку РБ (накоплено − списано) за всю историю.
+            Потенциальные клиенты для активации программы.
+          </p>
+        </div>
+        <button
+          onClick={() => onDownload(data)}
+          className="shrink-0 text-xs bg-purple-600 text-white hover:bg-purple-700 px-3 py-1.5 rounded-full transition-colors font-medium"
+        >
+          ↓ xlsx (все)
+        </button>
+      </div>
+
+      {/* Таблица */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-2 text-left whitespace-nowrap">#</th>
+              <th className="px-4 py-2 text-left whitespace-nowrap">ФИО / RenId</th>
+              <th className="px-4 py-2 text-left whitespace-nowrap">Роль</th>
+              {contactFields.map(cf => (
+                <th key={cf} className="px-4 py-2 text-left whitespace-nowrap">{cf}</th>
+              ))}
+              <th className="px-4 py-2 text-right whitespace-nowrap">Накоплено, РБ</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Начислений</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Списано, РБ</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Утилизация</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Посл. начисление</th>
+            </tr>
+          </thead>
+          <tbody>
+            {top.map((s, i) => {
+              const base = s.anyRow as Record<string, unknown>
+              const unused = s.totalAccrual - s.totalSpend
+              const isZeroSpend = s.spendCount === 0
+              return (
+                <tr key={s.renId} className="border-t border-gray-100 hover:bg-purple-50/30 transition-colors">
+                  <td className="px-4 py-2.5 text-gray-400 font-medium">{i + 1}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="font-medium text-gray-800">{s.fullName}</span>
+                    <span className="block text-xs text-gray-400">{s.renId}</span>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs text-gray-500">{s.role}</td>
+                  {contactFields.map(cf => (
+                    <td key={cf} className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">
+                      {String(base[cf] ?? '—')}
+                    </td>
+                  ))}
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">
+                    {fmtN(s.totalAccrual)}
+                    <span className="block text-[10px] text-purple-400 font-normal">
+                      не исп.: {fmtN(unused)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                    {s.accrualCount}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">
+                    {s.totalSpend > 0 ? fmtN(s.totalSpend) : (
+                      <span className="text-red-400 font-medium">0</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums">
+                    <span className={`font-semibold ${isZeroSpend ? 'text-red-500' : 'text-amber-600'}`}>
+                      {fmtPct(s.totalSpend, s.totalAccrual)}
+                    </span>
+                  </td>
+                  <td className="px-4 py-2.5 text-right text-xs text-gray-500 whitespace-nowrap">
+                    {fmtDate(s.lastAccrualDate)}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="px-5 py-3 bg-purple-50/50 border-t border-purple-100 text-xs text-purple-400">
+        Показаны топ-{TOP} из {data.length} партнёров с начислениями. Кнопка «xlsx» выгружает всех.
+      </div>
     </div>
   )
 }
