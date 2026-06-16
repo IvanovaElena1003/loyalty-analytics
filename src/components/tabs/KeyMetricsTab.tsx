@@ -71,6 +71,11 @@ const fmtPct  = (num: number, den: number) =>
 // ─── Компонент ────────────────────────────────────────────────────────────────
 export default function KeyMetricsTab({ rawRows }: Props) {
 
+  const ALLOWED_ROLES = new Set([
+    'Агент', 'Субагент', 'Директор партнера',
+    'Продавец внутри партнера', 'Куратор внутри партнера',
+  ])
+
   const { tenOrMore, threeToNine, oneOrTwo, neverSpent } = useMemo(() => {
     type PartnerData = {
       renId: string
@@ -94,10 +99,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     const rows2026 = rawRows.filter(r => parseYear(r.CreateDate) === 2026)
     const partnerMap = new Map<string, PartnerData>()
 
-    // Шаг 1: все партнёры из 2026
+    // Шаг 1: партнёры из 2026 с разрешёнными ролями
     for (const row of rows2026) {
       const renId = String(row['RenId'] ?? '').trim()
       if (!renId) continue
+      const role = String(row['Role'] ?? '').trim()
+      if (!ALLOWED_ROLES.has(role)) continue
       if (!partnerMap.has(renId)) {
         partnerMap.set(renId, {
           renId,
@@ -114,12 +121,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       }
     }
 
-    // Шаг 2: считаем события списания 2026
+    // Шаг 2: считаем события списания 2026 (partnerMap уже отфильтрован по ролям)
     for (const row of rows2026) {
       if (!isSpendingRow(row)) continue
       const renId = String(row['RenId'] ?? '').trim()
       const p = partnerMap.get(renId)
-      if (!p) continue
+      if (!p) continue  // не в разрешённых ролях — пропускаем
       p.spendRows.push(row)
       p.totalSpend += calcSpend(row)
     }
@@ -143,6 +150,79 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
 
     return { tenOrMore, threeToNine, oneOrTwo, neverSpent }
+  }, [rawRows])
+
+  // ── Сводный дашборд по группам ────────────────────────────────────────────
+  const groupSummary = useMemo(() => {
+    const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
+
+    // 1. Партнёры с начислениями за всю историю (разрешённые роли)
+    const everAccrued = new Set<string>()
+    for (const row of rawRows) {
+      if (String(row.State ?? '') !== 'PolicyIssued') continue
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId || !ALLOWED_ROLES.has(String(row['Role'] ?? '').trim())) continue
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(renId)
+    }
+
+    // 2. Кол-во списаний в 2026 по партнёру (разрешённые роли)
+    const spendCnt = new Map<string, number>()
+    const partners2026 = new Set<string>()
+    for (const row of rawRows) {
+      if (parseYear(row.CreateDate) !== 2026) continue
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId || !ALLOWED_ROLES.has(String(row['Role'] ?? '').trim())) continue
+      partners2026.add(renId)
+      if (isSpendingRow(row)) spendCnt.set(renId, (spendCnt.get(renId) ?? 0) + 1)
+    }
+
+    // 3. Функция определения группы
+    function grp(renId: string): 'ten' | 'three' | 'oneTwo' | 'zero' | 'noBal' | null {
+      if (!partners2026.has(renId)) return null
+      const c = spendCnt.get(renId) ?? 0
+      if (c >= 10) return 'ten'
+      if (c >= 3)  return 'three'
+      if (c >= 1)  return 'oneTwo'
+      return everAccrued.has(renId) ? 'zero' : 'noBal'
+    }
+
+    // 4. Агрегаты по группам
+    type GS = { partners: Set<string>; osago25: number; kasko25: number; cross25: number; osago26: number; kasko26: number; cross26: number }
+    const mk = (): GS => ({ partners: new Set(), osago25:0, kasko25:0, cross25:0, osago26:0, kasko26:0, cross26:0 })
+    const G: Record<string, GS> = { ten: mk(), three: mk(), oneTwo: mk(), zero: mk(), noBal: mk() }
+
+    // Регистрируем партнёров
+    for (const renId of partners2026) {
+      const g = grp(renId)
+      if (g) G[g].partners.add(renId)
+    }
+
+    // Агрегируем строки
+    for (const row of rawRows) {
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId || !ALLOWED_ROLES.has(String(row['Role'] ?? '').trim())) continue
+      const g = grp(renId)
+      if (!g) continue
+      const yr = parseYear(row.CreateDate)
+      if (yr !== 2025 && yr !== 2026) continue
+      const state = String(row.State ?? '')
+      if (EXCL.has(state)) continue
+      const isIssued = state === 'PolicyIssued'
+      const isCross  = String(row.CrossIsBought ?? '').trim() === 'Да'
+      const st = G[g]
+      if (yr === 2026) {
+        if (isIssued)          st.osago26++
+        if (isIssued && isCross) st.kasko26++
+        if (isCross)           st.cross26++
+      } else {
+        if (isIssued)          st.osago25++
+        if (isIssued && isCross) st.kasko25++
+        if (isCross)           st.cross25++
+      }
+    }
+
+    return G
   }, [rawRows])
 
   // ── Топ «копят, но не тратят» ─────────────────────────────────────────────
@@ -285,6 +365,9 @@ export default function KeyMetricsTab({ rawRows }: Props) {
 
   return (
     <div className="space-y-6">
+
+      {/* Сводный дашборд */}
+      <SummaryDashboard G={groupSummary} />
 
       {/* Пояснение */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
@@ -442,6 +525,88 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         }}
       />
 
+    </div>
+  )
+}
+
+// ── Сводный дашборд ─────────────────────────────────────────────────────────
+type GStats = { partners: Set<string>; osago25: number; kasko25: number; cross25: number; osago26: number; kasko26: number; cross26: number }
+
+function SummaryDashboard({ G }: { G: Record<string, GStats> }) {
+  const fmtPct2 = (num: number, den: number) =>
+    den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
+
+  const rows: { key: string; label: string; color: string }[] = [
+    { key: 'noBal',  label: 'Нет баллов',          color: 'text-gray-500' },
+    { key: 'zero',   label: '0 раз списали',         color: 'text-slate-600' },
+    { key: 'oneTwo', label: '1–2 раза списали',      color: 'text-amber-700' },
+    { key: 'three',  label: '3–9 раз списали',       color: 'text-green-700' },
+    { key: 'ten',    label: '10+ раз списали',        color: 'text-emerald-700' },
+  ]
+
+  const total = {
+    partners: rows.reduce((s, r) => s + G[r.key].partners.size, 0),
+    osago25:  rows.reduce((s, r) => s + G[r.key].osago25, 0),
+    kasko25:  rows.reduce((s, r) => s + G[r.key].kasko25, 0),
+    cross25:  rows.reduce((s, r) => s + G[r.key].cross25, 0),
+    osago26:  rows.reduce((s, r) => s + G[r.key].osago26, 0),
+    kasko26:  rows.reduce((s, r) => s + G[r.key].kasko26, 0),
+    cross26:  rows.reduce((s, r) => s + G[r.key].cross26, 0),
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-blue-200 overflow-hidden shadow-sm">
+      <div className="px-5 py-4 bg-blue-50 border-b border-blue-100">
+        <h3 className="font-bold text-blue-800 text-base">Агенты 2026: сводка по группам списания</h3>
+        <p className="text-xs text-blue-500 mt-0.5">
+          Учитываются роли: Агент, Субагент, Директор партнера, Продавец внутри партнера, Куратор внутри партнера
+        </p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-2.5 text-left">Использование Рен-бонусов</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Кол-во партнёров</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Доля</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско от бесполисных, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Все кроссы, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2025</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2026</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ key, label, color }) => {
+              const g = G[key]
+              const cnt = g.partners.size
+              return (
+                <tr key={key} className="border-t border-gray-100 hover:bg-blue-50/30 transition-colors">
+                  <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">{fmtN(cnt)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmtPct2(cnt, total.partners)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(g.osago26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">{fmtN(g.kasko26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fmtN(g.cross26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct2(g.kasko25, g.osago25)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-700 font-semibold">{fmtPct2(g.kasko26, g.osago26)}</td>
+                </tr>
+              )
+            })}
+            {/* Итого */}
+            <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
+              <td className="px-4 py-2.5 text-gray-800">Общий итог</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-800">{fmtN(total.partners)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">100,00%</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-800">{fmtN(total.osago26)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-indigo-700">{fmtN(total.kasko26)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(total.cross26)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct2(total.kasko25, total.osago25)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-700">{fmtPct2(total.kasko26, total.osago26)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
