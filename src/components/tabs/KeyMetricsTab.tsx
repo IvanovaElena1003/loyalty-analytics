@@ -385,6 +385,9 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         + Кол-во_списаний_2026 и Сумма_РБ_2026.
       </p>
 
+      {/* ── Динамика по месяцам ───────────────────────────────────────── */}
+      <EngagementTrend rawRows={rawRows} />
+
       {/* ── Топ: копят, но не тратят ──────────────────────────────────── */}
       <UnderutilizersBlock
         data={underutilizers}
@@ -635,6 +638,158 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
               <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(totalAgg.kasko25, totalAgg.osago25)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-blue-700">{fmtPct(totalAgg.kasko26, totalAgg.osago26)}</td>
             </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Динамика вовлечённости по месяцам ───────────────────────────────────────
+type GK = 'zero' | 'oneTwo' | 'three' | 'ten'
+const GKS: GK[] = ['zero', 'oneTwo', 'three', 'ten']
+const GK_LABEL: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2', three: '3–9', ten: '10+' }
+const GK_COLOR: Record<GK, string> = {
+  zero: '#94a3b8', oneTwo: '#fbbf24', three: '#4ade80', ten: '#059669',
+}
+const GK_TEXT: Record<GK, string> = {
+  zero: 'text-slate-500', oneTwo: 'text-amber-600', three: 'text-green-700', ten: 'text-emerald-700',
+}
+
+function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
+  const data = useMemo(() => {
+    const spendEver = new Map<string, number>()
+    for (const row of rawRows) {
+      if (!isSpendingRow(row)) continue
+      const rid = String(row['RenId'] ?? '').trim()
+      if (rid) spendEver.set(rid, (spendEver.get(rid) ?? 0) + 1)
+    }
+
+    const grp = (rid: string): GK => {
+      const c = spendEver.get(rid) ?? 0
+      if (c >= 10) return 'ten'
+      if (c >= 3)  return 'three'
+      if (c >= 1)  return 'oneTwo'
+      return 'zero'
+    }
+
+    type MonthEntry = {
+      ym: string
+      partners: Set<string>
+      pByGrp: Record<GK, Set<string>>
+      osago: Record<GK, number>
+      kasko: Record<GK, number>
+    }
+
+    const mk0 = <T,>(fn: () => T): Record<GK, T> =>
+      ({ zero: fn(), oneTwo: fn(), three: fn(), ten: fn() })
+
+    const ROLES = new Set(ALL_ALLOWED_ROLES)
+    const months = new Map<string, MonthEntry>()
+
+    for (const row of rawRows) {
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid) continue
+      if (!ROLES.has(String(row['Role'] ?? '').trim())) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      if (!months.has(ym)) months.set(ym, {
+        ym, partners: new Set(),
+        pByGrp: mk0(() => new Set<string>()),
+        osago: mk0(() => 0),
+        kasko: mk0(() => 0),
+      })
+      const m = months.get(ym)!
+      const g = grp(rid)
+      m.partners.add(rid)
+      m.pByGrp[g].add(rid)
+      if (String(row.State ?? '') === 'PolicyIssued') {
+        m.osago[g]++
+        if (String(row.CrossIsBought ?? '').trim() === 'Да') m.kasko[g]++
+      }
+    }
+
+    return Array.from(months.values()).sort((a, b) => a.ym.localeCompare(b.ym))
+  }, [rawRows])
+
+  const fmtYM = (ym: string) => {
+    const [y, mo] = ym.split('-')
+    const names = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+    return `${names[parseInt(mo) - 1]} '${y.slice(2)}`
+  }
+
+  const fmtPctLocal = (num: number, den: number) =>
+    den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
+
+  return (
+    <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
+      <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100">
+        <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
+        <p className="text-xs text-indigo-500 mt-1">
+          Группы — по числу списаний за всю историю. Конверсия — Каско / ОСАГО в конкретном месяце.
+        </p>
+        {/* Легенда */}
+        <div className="flex flex-wrap gap-4 mt-2">
+          {GKS.map(g => (
+            <span key={g} className="flex items-center gap-1 text-xs text-gray-600">
+              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: GK_COLOR[g] }} />
+              {GK_LABEL[g]}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[860px]">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+            <tr className="border-b border-gray-200">
+              <th className="px-4 py-2 text-left" rowSpan={2}>Месяц</th>
+              <th className="px-4 py-2 text-right" rowSpan={2}>Партнёров</th>
+              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля в группе, %</th>
+              <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={4}>Конв. ОСАГО→Каско</th>
+            </tr>
+            <tr className="border-b border-gray-200">
+              {GKS.map(g => (
+                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL[g]}</th>
+              ))}
+              <th className="px-3 py-1.5 text-center text-gray-400">Бар</th>
+              {GKS.map(g => (
+                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]} border-l border-gray-100 first:border-l-0`}>
+                  {GK_LABEL[g]}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map(m => {
+              const total = m.partners.size
+              const pcts = GKS.map(g => total > 0 ? (m.pByGrp[g].size / total) * 100 : 0)
+              return (
+                <tr key={m.ym} className="border-t border-gray-100 hover:bg-indigo-50/30 transition-colors">
+                  <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{fmtYM(m.ym)}</td>
+                  <td className="px-4 py-2 text-right tabular-nums text-gray-600">{fmtN(total)}</td>
+                  {GKS.map((g, i) => (
+                    <td key={g} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]}`}>
+                      {total > 0 ? `${Math.round(pcts[i])}%` : '—'}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2">
+                    <div className="flex h-3 rounded overflow-hidden w-20">
+                      {GKS.map((g, i) => (
+                        <div key={g} style={{ width: `${pcts[i]}%`, backgroundColor: GK_COLOR[g] }}
+                          title={`${GK_LABEL[g]}: ${Math.round(pcts[i])}%`} />
+                      ))}
+                    </div>
+                  </td>
+                  {GKS.map(g => (
+                    <td key={g} className={`px-3 py-2 text-center tabular-nums font-medium ${GK_TEXT[g]} border-l border-gray-100`}>
+                      {fmtPctLocal(m.kasko[g], m.osago[g])}
+                    </td>
+                  ))}
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
