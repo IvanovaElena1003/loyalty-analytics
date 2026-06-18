@@ -249,43 +249,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     downloadXlsx(group.map(p => buildPartnerRow(p)), filename)
   }
 
-  function SummaryTable({ data }: { data: typeof tenOrMore }) {
-    if (data.length === 0) return (
-      <p className="text-sm text-gray-400 italic px-4 py-3">Нет данных</p>
-    )
-    return (
-      <div className="overflow-auto" style={{ maxHeight: '360px' }}>
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-            <tr>
-              <th className="px-4 py-2 text-left">ФИО / RenId</th>
-              <th className="px-4 py-2 text-left">Роль</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">Списаний, шт.</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">Сумма РБ</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map(p => (
-              <tr key={p.renId} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2">
-                  <span className="font-medium text-gray-800">{p.fullName}</span>
-                  <span className="block text-xs text-gray-400">{p.renId}</span>
-                </td>
-                <td className="px-4 py-2 text-xs text-gray-500">{p.role}</td>
-                <td className="px-4 py-2 text-right tabular-nums font-semibold text-gray-800">
-                  {p.spendRows.length > 0 ? p.spendRows.length : '—'}
-                </td>
-                <td className="px-4 py-2 text-right tabular-nums text-indigo-600 font-medium">
-                  {p.totalSpend > 0 ? fmtN(p.totalSpend) : '—'}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    )
-  }
-
   const totalEventsTen   = tenOrMore.reduce((s, p) => s + p.spendRows.length, 0)
   const totalSpendTen    = tenOrMore.reduce((s, p) => s + p.totalSpend, 0)
   const totalEventsThree = threeToNine.reduce((s, p) => s + p.spendRows.length, 0)
@@ -299,13 +262,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       {/* Сводный дашборд */}
       <SummaryDashboard rawRows={rawRows} />
 
-      {/* Пояснение */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-        <strong>Дашборд: Партнёры по частоте списания Рен-бонусов в 2026 году.</strong>{' '}
-        Критерий списания: <code className="bg-blue-100 px-1 rounded">CrossIsBought = Да</code> и
-        (ChargedToIncreasedKV ≠ 0 <em>или</em> FinalPrice ≠ PolicyPrice). Каждая такая строка = 1 событие.
-        Группа «Списали 0 раз» — только партнёры, у которых за всю историю было хотя бы одно начисление.
-      </div>
 
       {/* ── Четыре группы ──────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -323,7 +279,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               className="shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-emerald-50/30">
+          <div className="px-5 py-4 flex flex-wrap gap-5 bg-emerald-50/30">
             <div>
               <p className="text-xs text-gray-500">Партнёров</p>
               <p className="text-3xl font-bold text-emerald-700">{fmtN(tenOrMore.length)}</p>
@@ -337,7 +293,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendTen)}</p>
             </div>
           </div>
-          <SummaryTable data={tenOrMore} />
         </div>
 
         {/* Группа 3–9: активные */}
@@ -353,7 +308,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               className="shrink-0 text-xs bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-green-50/30">
+          <div className="px-5 py-4 flex flex-wrap gap-5 bg-green-50/30">
             <div>
               <p className="text-xs text-gray-500">Партнёров</p>
               <p className="text-3xl font-bold text-green-700">{fmtN(threeToNine.length)}</p>
@@ -367,7 +322,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendThree)}</p>
             </div>
           </div>
-          <SummaryTable data={threeToNine} />
         </div>
 
         {/* Группа B: 1–2 списания */}
@@ -383,7 +337,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               className="shrink-0 text-xs bg-amber-500 text-white hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-amber-50/30">
+          <div className="px-5 py-4 flex flex-wrap gap-5 bg-amber-50/30">
             <div>
               <p className="text-xs text-gray-500">Партнёров</p>
               <p className="text-3xl font-bold text-amber-700">{fmtN(oneOrTwo.length)}</p>
@@ -397,7 +351,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendB)}</p>
             </div>
           </div>
-          <SummaryTable data={oneOrTwo} />
         </div>
 
         {/* Группа C: 0 списаний, но с историей начислений */}
@@ -413,7 +366,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               className="shrink-0 text-xs bg-slate-500 text-white hover:bg-slate-600 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 border-b border-gray-100 bg-slate-50/30">
+          <div className="px-5 py-4 flex flex-wrap gap-5 bg-slate-50/30">
             <div>
               <p className="text-xs text-gray-500">Партнёров</p>
               <p className="text-3xl font-bold text-slate-600">{fmtN(neverSpent.length)}</p>
@@ -423,7 +376,6 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-gray-400">0</p>
             </div>
           </div>
-          <SummaryTable data={neverSpent} />
         </div>
 
       </div>
