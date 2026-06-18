@@ -123,12 +123,12 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       }
     }
 
-    // Шаг 2: считаем события списания 2026 (partnerMap уже отфильтрован по ролям)
-    for (const row of rows2026) {
+    // Шаг 2: считаем события списания за всю историю
+    for (const row of rawRows) {
       if (!isSpendingRow(row)) continue
       const renId = String(row['RenId'] ?? '').trim()
       const p = partnerMap.get(renId)
-      if (!p) continue  // не в разрешённых ролях — пропускаем
+      if (!p) continue
       p.spendRows.push(row)
       p.totalSpend += calcSpend(row)
     }
@@ -146,7 +146,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       .filter(p => p.spendRows.length >= 1 && p.spendRows.length < 3)
       .sort((a, b) => b.spendRows.length - a.spendRows.length)
 
-    // Группа C: 0 списаний в 2026, но хоть раз начисляли за всю историю
+    // Группа C: 0 списаний за всю историю, но хоть раз начисляли
     const neverSpent = all
       .filter(p => p.spendRows.length === 0 && everAccrued.has(p.renId))
       .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
@@ -240,8 +240,8 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       if (k === 'RenId' || k === 'FullName' || k === 'Role') continue
       out[k] = v
     }
-    out['Кол-во_списаний_2026'] = p.spendRows.length
-    out['Сумма_РБ_2026']        = Math.round(p.totalSpend)
+    out['Кол-во_списаний_всего'] = p.spendRows.length
+    out['Сумма_РБ_всего']        = Math.round(p.totalSpend)
     return out
   }
 
@@ -271,7 +271,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
           <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-emerald-800 text-base">🏆 Списали 10+ раз</h3>
-              <p className="text-xs text-emerald-600 mt-0.5">Супер-активные пользователи (2026)</p>
+              <p className="text-xs text-emerald-600 mt-0.5">Супер-активные пользователи</p>
             </div>
             <button
               onClick={() => handleDownload(tenOrMore, 'spent_10plus_2026.xlsx')}
@@ -300,7 +300,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
           <div className="px-5 py-4 bg-green-50 border-b border-green-200 flex items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-green-800 text-base">✅ Списали 3–9 раз</h3>
-              <p className="text-xs text-green-600 mt-0.5">Активные пользователи (2026)</p>
+              <p className="text-xs text-green-600 mt-0.5">Активные пользователи</p>
             </div>
             <button
               onClick={() => handleDownload(threeToNine, 'spent_3_9_2026.xlsx')}
@@ -329,7 +329,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
           <div className="px-5 py-4 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-amber-800 text-base">⚠️ Списали 1–2 раза</h3>
-              <p className="text-xs text-amber-600 mt-0.5">Низкая активность (2026)</p>
+              <p className="text-xs text-amber-600 mt-0.5">Низкая активность</p>
             </div>
             <button
               onClick={() => handleDownload(oneOrTwo, 'spent_1_2_2026.xlsx')}
@@ -358,7 +358,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
           <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-slate-700 text-base">🔴 Списали 0 раз</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Есть начисления за всю историю, но не списывали в 2026</p>
+              <p className="text-xs text-slate-500 mt-0.5">Есть начисления за всю историю, но ни разу не списывали</p>
             </div>
             <button
               onClick={() => handleDownload(neverSpent, 'spent_0_with_accruals_2026.xlsx')}
@@ -372,7 +372,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-slate-600">{fmtN(neverSpent.length)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Списаний в 2026</p>
+              <p className="text-xs text-gray-500">Списаний всего</p>
               <p className="text-3xl font-bold text-gray-400">0</p>
             </div>
           </div>
@@ -523,7 +523,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 
       {/* Шапка */}
       <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-3">
-        <h3 className="font-bold text-blue-800 text-base">Агенты 2026: сводка по группам</h3>
+        <h3 className="font-bold text-blue-800 text-base">Вовлечённость партнёров в программу лояльности</h3>
 
         {/* Фильтр по роли */}
         <div>
