@@ -460,13 +460,16 @@ export default function KeyMetricsTab({ rawRows }: Props) {
 }
 
 // ── Сводный дашборд ─────────────────────────────────────────────────────────
+type SAgg = { osago25: number; kasko25: number; osago26: number; kasko26: number }
+
 function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
 
   const G = useMemo(() => {
     const roleSet = new Set(selectedRoles)
+    const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
 
-    // Вся история: evenIssued, everAccrued, spendCntEver — без фильтра по роли
     const everIssued   = new Set<string>()
     const everAccrued  = new Set<string>()
     const spendCntEver = new Map<string, number>()
@@ -481,7 +484,6 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       if (isSpendingRow(row)) spendCntEver.set(renId, (spendCntEver.get(renId) ?? 0) + 1)
     }
 
-    // Партнёры 2026 с разрешёнными ролями
     const partners2026 = new Set<string>()
     for (const row of rawRows) {
       if (parseYear(row.CreateDate) !== 2026) continue
@@ -507,7 +509,33 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       const g = grp(renId)
       if (g) cnt[g]++
     }
-    return { cnt, total: partners2026.size }
+
+    const mkA = (): SAgg => ({ osago25: 0, kasko25: 0, osago26: 0, kasko26: 0 })
+    const agg: Record<GKey, SAgg> = {
+      noIssued: mkA(), noBal: mkA(), zero: mkA(), oneTwo: mkA(), three: mkA(), ten: mkA(),
+    }
+    for (const row of rawRows) {
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
+      const g = grp(renId)
+      if (!g) continue
+      const yr = parseYear(row.CreateDate)
+      if (yr !== 2025 && yr !== 2026) continue
+      const state = String(row.State ?? '')
+      if (EXCL.has(state)) continue
+      const isIssued = state === 'PolicyIssued'
+      const isCross  = String(row.CrossIsBought ?? '').trim() === 'Да'
+      const st = agg[g]
+      if (yr === 2026) {
+        if (isIssued)            st.osago26++
+        if (isIssued && isCross) st.kasko26++
+      } else {
+        if (isIssued)            st.osago25++
+        if (isIssued && isCross) st.kasko25++
+      }
+    }
+
+    return { cnt, agg, total: partners2026.size }
   }, [rawRows, selectedRoles])
 
   const withBalTotal = G.cnt.zero + G.cnt.oneTwo + G.cnt.three + G.cnt.ten
@@ -516,25 +544,36 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
   const fmtPct = (num: number, den: number) =>
     den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
 
+  // Суммарные агрегаты для withBal строк
+  const spendKeys = ['zero', 'oneTwo', 'three', 'ten'] as const
+  const totalAgg: SAgg = {
+    osago25: spendKeys.reduce((s, k) => s + G.agg[k].osago25, 0),
+    kasko25: spendKeys.reduce((s, k) => s + G.agg[k].kasko25, 0),
+    osago26: spendKeys.reduce((s, k) => s + G.agg[k].osago26, 0),
+    kasko26: spendKeys.reduce((s, k) => s + G.agg[k].kasko26, 0),
+  }
+
   function toggleRole(role: string) {
     setSelectedRoles(prev =>
       prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
     )
   }
 
-  const spendRows: { key: 'zero' | 'oneTwo' | 'three' | 'ten'; label: string; color: string; bg: string }[] = [
-    { key: 'zero',   label: '0 раз — не списывали',  color: 'text-slate-600', bg: 'bg-slate-50' },
-    { key: 'oneTwo', label: '1–2 раза',               color: 'text-amber-700', bg: 'bg-amber-50' },
-    { key: 'three',  label: '3–9 раз',                color: 'text-green-700', bg: 'bg-green-50' },
-    { key: 'ten',    label: '10+ раз',                color: 'text-emerald-700', bg: 'bg-emerald-50' },
+  const spendRows: { key: typeof spendKeys[number]; label: string; color: string }[] = [
+    { key: 'zero',   label: '0 раз — не списывали',  color: 'text-slate-600' },
+    { key: 'oneTwo', label: '1–2 раза',               color: 'text-amber-700' },
+    { key: 'three',  label: '3–9 раз',                color: 'text-green-700' },
+    { key: 'ten',    label: '10+ раз',                color: 'text-emerald-700' },
   ]
 
   return (
     <div className="bg-white rounded-xl border border-blue-200 overflow-hidden shadow-sm">
 
-      {/* Шапка с фильтром и методологией */}
+      {/* Шапка */}
       <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-3">
         <h3 className="font-bold text-blue-800 text-base">Агенты 2026: сводка по группам</h3>
+
+        {/* Фильтр по роли */}
         <div>
           <p className="text-xs font-semibold text-blue-700 mb-1.5">Фильтр по роли:</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -547,69 +586,99 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
             ))}
           </div>
         </div>
-        <div className="text-xs text-blue-700 space-y-1">
-          <p>Партнёры из данных 2026 года. Вся история — данные за все годы из загруженного файла.</p>
-          <p><strong>Нет оформленных ОСАГО</strong> — за всю историю нет ни одной строки State = PolicyIssued.</p>
-          <p><strong>Есть ОСАГО, без начислений РБ</strong> — PolicyIssued есть, но LoyaltyPointsInLK никогда не был &gt; 0.</p>
-          <p><strong>Есть ОСАГО с РБ</strong> — был хоть раз PolicyIssued с LoyaltyPointsInLK &gt; 0. Разбивка по частоте списания Рен-бонусов за всю историю (не только 2026).</p>
-          <p><strong>«Списание РБ»</strong> — строка с CrossIsBought = Да и (ChargedToIncreasedKV ≠ 0 или FinalPrice ≠ PolicyPrice).</p>
+
+        {/* Методология — сворачиваемая */}
+        <div>
+          <button
+            onClick={() => setMethodologyOpen(o => !o)}
+            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+          >
+            <span>{methodologyOpen ? '▾' : '▸'}</span>
+            <span>Методология</span>
+          </button>
+          {methodologyOpen && (
+            <div className="mt-2 text-xs text-blue-700 space-y-1 border-t border-blue-100 pt-2">
+              <p>Партнёры из данных 2026 года. Вся история — данные за все годы из загруженного файла.</p>
+              <p><strong>Нет оформленных ОСАГО, только котировки</strong> — за всю историю нет ни одной строки State = PolicyIssued.</p>
+              <p><strong>Есть ОСАГО, без начислений РБ</strong> — PolicyIssued есть, но LoyaltyPointsInLK никогда не был &gt; 0.</p>
+              <p><strong>Есть ОСАГО с РБ</strong> — был хоть раз PolicyIssued с LoyaltyPointsInLK &gt; 0. Разбивка по частоте списания Рен-бонусов за всю историю.</p>
+              <p><strong>«Списание РБ»</strong> — строка с CrossIsBought = Да и (ChargedToIncreasedKV ≠ 0 или FinalPrice ≠ PolicyPrice).</p>
+              <p><strong>ОСАГО, шт.</strong> — оформленные полисы (State = PolicyIssued) партнёров группы в 2026 г.</p>
+              <p><strong>Каско от бесполисных, шт.</strong> — из них куплен Каско от бесполисных (CrossIsBought = Да).</p>
+              <p><strong>Конверсия Бесполис</strong> — Каско / ОСАГО × 100%.</p>
+            </div>
+          )}
         </div>
       </div>
 
       {/* Три KPI-карточки */}
       <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
-        {/* Нет ОСАГО */}
         <div className="px-5 py-4 bg-gray-50">
-          <p className="text-xs text-gray-500 font-medium mb-1">Нет оформленных ОСАГО</p>
+          <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Нет оформленных ОСАГО, только котировки</p>
           <p className="text-3xl font-bold text-gray-500">{fmtN(G.cnt.noIssued)}</p>
           <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noIssued, total)} от всех</p>
         </div>
-        {/* Есть ОСАГО, без РБ */}
         <div className="px-5 py-4 bg-gray-50">
-          <p className="text-xs text-gray-500 font-medium mb-1">Есть ОСАГО, без начислений РБ</p>
+          <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Есть ОСАГО, без начислений РБ</p>
           <p className="text-3xl font-bold text-gray-600">{fmtN(G.cnt.noBal)}</p>
           <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, total)} от всех</p>
         </div>
-        {/* Есть ОСАГО с РБ */}
         <div className="px-5 py-4 bg-blue-50">
-          <p className="text-xs text-blue-700 font-medium mb-1">Есть ОСАГО с начислением РБ</p>
+          <p className="text-xs text-blue-700 font-medium mb-1 leading-snug">Есть ОСАГО с начислением РБ</p>
           <p className="text-3xl font-bold text-blue-700">{fmtN(withBalTotal)}</p>
           <p className="text-sm text-blue-500 mt-0.5">{fmtPct(withBalTotal, total)} от всех</p>
         </div>
       </div>
 
-      {/* Разбивка «Есть ОСАГО с РБ» по частоте списания */}
+      {/* Разбивка по частоте списания */}
       <div className="px-5 py-3 bg-blue-50/40 border-b border-blue-100">
         <p className="text-xs font-semibold text-blue-700">
           Из {fmtN(withBalTotal)} партнёров с начислениями РБ — частота списания за всю историю:
         </p>
       </div>
-      <table className="w-full text-sm">
-        <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
-          <tr>
-            <th className="px-4 py-2.5 text-left">Частота списания РБ (вся история)</th>
-            <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
-            <th className="px-4 py-2.5 text-right whitespace-nowrap">% от группы с РБ</th>
-            <th className="px-4 py-2.5 text-right whitespace-nowrap">% от всех</th>
-          </tr>
-        </thead>
-        <tbody>
-          {spendRows.map(({ key, label, color }) => (
-            <tr key={key} className="border-t border-gray-100 hover:bg-blue-50/30 transition-colors">
-              <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">{fmtN(G.cnt[key])}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct(G.cnt[key], withBalTotal)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmtPct(G.cnt[key], total)}</td>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+            <tr>
+              <th className="px-4 py-2.5 text-left whitespace-nowrap">Частота списания РБ</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">% от группы с РБ</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">% от всех</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско от бесполисных, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2025</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2026</th>
             </tr>
-          ))}
-          <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold">
-            <td className="px-4 py-2.5 text-blue-800">Итого с РБ</td>
-            <td className="px-4 py-2.5 text-right tabular-nums text-blue-800">{fmtN(withBalTotal)}</td>
-            <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">100,0%</td>
-            <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fmtPct(withBalTotal, total)}</td>
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {spendRows.map(({ key, label, color }) => {
+              const a = G.agg[key]
+              return (
+                <tr key={key} className="border-t border-gray-100 hover:bg-blue-50/30 transition-colors">
+                  <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">{fmtN(G.cnt[key])}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct(G.cnt[key], withBalTotal)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmtPct(G.cnt[key], total)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(a.osago26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">{fmtN(a.kasko26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(a.kasko25, a.osago25)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-700 font-semibold">{fmtPct(a.kasko26, a.osago26)}</td>
+                </tr>
+              )
+            })}
+            <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold">
+              <td className="px-4 py-2.5 text-blue-800">Итого с РБ</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-800">{fmtN(withBalTotal)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">100,0%</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fmtPct(withBalTotal, total)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-gray-800">{fmtN(totalAgg.osago26)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-indigo-700">{fmtN(totalAgg.kasko26)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(totalAgg.kasko25, totalAgg.osago25)}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums text-blue-700">{fmtPct(totalAgg.kasko26, totalAgg.osago26)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
