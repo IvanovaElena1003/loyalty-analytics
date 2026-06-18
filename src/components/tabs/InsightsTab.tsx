@@ -27,6 +27,57 @@ function trend(cur: number, prev: number, absThreshold = 0.5): Dir {
   return 'down'
 }
 
+function parseYearMonth(v: unknown): string | null {
+  if (v == null) return null
+  let d: Date | null = null
+  if (v instanceof Date)             d = isNaN(v.getTime()) ? null : v
+  else if (typeof v === 'number' && v > 0) d = new Date((v - 25569) * 86400000)
+  else if (typeof v === 'string') {
+    const n = Number(v)
+    d = (!isNaN(n) && n > 0) ? new Date((n - 25569) * 86400000) : new Date(v)
+    if (isNaN(d.getTime())) d = null
+  }
+  if (!d) return null
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+}
+
+const INSIGHTS_ROLES = new Set([
+  'Агент', 'Субагент', 'Директор партнера',
+  'Продавец внутри партнера', 'Куратор внутри партнера',
+])
+
+function isSpendRow(row: AggregateResult['rawRows'][number]): boolean {
+  if (String(row.CrossIsBought ?? '').trim() !== 'Да') return false
+  const kv = Number(row.ChargedToIncreasedKV ?? 0)
+  if (!isNaN(kv) && kv !== 0) return true
+  const fp = Number(row.FinalPrice ?? 0)
+  const pp = Number((row as Record<string, unknown>)['PolicyPrice'] ?? 2490)
+  return !isNaN(fp) && !isNaN(pp) && fp !== pp
+}
+
+// Доля партнёров (INSIGHTS_ROLES) в данном наборе месяцев, у кого >= minN событий списания
+function spendFreqPct(
+  rawRows: AggregateResult['rawRows'],
+  monthKeys: Set<string>,
+  minN: number,
+): number {
+  const cnt  = new Map<string, number>()
+  const seen = new Set<string>()
+  for (const row of rawRows) {
+    const ym = parseYearMonth(row.CreateDate)
+    if (!ym || !monthKeys.has(ym)) continue
+    const renId = String((row as Record<string, unknown>)['RenId'] ?? '').trim()
+    const role  = String((row as Record<string, unknown>)['Role']  ?? '').trim()
+    if (!renId || !INSIGHTS_ROLES.has(role)) continue
+    seen.add(renId)
+    if (isSpendRow(row)) cnt.set(renId, (cnt.get(renId) ?? 0) + 1)
+  }
+  if (seen.size === 0) return 0
+  let n = 0
+  for (const id of seen) if ((cnt.get(id) ?? 0) >= minN) n++
+  return (n / seen.size) * 100
+}
+
 // ─── Типы инсайтов ────────────────────────────────────────────────────────────
 interface MetricInsight {
   label: string
@@ -167,6 +218,52 @@ function computeInsights(result: AggregateResult) {
   const s1 = computeSection1(rawRows, 'default')
   const triedPct = s1.grandTotal > 0 ? (s1.grandTried / s1.grandTotal) * 100 : 0
   const notTriedPct = 100 - triedPct
+
+  // ── Охват / использование программы (INSIGHTS_ROLES) ─────────────────────
+  const coveredSet = new Set<string>() // есть PolicyIssued + LoyaltyPointsInLK > 0
+  const issuredSet = new Set<string>() // есть PolicyIssued (любой LP)
+  const spendCntAll = new Map<string, number>()
+  for (const row of rawRows) {
+    const renId = String((row as Record<string, unknown>)['RenId'] ?? '').trim()
+    const role  = String((row as Record<string, unknown>)['Role']  ?? '').trim()
+    if (!renId || !INSIGHTS_ROLES.has(role)) continue
+    if (String(row.State ?? '') === 'PolicyIssued') {
+      issuredSet.add(renId)
+      const lp = Number(row.LoyaltyPointsInLK ?? 0)
+      if (!isNaN(lp) && lp > 0) coveredSet.add(renId)
+    }
+    if (isSpendRow(row)) spendCntAll.set(renId, (spendCntAll.get(renId) ?? 0) + 1)
+  }
+  const coveredCount = coveredSet.size
+  let usingCount = 0
+  for (const id of coveredSet) if ((spendCntAll.get(id) ?? 0) >= 3) usingCount++
+
+  // ── Метрики частоты списания (тренд по полупериодам) ──────────────────────
+  if (hasTrend) {
+    const mkSet = (half: MonthMetrics[]) => new Set(half.map(m => m.sortKey))
+    const earlyKeys  = mkSet(earlier)
+    const recentKeys = mkSet(recent)
+
+    const addFreqMetric = (label: string, minN: number) => {
+      const cur  = spendFreqPct(rawRows, recentKeys, minN)
+      const prev = spendFreqPct(rawRows, earlyKeys,  minN)
+      const delta = cur - prev
+      const dir   = trend(cur, prev, 0.3)
+      metrics.push({
+        label,
+        cur:   fmtPct(cur),
+        prev:  fmtPct(prev),
+        delta: fmtSign(delta),
+        dir,
+        goodDir: 'up',
+        detail: `Доля партнёров с ≥${minN} списаниями: ${cur.toFixed(1)}% (ранее ${prev.toFixed(1)}%)`,
+      })
+    }
+
+    addFreqMetric('Доля с 3+ списаниями', 3)
+    addFreqMetric('Доля с 5+ списаниями', 5)
+    addFreqMetric('Доля с 10+ списаниями', 10)
+  }
 
   // ── Рекомендации ─────────────────────────────────────────────────────────
   const recommendations: Recommendation[] = []
@@ -320,6 +417,8 @@ function computeInsights(result: AggregateResult) {
     totalAccrued,
     totalSpent,
     spendRatio,
+    coveredCount,
+    usingCount,
   }
 
   return { metrics, recommendations, segments, kpis, hasTrend, periodEarlier: earlier, periodRecent: recent }
@@ -364,64 +463,42 @@ export default function InsightsTab({ result }: Props) {
 
   const { metrics, recommendations, segments, kpis, hasTrend } = data
 
-  const improved = metrics.filter(m => m.dir !== 'flat' && m.dir === m.goodDir)
-  const worsened = metrics.filter(m => m.dir !== 'flat' && m.dir !== m.goodDir)
-  const stable   = metrics.filter(m => m.dir === 'flat')
-
   return (
     <div className="space-y-8">
 
-      {/* ── Шапка ────────────────────────────────────────────────────────── */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
-        <h2 className="text-xl font-bold mb-1">Сводные выводы по программе лояльности</h2>
-        <p className="text-blue-100 text-sm">
-          Период: {kpis.periodStart} — {kpis.periodEnd} · {kpis.months} мес.
-          {hasTrend && ' · Показан тренд (первая половина → вторая половина периода)'}
-        </p>
-
-        <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[
-            { label: 'Котировок всего', value: fmtN(kpis.totalQuotes) },
-            { label: 'Оформлено полисов', value: fmtN(kpis.totalIssued) },
-            { label: 'Конверсия (всего)', value: fmtPct(kpis.conversionOverall) },
-            { label: '% полисов с РБ', value: fmtPct(kpis.pctBonusOverall) },
-          ].map(k => (
-            <div key={k.label} className="bg-white/10 rounded-xl px-4 py-3 backdrop-blur-sm">
-              <p className="text-xs text-blue-100">{k.label}</p>
-              <p className="text-2xl font-bold mt-0.5">{k.value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Вовлечённость агентов ─────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Агентов охвачено программой</p>
-          <p className="text-3xl font-bold text-blue-700 mt-2">{fmtPct(kpis.triedPct)}</p>
-          <p className="text-sm text-gray-500 mt-1">
-            {fmtN(kpis.totalAgents - (kpis.totalAgents * kpis.notTriedPct / 100))} из {fmtN(kpis.totalAgents)} использовали РБ
+      {/* ── KPI-карточки ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="bg-white rounded-xl border border-blue-200 p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold leading-tight">Агентов охвачено программой</p>
+          <p className="text-3xl font-bold text-blue-700 mt-2">{fmtN(kpis.coveredCount)}</p>
+          <p className="text-xs text-gray-400 mt-1 leading-snug">
+            Есть PolicyIssued + хотя бы 1 начисление РБ
           </p>
-          <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(100, kpis.triedPct)}%` }} />
-          </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Начислено РБ (всего)</p>
+        <div className="bg-white rounded-xl border border-indigo-200 p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold leading-tight">Агентов используют программу</p>
+          <p className="text-3xl font-bold text-indigo-700 mt-2">{fmtN(kpis.usingCount)}</p>
+          <p className="text-xs text-gray-400 mt-1 leading-snug">
+            3+ списания за всю историю · {kpis.coveredCount > 0 ? fmtPct((kpis.usingCount / kpis.coveredCount) * 100) : '—'} от охваченных
+          </p>
+        </div>
+
+        <div className="bg-white rounded-xl border border-emerald-200 p-5">
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold leading-tight">Начислено РБ всего</p>
           <p className="text-3xl font-bold text-emerald-700 mt-2">{fmtN(kpis.totalAccrued)}</p>
-          <p className="text-sm text-gray-500 mt-1">Конверсия КК: {fmtPct(kpis.crossConvOverall)}</p>
+          <p className="text-xs text-gray-400 mt-1">Конверсия КК: {fmtPct(kpis.crossConvOverall)}</p>
         </div>
 
         <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold">Списано / начислено</p>
+          <p className="text-xs text-gray-500 uppercase tracking-wide font-semibold leading-tight">Списано РБ всего</p>
           <p className={`text-3xl font-bold mt-2 ${kpis.spendRatio < 30 ? 'text-red-600' : kpis.spendRatio < 60 ? 'text-amber-600' : 'text-emerald-700'}`}>
-            {fmtPct(kpis.spendRatio)}
+            {fmtN(kpis.totalSpent)}
           </p>
-          <p className="text-sm text-gray-500 mt-1">
-            Списано {fmtN(kpis.totalSpent)} из {fmtN(kpis.totalAccrued)} РБ
+          <p className="text-xs text-gray-400 mt-1">
+            {fmtPct(kpis.spendRatio)} от начисленного
           </p>
-          <div className="mt-3 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
             <div
               className={`h-full rounded-full ${kpis.spendRatio < 30 ? 'bg-red-400' : kpis.spendRatio < 60 ? 'bg-amber-400' : 'bg-emerald-500'}`}
               style={{ width: `${Math.min(100, kpis.spendRatio)}%` }}
@@ -429,82 +506,6 @@ export default function InsightsTab({ result }: Props) {
           </div>
         </div>
       </div>
-
-      {/* ── Тренд: три колонки ───────────────────────────────────────────── */}
-      {hasTrend && (
-        <div>
-          <h3 className="text-base font-bold text-gray-800 mb-3">
-            Тренд: первая половина периода → вторая половина
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Улучшилось */}
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">✅</span>
-                <h4 className="font-bold text-green-800 text-sm uppercase tracking-wide">
-                  Улучшилось{improved.length > 0 && ` (${improved.length})`}
-                </h4>
-              </div>
-              {improved.length === 0
-                ? <p className="text-sm text-green-400 italic">Нет улучшений в данном периоде</p>
-                : improved.map(m => (
-                  <div key={m.label} className="bg-white/70 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-gray-700 leading-tight">{m.label}</span>
-                      <span className="text-green-600 font-bold text-xs whitespace-nowrap">{m.delta}</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{m.detail}</p>
-                  </div>
-                ))
-              }
-            </div>
-
-            {/* Ухудшилось */}
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">❌</span>
-                <h4 className="font-bold text-red-800 text-sm uppercase tracking-wide">
-                  Ухудшилось{worsened.length > 0 && ` (${worsened.length})`}
-                </h4>
-              </div>
-              {worsened.length === 0
-                ? <p className="text-sm text-red-300 italic">Явных ухудшений не выявлено</p>
-                : worsened.map(m => (
-                  <div key={m.label} className="bg-white/70 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-gray-700 leading-tight">{m.label}</span>
-                      <span className="text-red-600 font-bold text-xs whitespace-nowrap">{m.delta}</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{m.detail}</p>
-                  </div>
-                ))
-              }
-            </div>
-
-            {/* Стабильно */}
-            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-2">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-xl">→</span>
-                <h4 className="font-bold text-gray-600 text-sm uppercase tracking-wide">
-                  Стабильно{stable.length > 0 && ` (${stable.length})`}
-                </h4>
-              </div>
-              {stable.length === 0
-                ? <p className="text-sm text-gray-300 italic">—</p>
-                : stable.map(m => (
-                  <div key={m.label} className="bg-white/70 rounded-lg px-3 py-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium text-gray-700 leading-tight">{m.label}</span>
-                      <span className="text-gray-400 text-xs whitespace-nowrap">{m.cur}</span>
-                    </div>
-                    <p className="text-[11px] text-gray-400 mt-0.5">{m.detail}</p>
-                  </div>
-                ))
-              }
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Детализация всех метрик ──────────────────────────────────────── */}
       <div>
