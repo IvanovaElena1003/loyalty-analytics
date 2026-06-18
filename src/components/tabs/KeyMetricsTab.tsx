@@ -603,10 +603,10 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">% от группы с РБ</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">% от всех</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО, шт.</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско от бесполисных, шт.</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2025</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конверсия Бесполис 2026</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско, шт.</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конв. '25</th>
+              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конв. '26</th>
             </tr>
           </thead>
           <tbody>
