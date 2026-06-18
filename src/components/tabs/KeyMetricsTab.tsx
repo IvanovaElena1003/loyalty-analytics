@@ -618,18 +618,18 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
           <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
             <div className="px-5 py-4 bg-gray-50">
               <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Нет оформленных ОСАГО, только котировки</p>
-              <p className="text-3xl font-bold text-gray-500">{fmtN(G.cnt.noIssued)}</p>
+              <p className="text-3xl font-bold text-gray-500">{fmtN(G.cnt.noIssued)} <span className="text-sm font-normal text-gray-400">партнёров</span></p>
               <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noIssued, total)} от всех</p>
             </div>
             <div className="px-5 py-4 bg-gray-50">
               <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Есть ОСАГО, без начислений РБ</p>
-              <p className="text-3xl font-bold text-gray-600">{fmtN(G.cnt.noBal)}</p>
+              <p className="text-3xl font-bold text-gray-600">{fmtN(G.cnt.noBal)} <span className="text-sm font-normal text-gray-400">партнёров</span></p>
               <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, total)} от всех</p>
               <p className="text-xs text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, hasIssued)} из имеющих ОСАГО</p>
             </div>
             <div className="px-5 py-4 bg-blue-50">
               <p className="text-xs text-blue-700 font-medium mb-1 leading-snug">Есть ОСАГО с начислением РБ</p>
-              <p className="text-3xl font-bold text-blue-700">{fmtN(withBalTotal)}</p>
+              <p className="text-3xl font-bold text-blue-700">{fmtN(withBalTotal)} <span className="text-sm font-normal text-blue-400">партнёров</span></p>
               <p className="text-sm text-blue-500 mt-0.5">{fmtPct(withBalTotal, total)} от всех</p>
               <p className="text-xs text-gray-400 mt-0.5">{fmtPct(withBalTotal, hasIssued)} из имеющих ОСАГО</p>
             </div>
