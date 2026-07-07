@@ -9,10 +9,11 @@ import AnomaliesTab from './components/tabs/AnomaliesTab'
 import EngagementTab from './components/tabs/EngagementTab'
 import InsightsTab from './components/tabs/InsightsTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
+import { isFullMode } from './config/mode'
 
 type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'insights' | 'keymetrics' | 'methodology' | 'anomalies'
 
-const TABS: { id: Tab; label: string; needsData?: true }[] = [
+const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: '📂 Загрузка' },
   { id: 'funnel',       label: '📊 Воронка',        needsData: true },
   { id: 'distribution', label: '📈 Распределение',  needsData: true },
@@ -22,6 +23,13 @@ const TABS: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: '🔧 Тех. вкладка',    needsData: true },
 ]
+
+// Вкладки ограниченной версии — наполняются по мере необходимости
+const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
+  { id: 'upload', label: '📂 Загрузка' },
+]
+
+const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
 
 function Spinner({ filename }: { filename: string }) {
   return (
@@ -129,6 +137,14 @@ export default function App() {
         {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
+
+        {/* Заглушка для limited-режима после загрузки файла */}
+        {!loading && !isFullMode && result && tab === 'upload' && (
+          <div className="mt-6 bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
+            <p className="text-lg font-medium text-gray-500">Аналитика загружена</p>
+            <p className="text-sm mt-1">Разделы этой версии дашборда появятся здесь</p>
+          </div>
+        )}
       </main>
     </div>
   )
