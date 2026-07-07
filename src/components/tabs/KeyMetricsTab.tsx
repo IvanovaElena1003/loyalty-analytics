@@ -86,6 +86,9 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       anyRow: RawRow
       spendRows: RawRow[]
       totalSpend: number
+      totalAccrual: number
+      accrualCount: number
+      lastAccrualDate: Date | null
     }
 
     // Шаг 0: партнёры, у которых хоть раз было начисление за ВСЮ историю
@@ -98,11 +101,10 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(renId)
     }
 
-    const rows2026 = rawRows.filter(r => parseYear(r.CreateDate) === 2026)
     const partnerMap = new Map<string, PartnerData>()
 
-    // Шаг 1: партнёры из 2026 с разрешёнными ролями
-    for (const row of rows2026) {
+    // Шаг 1: партнёры с начислениями за всю историю с разрешёнными ролями
+    for (const row of rawRows) {
       const renId = String(row['RenId'] ?? '').trim()
       if (!renId) continue
       const role = String(row['Role'] ?? '').trim()
@@ -115,6 +117,9 @@ export default function KeyMetricsTab({ rawRows }: Props) {
           anyRow:   row,
           spendRows: [],
           totalSpend: 0,
+          totalAccrual: 0,
+          accrualCount: 0,
+          lastAccrualDate: null,
         })
       }
       const p = partnerMap.get(renId)!
@@ -123,14 +128,24 @@ export default function KeyMetricsTab({ rawRows }: Props) {
       }
     }
 
-    // Шаг 2: считаем события списания за всю историю
+    // Шаг 2: считаем события списания и начисления за всю историю
     for (const row of rawRows) {
-      if (!isSpendingRow(row)) continue
       const renId = String(row['RenId'] ?? '').trim()
       const p = partnerMap.get(renId)
       if (!p) continue
-      p.spendRows.push(row)
-      p.totalSpend += calcSpend(row)
+      if (isSpendingRow(row)) {
+        p.spendRows.push(row)
+        p.totalSpend += calcSpend(row)
+      }
+      if (String(row.State ?? '') === 'PolicyIssued') {
+        const lp = toNum(row.LoyaltyPointsInLK)
+        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+          p.totalAccrual += lp
+          p.accrualCount++
+          const d = parseDate(row.CreateDate)
+          if (d && (!p.lastAccrualDate || d > p.lastAccrualDate)) p.lastAccrualDate = d
+        }
+      }
     }
 
     const all = Array.from(partnerMap.values())
@@ -229,30 +244,56 @@ export default function KeyMetricsTab({ rawRows }: Props) {
     return Object.keys(firstRow).filter(k => CONTACT_PATTERNS.test(k))
   }, [rawRows])
 
-  const POLICY_LEVEL_FIELDS = new Set([
-    'CreateDate', 'State', 'CrossIsBought', 'FinalPrice', 'PolicyPrice',
-    'ChargedToIncreasedKV', 'LoyaltyPointsInLK', 'LoyaltyPointsScoring',
-    'AvailableForUsePoints', 'QuotationNumber', '2490',
-  ])
-
   function buildPartnerRow(p: typeof tenOrMore[number]): Record<string, unknown> {
     const base = p.anyRow as Record<string, unknown>
     const out: Record<string, unknown> = {}
-    out['RenId'] = p.renId
-    out['ФИО']   = p.fullName
-    out['Роль']  = p.role
-    for (const [k, v] of Object.entries(base)) {
-      if (POLICY_LEVEL_FIELDS.has(k)) continue
-      if (k === 'RenId' || k === 'FullName' || k === 'Role') continue
-      out[k] = v
-    }
-    out['Кол-во_списаний_всего'] = p.spendRows.length
-    out['Сумма_РБ_всего']        = Math.round(p.totalSpend)
+    out['HeadPartnerCB']      = String(base['HeadPartnerCB'] ?? '').trim() || '[NULL]'
+    out['CashbookId']         = String(base['CashbookId'] ?? '').trim() || '[NULL]'
+    out['RenId']              = p.renId
+    out['ФИО']                = p.fullName
+    out['Роль']               = p.role
+    for (const cf of contactFields) out[cf] = base[cf] ?? '—'
+    out['Накоплено_РБ']       = Math.round(p.totalAccrual)
+    out['Событий_начисления'] = p.accrualCount
+    out['Списано_РБ']         = Math.round(p.totalSpend)
+    out['Кол-во_списаний']    = p.spendRows.length
+    out['Утилизация_%']       = p.totalAccrual > 0 ? Math.round((p.totalSpend / p.totalAccrual) * 100) : 0
+    out['Последнее_начисление'] = fmtDate(p.lastAccrualDate)
     return out
   }
 
   function handleDownload(group: typeof tenOrMore, filename: string) {
-    downloadXlsx(group.map(p => buildPartnerRow(p)), filename)
+    // Группируем: голова = HeadPartnerCB пустой, суб = HeadPartnerCB = CashbookId головы
+    type Grp = { head: typeof group[number]; subs: typeof group[number][] }
+    const groupMap = new Map<string, Grp>()
+
+    for (const p of group) {
+      const raw = p.anyRow as Record<string, unknown>
+      const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+      const cid    = String(raw['CashbookId']    ?? '').trim()
+      if (!headCB || headCB === '[NULL]') {
+        const key = cid || p.renId
+        if (!groupMap.has(key)) groupMap.set(key, { head: p, subs: [] })
+      }
+    }
+    for (const p of group) {
+      const raw = p.anyRow as Record<string, unknown>
+      const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+      if (headCB && headCB !== '[NULL]') {
+        if (groupMap.has(headCB)) groupMap.get(headCB)!.subs.push(p)
+        else groupMap.set(`orphan_${p.renId}`, { head: p, subs: [] })
+      }
+    }
+
+    const остаток = (p: typeof group[number]) => p.totalAccrual - p.totalSpend
+    const rows: Record<string, unknown>[] = []
+    for (const g of Array.from(groupMap.values())
+      .map(g => ({ ...g, maxОст: Math.max(остаток(g.head), ...g.subs.map(остаток)) }))
+      .sort((a, b) => b.maxОст - a.maxОст)) {
+      rows.push(buildPartnerRow(g.head))
+      for (const sub of g.subs.sort((a, b) => остаток(b) - остаток(a))) rows.push(buildPartnerRow(sub))
+    }
+    downloadXlsx(rows, filename)
   }
 
   const totalEventsTen   = tenOrMore.reduce((s, p) => s + p.spendRows.length, 0)
@@ -399,42 +440,64 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         data={underutilizers}
         contactFields={contactFields}
         onDownload={(rows) => {
-          // Группируем по HeadPartnerCB, внутри группы — по убыванию накоплений
-          type Group = { head: string; entries: typeof rows }
-          const groupMap = new Map<string, typeof rows>()
+          // Голова = HeadPartnerCB пустой/[NULL], CashbookId заполнен
+          // Суб = HeadPartnerCB = CashbookId головы
+          type Group = { head: typeof rows[0]; subs: typeof rows[0][] }
+          const groupMap = new Map<string, Group>()
+
           for (const s of rows) {
             const raw = s.anyRow as Record<string, unknown>
-            const head = String(raw['HeadPartnerCB'] ?? raw['HeadPartner'] ?? '—').trim() || '—'
-            if (!groupMap.has(head)) groupMap.set(head, [])
-            groupMap.get(head)!.push(s)
-          }
-          // Группы сортируем по суммарному накоплению убывания
-          const groups: Group[] = Array.from(groupMap.entries())
-            .map(([head, entries]) => ({ head, entries: entries.sort((a, b) => b.totalAccrual - a.totalAccrual) }))
-            .sort((a, b) => b.entries.reduce((s, e) => s + e.totalAccrual, 0) - a.entries.reduce((s, e) => s + e.totalAccrual, 0))
-
-          const out: Record<string, unknown>[] = []
-          for (const g of groups) {
-            for (const s of g.entries) {
-              const raw = s.anyRow as Record<string, unknown>
-              const r: Record<string, unknown> = {
-                HeadPartnerCB: g.head,
-                CashbookId:    String(raw['CashbookId'] ?? '—').trim(),
-                RenId: s.renId, ФИО: s.fullName, Роль: s.role,
-              }
-              for (const cf of contactFields) r[cf] = raw[cf] ?? '—'
-              r['Накоплено_РБ']        = Math.round(s.totalAccrual)
-              r['Событий_начисления']  = s.accrualCount
-              r['Кол-во_списаний']     = s.spendCount
-              r['Списано_РБ']          = Math.round(s.totalSpend)
-              r['Утилизация_%']        = s.totalAccrual > 0 ? Math.round((s.totalSpend / s.totalAccrual) * 100) : 0
-              r['Последнее_начисление'] = fmtDate(s.lastAccrualDate)
-              out.push(r)
+            const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+            const cid    = String(raw['CashbookId']    ?? '').trim()
+            if (!headCB || headCB === '[NULL]') {
+              const key = cid || s.renId
+              if (!groupMap.has(key)) groupMap.set(key, { head: s, subs: [] })
             }
+          }
+          for (const s of rows) {
+            const raw = s.anyRow as Record<string, unknown>
+            const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+            if (headCB && headCB !== '[NULL]') {
+              if (groupMap.has(headCB)) groupMap.get(headCB)!.subs.push(s)
+              else groupMap.set(`orphan_${s.renId}`, { head: s, subs: [] })
+            }
+          }
+
+          const mkRow = (s: typeof rows[0]) => {
+            const raw = s.anyRow as Record<string, unknown>
+            const r: Record<string, unknown> = {
+              HeadPartnerCB: String(raw['HeadPartnerCB'] ?? '').trim() || '[NULL]',
+              CashbookId:    String(raw['CashbookId']    ?? '').trim() || '[NULL]',
+              RenId: s.renId, ФИО: s.fullName, Роль: s.role,
+            }
+            for (const cf of contactFields) r[cf] = raw[cf] ?? '—'
+            r['Накоплено_РБ']        = Math.round(s.totalAccrual)
+            r['Событий_начисления']  = s.accrualCount
+            r['Списано_РБ']          = Math.round(s.totalSpend)
+            r['Кол-во_списаний']     = s.spendCount
+            r['Утилизация_%']        = s.totalAccrual > 0 ? Math.round((s.totalSpend / s.totalAccrual) * 100) : 0
+            r['Последнее_начисление'] = fmtDate(s.lastAccrualDate)
+            return r
+          }
+
+          const остаток = (s: typeof rows[0]) => s.totalAccrual - s.totalSpend
+          const out: Record<string, unknown>[] = []
+          // Сортируем группы по MAX остатку среди всех участников группы
+          for (const g of Array.from(groupMap.values())
+            .map(g => ({ ...g, maxОстаток: Math.max(остаток(g.head), ...g.subs.map(остаток)) }))
+            .sort((a, b) => b.maxОстаток - a.maxОстаток)) {
+            out.push(mkRow(g.head))
+            for (const sub of g.subs.sort((a, b) => остаток(b) - остаток(a))) out.push(mkRow(sub))
           }
           downloadXlsx(out, 'underutilizers_all.xlsx')
         }}
       />
+
+      {/* ── Когортный анализ (по месяцам) ─────────────────────────────── */}
+      <CohortBlock rawRows={rawRows} />
+
+      {/* ── Когортный анализ (накопительно) ───────────────────────────── */}
+      <CohortCumulativeBlock rawRows={rawRows} />
 
     </div>
   )
@@ -465,17 +528,17 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       if (isSpendingRow(row)) spendCntEver.set(renId, (spendCntEver.get(renId) ?? 0) + 1)
     }
 
-    const partners2026 = new Set<string>()
+    // Все партнёры с разрешёнными ролями за всю историю (популяция)
+    const partnersWithRole = new Set<string>()
     for (const row of rawRows) {
-      if (parseYear(row.CreateDate) !== 2026) continue
       const renId = String(row['RenId'] ?? '').trim()
       if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
-      partners2026.add(renId)
+      partnersWithRole.add(renId)
     }
 
     type GKey = 'noIssued' | 'noBal' | 'zero' | 'oneTwo' | 'three' | 'ten'
     function grp(renId: string): GKey | null {
-      if (!partners2026.has(renId)) return null
+      if (!partnersWithRole.has(renId)) return null
       if (!everIssued.has(renId))  return 'noIssued'
       if (!everAccrued.has(renId)) return 'noBal'
       const c = spendCntEver.get(renId) ?? 0
@@ -486,7 +549,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
     }
 
     const cnt: Record<GKey, number> = { noIssued: 0, noBal: 0, zero: 0, oneTwo: 0, three: 0, ten: 0 }
-    for (const renId of partners2026) {
+    for (const renId of partnersWithRole) {
       const g = grp(renId)
       if (g) cnt[g]++
     }
@@ -516,7 +579,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       }
     }
 
-    return { cnt, agg, total: partners2026.size }
+    return { cnt, agg, total: partnersWithRole.size }
   }, [rawRows, selectedRoles])
 
   const withBalTotal = G.cnt.zero + G.cnt.oneTwo + G.cnt.three + G.cnt.ten
@@ -527,12 +590,6 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 
   // Суммарные агрегаты для withBal строк
   const spendKeys = ['zero', 'oneTwo', 'three', 'ten'] as const
-  const totalAgg: SAgg = {
-    osago25: spendKeys.reduce((s, k) => s + G.agg[k].osago25, 0),
-    kasko25: spendKeys.reduce((s, k) => s + G.agg[k].kasko25, 0),
-    osago26: spendKeys.reduce((s, k) => s + G.agg[k].osago26, 0),
-    kasko26: spendKeys.reduce((s, k) => s + G.agg[k].kasko26, 0),
-  }
 
   function toggleRole(role: string) {
     setSelectedRoles(prev =>
@@ -568,14 +625,14 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
           </div>
         </div>
 
-        {/* Методология — сворачиваемая */}
+        {/* Как читать этот отчёт — сворачиваемая */}
         <div>
           <button
             onClick={() => setMethodologyOpen(o => !o)}
             className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
           >
             <span>{methodologyOpen ? '▾' : '▸'}</span>
-            <span>Методология</span>
+            <span>Как читать этот отчёт</span>
           </button>
           {methodologyOpen && (
             <div className="mt-2 text-xs text-blue-700 space-y-1 border-t border-blue-100 pt-2">
@@ -631,7 +688,6 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
               <th className="px-4 py-2.5 text-left whitespace-nowrap">Частота списания РБ</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">% от группы с РБ</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">% от всех</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско, шт.</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Конв. '25</th>
@@ -646,7 +702,6 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
                   <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">{fmtN(G.cnt[key])}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct(G.cnt[key], withBalTotal)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">{fmtPct(G.cnt[key], total)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(a.osago26)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">{fmtN(a.kasko26)}</td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(a.kasko25, a.osago25)}</td>
@@ -654,16 +709,6 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
                 </tr>
               )
             })}
-            <tr className="border-t-2 border-blue-200 bg-blue-50 font-semibold">
-              <td className="px-4 py-2.5 text-blue-800">Итого с РБ</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-blue-800">{fmtN(withBalTotal)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">100,0%</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">{fmtPct(withBalTotal, total)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-gray-800">{fmtN(totalAgg.osago26)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-indigo-700">{fmtN(totalAgg.kasko26)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(totalAgg.kasko25, totalAgg.osago25)}</td>
-              <td className="px-4 py-2.5 text-right tabular-nums text-blue-700">{fmtPct(totalAgg.kasko26, totalAgg.osago26)}</td>
-            </tr>
           </tbody>
         </table>
       </div>
@@ -674,7 +719,8 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 // ── Динамика вовлечённости по месяцам ───────────────────────────────────────
 type GK = 'zero' | 'oneTwo' | 'three' | 'ten'
 const GKS: GK[] = ['zero', 'oneTwo', 'three', 'ten']
-const GK_LABEL: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2', three: '3–9', ten: '10+' }
+const GK_LABEL: Record<GK, string> = { zero: 'Не списывали', oneTwo: 'Списано 1–2 раза', three: 'Списано 3–9 раз', ten: 'Списано 10+ раз' }
+const GK_LABEL_SHORT: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2 раза', three: '3–9 раз', ten: '10+ раз' }
 const GK_COLOR: Record<GK, string> = {
   zero: '#94a3b8', oneTwo: '#fbbf24', three: '#4ade80', ten: '#059669',
 }
@@ -683,9 +729,14 @@ const GK_TEXT: Record<GK, string> = {
 }
 
 function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
+  const [legendOpen, setLegendOpen] = useState(false)
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
+  const toggleRole = (role: string) =>
+    setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
+
   const { rows: data, N } = useMemo(() => {
-    // 1. Фиксированная база: everAccrued ∩ partners2026 (как в SummaryDashboard)
-    const ROLES = new Set(ALL_ALLOWED_ROLES)
+    // 1. Фиксированная база: everAccrued ∩ партнёры с выбранными ролями (вся история, без года)
+    const ROLES = new Set(selectedRoles)
     const everAccrued = new Set<string>()
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
@@ -693,17 +744,30 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       const lp = toNum(row.LoyaltyPointsInLK)
       if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
     }
-    const partners2026 = new Set<string>()
+    const partnersWithRole = new Set<string>()
     for (const row of rawRows) {
-      if (parseYear(row.CreateDate) !== 2026) continue
       const rid = String(row['RenId'] ?? '').trim()
       if (!rid || !ROLES.has(String(row['Role'] ?? '').trim())) continue
-      partners2026.add(rid)
+      partnersWithRole.add(rid)
     }
-    // База = только партнёры активные в 2026 с начислениями РБ
     const base = new Set<string>()
-    for (const rid of everAccrued) { if (partners2026.has(rid)) base.add(rid) }
+    for (const rid of everAccrued) { if (partnersWithRole.has(rid)) base.add(rid) }
     const N = base.size
+
+    // 2а. Первое начисление РБ по каждому партнёру (для накопительного счётчика активных)
+    const firstAccrualMs = new Map<string, number>()
+    for (const row of rawRows) {
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || !base.has(rid) || String(row.State ?? '') !== 'PolicyIssued') continue
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (isNull(row.LoyaltyPointsInLK) || lp <= 0) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      const ms = d.getTime()
+      if (!firstAccrualMs.has(rid) || ms < firstAccrualMs.get(rid)!) firstAccrualMs.set(rid, ms)
+    }
+    const firstAccrualsSorted = Array.from(firstAccrualMs.values()).sort((a, b) => a - b)
+    let faPtr = 0  // pointer for cumulative first-accrual count
 
     // 2. Временные метки событий списания по партнёру (отсортированные)
     const spendTs = new Map<string, number[]>()
@@ -763,6 +827,10 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         ptrs.set(rid, p)
       }
 
+      // Кол-во партнёров с начислениями РБ накопительно к этому месяцу
+      while (faPtr < firstAccrualsSorted.length && firstAccrualsSorted[faPtr] <= endMs) faPtr++
+      const cumActive = faPtr
+
       // Распределение по группам на этот момент (вся база N)
       const dist: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
       for (const rid of base) dist[grp(cumCnt.get(rid) ?? 0)]++
@@ -779,11 +847,11 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         }
       }
 
-      return { ym, dist, osago, kasko }
+      return { ym, dist, osago, kasko, cumActive }
     })
 
     return { rows, N }
-  }, [rawRows])
+  }, [rawRows, selectedRoles])
 
   const fmtYM = (ym: string) => {
     const [y, mo] = ym.split('-')
@@ -796,47 +864,100 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
 
   return (
     <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
-      <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100">
-        <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
-        <p className="text-xs text-indigo-500 mt-1">
-          Фиксированная база: <strong>{fmtN(N)}</strong> партнёров с начислениями РБ.
-          Группы — накопительно на конец каждого месяца. Партнёр перетекает в следующую группу по мере накопления списаний.
-          Конверсия — Каско / ОСАГО в конкретном месяце.
-        </p>
-        <div className="flex flex-wrap gap-4 mt-2">
+      <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
+            <p className="text-xs text-indigo-500 mt-0.5">Доля партнёров по количеству списаний — накопительно на конец каждого месяца</p>
+          </div>
+          {/* База */}
+          <div className="shrink-0 text-center bg-white border-2 border-indigo-300 rounded-xl px-4 py-2 shadow-sm">
+            <p className="text-2xl font-bold text-indigo-700 leading-none">{fmtN(N)}</p>
+            <p className="text-[10px] text-indigo-400 mt-0.5">партнёров с начислениями РБ</p>
+          </div>
+        </div>
+
+        {/* Фильтр по роли */}
+        <div>
+          <p className="text-xs font-semibold text-indigo-700 mb-1.5">Фильтр по роли:</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {ALL_ALLOWED_ROLES.map(role => (
+              <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input type="checkbox" checked={selectedRoles.includes(role)}
+                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className={selectedRoles.includes(role) ? 'text-indigo-800 font-medium' : 'text-indigo-300'}>{role}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Цветовая легенда */}
+        <div className="flex flex-wrap gap-4">
           {GKS.map(g => (
-            <span key={g} className="flex items-center gap-1 text-xs text-gray-600">
-              <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: GK_COLOR[g] }} />
+            <span key={g} className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: GK_COLOR[g] }} />
               {GK_LABEL[g]}
             </span>
           ))}
         </div>
+
+        {/* Сворачиваемая легенда */}
+        <div>
+          <button
+            onClick={() => setLegendOpen(o => !o)}
+            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+          >
+            <span>{legendOpen ? '▾' : '▸'}</span>
+            <span>Как читать этот отчёт</span>
+          </button>
+          {legendOpen && (
+            <div className="mt-2 text-xs text-indigo-700 space-y-1.5 border-t border-indigo-100 pt-2">
+              <p><strong>Фиксированная база ({fmtN(N)} партнёров)</strong> — все, у кого хоть раз было PolicyIssued с LoyaltyPointsInLK&nbsp;&gt;&nbsp;0 и есть разрешённая роль (Агент / Субагент / Директор партнёра и др.). База не меняется от месяца к месяцу.</p>
+              <p><strong>Доля по частоте списания</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Суммируется в 100% по строке (без столбца конверсии).</p>
+              <p><strong>Накопительно</strong> — однажды перейдя в группу «Списано 3–9 раз», партнёр остаётся в ней и не возвращается назад. Поэтому доля «Не списывали» со временем только уменьшается.</p>
+              <p><strong>Конв. ОСАГО→Каско</strong> — Каско (шт.) / ОСАГО (шт.) именно в этом конкретном месяце для партнёров данной группы (по накопленной группе на конец месяца).</p>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[860px]">
+        <table className="w-full text-sm min-w-[900px]">
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr className="border-b border-gray-200">
               <th className="px-4 py-2 text-left" rowSpan={2}>Месяц</th>
-              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля в группе (накопит.), % из {fmtN(N)}</th>
+              <th className="px-4 py-2 text-center border-l border-indigo-100" rowSpan={2}>
+                <span className="text-indigo-600">Партнёров<br/>с РБ (накопит.)</span>
+              </th>
+              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля партнёров по количеству списаний</th>
               <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={4}>Конв. ОСАГО→Каско в месяце</th>
             </tr>
             <tr className="border-b border-gray-200">
               {GKS.map(g => (
-                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL[g]}</th>
+                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL_SHORT[g]}</th>
               ))}
               <th className="px-3 py-1.5 text-center text-gray-400">Бар</th>
               {GKS.map(g => (
-                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL[g]}</th>
+                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL_SHORT[g]}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {data.map(m => {
+            {data.map((m, idx) => {
               const pcts = GKS.map(g => N > 0 ? (m.dist[g] / N) * 100 : 0)
+              const prevCumActive = idx > 0 ? data[idx - 1].cumActive : 0
+              const growthPct = prevCumActive > 0 ? ((m.cumActive - prevCumActive) / prevCumActive) * 100 : null
               return (
                 <tr key={m.ym} className="border-t border-gray-100 hover:bg-indigo-50/30 transition-colors">
                   <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{fmtYM(m.ym)}</td>
+                  <td className="px-4 py-2 text-center tabular-nums font-semibold text-indigo-600 border-l border-indigo-100">
+                    {fmtN(m.cumActive)}
+                    {growthPct !== null && growthPct !== 0 && (
+                      <span className="block text-[10px] font-normal text-emerald-600 leading-tight">
+                        +{growthPct < 1 ? growthPct.toFixed(1) : Math.round(growthPct)}%
+                      </span>
+                    )}
+                  </td>
                   {GKS.map((g, i) => (
                     <td key={g} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]}`}>
                       {`${Math.round(pcts[i])}%`}
@@ -891,7 +1012,7 @@ function UnderutilizersBlock({
       <div className="px-5 py-4 bg-purple-50 border-b border-purple-200 flex items-center justify-between gap-3">
         <div>
           <h3 className="font-bold text-purple-800 text-base">
-            💡 Топ-{TOP}: копят, но не используют баллы
+            ТОП: копят, но не используют баллы
           </h3>
           <p className="text-xs text-purple-500 mt-0.5">
             Ранжированы по неиспользованному остатку РБ (накоплено − списано) за всю историю.
@@ -919,9 +1040,17 @@ function UnderutilizersBlock({
               ))}
               <th className="px-4 py-2 text-right whitespace-nowrap">Накоплено, РБ</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Начислений</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">Списаний</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Списано, РБ</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">Утилизация</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Списаний</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">
+                <span className="inline-flex items-center gap-1">
+                  Утилизация
+                  <span
+                    title="Утилизация = Списано РБ / Накоплено РБ × 100%. Показывает, какую долю накопленных рен-бонусов партнёр уже потратил. 0% — ни разу не списывал, 100% — потратил всё накопленное."
+                    className="cursor-help inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-gray-400 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 text-[10px] font-bold leading-none transition-colors"
+                  >?</span>
+                </span>
+              </th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Посл. начисление</th>
             </tr>
           </thead>
@@ -952,13 +1081,13 @@ function UnderutilizersBlock({
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
                     {s.accrualCount}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">
-                    {s.spendCount > 0 ? s.spendCount : <span className="text-red-400 font-medium">0</span>}
-                  </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">
                     {s.totalSpend > 0 ? fmtN(s.totalSpend) : (
                       <span className="text-red-400 font-medium">0</span>
                     )}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">
+                    {s.spendCount > 0 ? s.spendCount : <span className="text-red-400 font-medium">0</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums">
                     <span className={`font-semibold ${isZeroSpend ? 'text-red-500' : 'text-amber-600'}`}>
@@ -977,6 +1106,373 @@ function UnderutilizersBlock({
 
       <div className="px-5 py-3 bg-purple-50/50 border-t border-purple-100 text-xs text-purple-400">
         Показаны топ-{TOP} из {data.length} партнёров с начислениями. Кнопка «xlsx» выгружает всех.
+      </div>
+    </div>
+  )
+}
+
+// ── Когортный анализ ─────────────────────────────────────────────────────────
+function ymStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function addMonthsToYM(ym: string, k: number): string {
+  const [y, m] = ym.split('-').map(Number)
+  const d = new Date(y, m - 1 + k, 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+function labelYM(ym: string): string {
+  const [y, m] = ym.split('-').map(Number)
+  return new Date(y, m - 1, 1).toLocaleString('ru-RU', { month: 'short', year: '2-digit' })
+    .replace(/^./, c => c.toUpperCase())
+}
+
+const MAX_COHORT_OFFSET = 12
+
+// Общая функция вычисления когорт (используется в двух блоках)
+function buildCohortData(rawRows: RawRow[], selectedRoles: string[]) {
+  const roleSet = new Set(selectedRoles)
+  const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
+  const firstAccrualYM = new Map<string, string>()
+  const crossMonthsMap = new Map<string, Set<string>>()
+  let maxDataYM = ''
+
+  for (const row of rawRows) {
+    const renId = String(row['RenId'] ?? '').trim()
+    if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
+    if (EXCL.has(String(row.State ?? ''))) continue
+    const d = parseDate(row.CreateDate)
+    if (!d) continue
+    const ym = ymStr(d)
+    if (ym > maxDataYM) maxDataYM = ym
+    if (String(row.State ?? '') === 'PolicyIssued') {
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+        const ex = firstAccrualYM.get(renId)
+        if (!ex || ym < ex) firstAccrualYM.set(renId, ym)
+      }
+    }
+    if (isSpendingRow(row)) {
+      if (!crossMonthsMap.has(renId)) crossMonthsMap.set(renId, new Set())
+      crossMonthsMap.get(renId)!.add(ym)
+    }
+  }
+
+  const cohortMap = new Map<string, string[]>()
+  for (const [pid, ym] of firstAccrualYM) {
+    if (!cohortMap.has(ym)) cohortMap.set(ym, [])
+    cohortMap.get(ym)!.push(pid)
+  }
+
+  const cohortMonths = Array.from(cohortMap.keys()).sort()
+  if (!cohortMonths.length) return null
+
+  const earliestYM = cohortMonths[0]
+  let dynMax = 0
+  for (let k = 0; k <= MAX_COHORT_OFFSET; k++) {
+    if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
+  }
+
+  return { cohortMap, cohortMonths, crossMonthsMap, maxDataYM, dynMax }
+}
+
+// Общий хедер с фильтрами и методологией
+function CohortHeader({
+  title, subtitle, accentColor, selectedRoles, onToggle, methodologyOpen, onToggleMethodology, methodologyText,
+}: {
+  title: string; subtitle: string; accentColor: string
+  selectedRoles: string[]; onToggle: (r: string) => void
+  methodologyOpen: boolean; onToggleMethodology: () => void; methodologyText: React.ReactNode
+}) {
+  return (
+    <div className={`px-5 py-4 border-b ${accentColor} space-y-3`}>
+      <div>
+        <h2 className="font-bold text-base">{title}</h2>
+        <p className="text-xs mt-0.5 opacity-80">{subtitle}</p>
+      </div>
+      <div>
+        <p className="text-xs font-semibold mb-1.5">Фильтр по роли:</p>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+          {ALL_ALLOWED_ROLES.map(role => (
+            <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+              <input type="checkbox" checked={selectedRoles.includes(role)}
+                onChange={() => onToggle(role)} className="w-3.5 h-3.5" />
+              <span className={selectedRoles.includes(role) ? 'font-medium' : 'opacity-40'}>{role}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <button onClick={onToggleMethodology}
+          className="flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-opacity">
+          <span>{methodologyOpen ? '▾' : '▸'}</span>
+          <span>Как читать этот отчёт</span>
+        </button>
+        {methodologyOpen && (
+          <div className="mt-2 text-xs space-y-1 border-t border-current/10 pt-2 opacity-80">
+            {methodologyText}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Общая таблица когорт
+function CohortTable({
+  cohortRows, maxOffset, cellBg,
+}: {
+  cohortRows: Array<{ cohortYM: string; N: number; cells: Array<{ count: number; pct: number } | null> }>
+  maxOffset: number
+  cellBg: (pct: number) => string
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="text-xs border-collapse">
+        <thead>
+          <tr className="bg-gray-50 border-b border-gray-200">
+            <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-0 bg-gray-50 z-10 border-r border-gray-200">
+              Когорта
+            </th>
+            <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">
+              Партнёров
+            </th>
+            {Array.from({ length: maxOffset + 1 }, (_, k) => (
+              <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[52px]">
+                M{k}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {cohortRows.map(row => (
+            <tr key={row.cohortYM} className="border-b border-gray-100 hover:brightness-95 transition-all">
+              <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap sticky left-0 bg-white z-10 border-r border-gray-200">
+                {labelYM(row.cohortYM)}
+              </td>
+              <td className="px-3 py-1.5 text-center tabular-nums text-gray-500 border-r border-gray-100">
+                {row.N.toLocaleString('ru-RU')}
+              </td>
+              {Array.from({ length: maxOffset + 1 }, (_, k) => {
+                const cell = row.cells[k]
+                if (!cell) return <td key={k} className="px-2 py-1.5 text-center text-gray-200">—</td>
+                return (
+                  <td key={k}
+                    title={`${cell.count} из ${row.N} партнёров`}
+                    className="px-2 py-1.5 text-center tabular-nums font-medium"
+                    style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
+                    {cell.pct > 0 ? `${cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%` : <span className="text-gray-300">0%</span>}
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Блок 1: конверсия в месяце (не накопительно) ─────────────────────────────
+function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
+
+  const result = useMemo(() => {
+    const d = buildCohortData(rawRows, selectedRoles)
+    if (!d) return null
+    const { cohortMap, cohortMonths, crossMonthsMap, maxDataYM, dynMax } = d
+    const cohortRows = cohortMonths.map(cohortYM => {
+      const partners = cohortMap.get(cohortYM)!
+      const N = partners.length
+      const cells: Array<{ count: number; pct: number } | null> = []
+      for (let k = 0; k <= dynMax; k++) {
+        const tYM = addMonthsToYM(cohortYM, k)
+        if (tYM > maxDataYM) { cells.push(null); continue }
+        const count = partners.filter(pid => crossMonthsMap.get(pid)?.has(tYM) ?? false).length
+        cells.push({ count, pct: N > 0 ? (count / N) * 100 : 0 })
+      }
+      return { cohortYM, N, cells }
+    })
+    const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
+    return { cohortRows, maxOffset: dynMax, maxPct }
+  }, [rawRows, selectedRoles])
+
+  if (!result) return null
+
+  function cellBg(pct: number) {
+    const i = Math.min(pct / result!.maxPct, 1)
+    return `rgba(16,185,129,${0.1 + i * 0.65})`  // emerald
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden shadow-sm">
+      <CohortHeader
+        title="📅 Когортный анализ: кросс-продажи по месяцам"
+        subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — % когорты, купивших Каско именно в этом относительном месяце (M0, M1 и т.д.)."
+        accentColor="bg-emerald-50 text-emerald-800 border-emerald-200"
+        selectedRoles={selectedRoles}
+        onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
+        methodologyOpen={methodologyOpen}
+        onToggleMethodology={() => setMethodologyOpen(o => !o)}
+        methodologyText={<>
+          <p><strong>Когорта</strong> — все партнёры, у которых первое начисление РБ (State=PolicyIssued, LoyaltyPointsInLK&gt;0) произошло в данном месяце.</p>
+          <p><strong>M0</strong> — тот же месяц, что и первое начисление. <strong>M1</strong> — следующий месяц и т.д.</p>
+          <p><strong>Ячейка</strong> — % партнёров когорты, у которых в этом конкретном месяце была хоть одна кросс-продажа (CrossIsBought=Да + списание РБ).</p>
+          <p>Один партнёр может попасть в несколько столбцов — если делал кросс в разные месяцы.</p>
+          <p>Чем темнее ячейка — тем выше доля партнёров с кросс-продажами в этом месяце.</p>
+        </>}
+      />
+      <CohortTable cohortRows={result.cohortRows} maxOffset={result.maxOffset} cellBg={cellBg} />
+      <div className="px-5 py-3 bg-emerald-50/40 border-t border-emerald-100 text-xs text-emerald-600">
+        Показывает активность когорты в каждом конкретном месяце. Не накопительно — один и тот же партнёр учитывается заново в каждом месяце, когда делает кросс.
+      </div>
+    </div>
+  )
+}
+
+// ── Блок 2: конверсия ОСАГО→Каско по сделкам когорты ────────────────────────
+function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
+
+  const result = useMemo(() => {
+    const roleSet = new Set(selectedRoles)
+    const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
+
+    // Строим когорты (первое начисление РБ)
+    const firstAccrualYM = new Map<string, string>()
+    // Для каждого партнёра и месяца: кол-во ОСАГО и кол-во Каско
+    const osagoByPidYM  = new Map<string, Map<string, number>>() // pid → ym → count
+    const kaskoByPidYM  = new Map<string, Map<string, number>>()
+    let maxDataYM = ''
+
+    for (const row of rawRows) {
+      const renId = String(row['RenId'] ?? '').trim()
+      if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
+      if (EXCL.has(String(row.State ?? ''))) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      const ym = ymStr(d)
+      if (ym > maxDataYM) maxDataYM = ym
+
+      if (String(row.State ?? '') === 'PolicyIssued') {
+        const lp = toNum(row.LoyaltyPointsInLK)
+        // Первое начисление
+        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+          const ex = firstAccrualYM.get(renId)
+          if (!ex || ym < ex) firstAccrualYM.set(renId, ym)
+        }
+        // Считаем ОСАГО (любой PolicyIssued)
+        if (!osagoByPidYM.has(renId)) osagoByPidYM.set(renId, new Map())
+        osagoByPidYM.get(renId)!.set(ym, (osagoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
+        // Считаем Каско (CrossIsBought + списание)
+        if (isSpendingRow(row)) {
+          if (!kaskoByPidYM.has(renId)) kaskoByPidYM.set(renId, new Map())
+          kaskoByPidYM.get(renId)!.set(ym, (kaskoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
+        }
+      }
+    }
+
+    // Группируем по когортам
+    const cohortMap = new Map<string, string[]>()
+    for (const [pid, ym] of firstAccrualYM) {
+      if (!cohortMap.has(ym)) cohortMap.set(ym, [])
+      cohortMap.get(ym)!.push(pid)
+    }
+    const cohortMonths = Array.from(cohortMap.keys()).sort()
+    if (!cohortMonths.length) return null
+
+    const earliestYM = cohortMonths[0]
+    let dynMax = 0
+    for (let k = 0; k <= MAX_COHORT_OFFSET; k++) {
+      if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
+    }
+
+    // Строим строки: в каждой ячейке — конверсия ОСАГО→Каско по всем сделкам когорты
+    const cohortRows = cohortMonths.map(cohortYM => {
+      const partners = cohortMap.get(cohortYM)!
+      const N = partners.length
+      const cells: Array<{ osago: number; kasko: number; pct: number } | null> = []
+      for (let k = 0; k <= dynMax; k++) {
+        const tYM = addMonthsToYM(cohortYM, k)
+        if (tYM > maxDataYM) { cells.push(null); continue }
+        let osago = 0, kasko = 0
+        for (const pid of partners) {
+          osago += osagoByPidYM.get(pid)?.get(tYM) ?? 0
+          kasko += kaskoByPidYM.get(pid)?.get(tYM) ?? 0
+        }
+        cells.push({ osago, kasko, pct: osago > 0 ? (kasko / osago) * 100 : 0 })
+      }
+      return { cohortYM, N, cells }
+    })
+
+    const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
+    return { cohortRows, maxOffset: dynMax, maxPct }
+  }, [rawRows, selectedRoles])
+
+  if (!result) return null
+
+  function cellBg(pct: number) {
+    const i = Math.min(pct / result!.maxPct, 1)
+    return `rgba(99,102,241,${0.08 + i * 0.62})`  // indigo
+  }
+
+  // Адаптируем CohortTable для ячеек с osago/kasko
+  return (
+    <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
+      <CohortHeader
+        title="📊 Когортный анализ: конверсия ОСАГО → Каско"
+        subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — конверсия ОСАГО→Каско по всем сделкам партнёров когорты в этом месяце."
+        accentColor="bg-indigo-50 text-indigo-800 border-indigo-200"
+        selectedRoles={selectedRoles}
+        onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
+        methodologyOpen={methodologyOpen}
+        onToggleMethodology={() => setMethodologyOpen(o => !o)}
+        methodologyText={<>
+          <p><strong>Когорта</strong> — все партнёры, у которых первое начисление РБ (State=PolicyIssued, LoyaltyPointsInLK&gt;0) произошло в данном месяце.</p>
+          <p><strong>M0</strong> — месяц первого начисления. <strong>Mk</strong> — k-й месяц после первого начисления.</p>
+          <p><strong>Ячейка</strong> — конверсия = Каско / ОСАГО × 100%, где считаются все полисы (не партнёры) когорты в данном месяце.</p>
+          <p>Например, если в M2 партнёры когорты оформили 500 ОСАГО и из них 80 с Каско — конверсия 16%.</p>
+          <p>Показывает, как меняется уровень кросс-продаж у «возрастной» когорты от месяца к месяцу.</p>
+          <p>Чем темнее ячейка — тем выше конверсия в Каско в этом месяце.</p>
+        </>}
+      />
+      <div className="overflow-x-auto">
+        <table className="text-xs border-collapse">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-200">
+              <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Когорта</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">Партнёров</th>
+              {Array.from({ length: result.maxOffset + 1 }, (_, k) => (
+                <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[52px]">M{k}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {result.cohortRows.map(row => (
+              <tr key={row.cohortYM} className="border-b border-gray-100 hover:brightness-95 transition-all">
+                <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap sticky left-0 bg-white z-10 border-r border-gray-200">{labelYM(row.cohortYM)}</td>
+                <td className="px-3 py-1.5 text-center tabular-nums text-gray-500 border-r border-gray-100">{row.N.toLocaleString('ru-RU')}</td>
+                {row.cells.map((cell, k) => {
+                  if (!cell) return <td key={k} className="px-2 py-1.5 text-center text-gray-200">—</td>
+                  return (
+                    <td key={k}
+                      title={`${cell.kasko} Каско из ${cell.osago} ОСАГО`}
+                      className="px-2 py-1.5 text-center tabular-nums font-medium"
+                      style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
+                      {cell.pct > 0
+                        ? `${cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%`
+                        : <span className="text-gray-300">—</span>}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div className="px-5 py-3 bg-indigo-50/40 border-t border-indigo-100 text-xs text-indigo-600">
+        Конверсия считается по полисам (не по партнёрам): Каско ÷ ОСАГО × 100% за каждый месяц. Наводи на ячейку — увидишь абсолютные числа.
       </div>
     </div>
   )
