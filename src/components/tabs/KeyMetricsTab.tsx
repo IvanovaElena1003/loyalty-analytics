@@ -658,11 +658,17 @@ const GK_TEXT: Record<GK, string> = {
 
 function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
   const data = useMemo(() => {
+    // Партнёры с начислениями РБ за всю историю (PolicyIssued + LoyaltyPointsInLK > 0)
+    const everAccrued = new Set<string>()
     const spendEver = new Map<string, number>()
     for (const row of rawRows) {
-      if (!isSpendingRow(row)) continue
       const rid = String(row['RenId'] ?? '').trim()
-      if (rid) spendEver.set(rid, (spendEver.get(rid) ?? 0) + 1)
+      if (!rid) continue
+      if (String(row.State ?? '') === 'PolicyIssued') {
+        const lp = toNum(row.LoyaltyPointsInLK)
+        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
+      }
+      if (isSpendingRow(row)) spendEver.set(rid, (spendEver.get(rid) ?? 0) + 1)
     }
 
     const grp = (rid: string): GK => {
@@ -690,6 +696,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
       if (!rid) continue
+      if (!everAccrued.has(rid)) continue  // только партнёры с начислениями РБ
       if (!ROLES.has(String(row['Role'] ?? '').trim())) continue
       const d = parseDate(row.CreateDate)
       if (!d) continue
@@ -727,7 +734,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100">
         <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
         <p className="text-xs text-indigo-500 mt-1">
-          Группы — по числу списаний за всю историю. Конверсия — Каско / ОСАГО в конкретном месяце.
+          Только партнёры с начислениями РБ (есть ОСАГО + LoyaltyPointsInLK &gt; 0 за всю историю). Группы — по числу списаний за всю историю. Конверсия — Каско / ОСАГО в конкретном месяце.
         </p>
         {/* Легенда */}
         <div className="flex flex-wrap gap-4 mt-2">
