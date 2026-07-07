@@ -212,7 +212,13 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         s.role.trim() !== 'Продавец' &&
         (s.totalSpend / s.totalAccrual) <= 0.05   // утилизация ≤ 5%
       )
-      .sort((a, b) => (b.totalAccrual - b.totalSpend) - (a.totalAccrual - a.totalSpend))
+      .sort((a, b) => {
+        // Первичная: больше накоплений; вторичная: ниже утилизация
+        if (b.totalAccrual !== a.totalAccrual) return b.totalAccrual - a.totalAccrual
+        const uA = a.totalAccrual > 0 ? a.totalSpend / a.totalAccrual : 0
+        const uB = b.totalAccrual > 0 ? b.totalSpend / b.totalAccrual : 0
+        return uA - uB
+      })
   }, [rawRows])
 
   // Контактные поля — ищем в первой строке данных
@@ -393,20 +399,40 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         data={underutilizers}
         contactFields={contactFields}
         onDownload={(rows) => {
-          const out = rows.map(s => {
-            const base = s.anyRow as Record<string, unknown>
-            const r: Record<string, unknown> = {
-              RenId: s.renId, ФИО: s.fullName, Роль: s.role,
+          // Группируем по HeadPartnerCB, внутри группы — по убыванию накоплений
+          type Group = { head: string; entries: typeof rows }
+          const groupMap = new Map<string, typeof rows>()
+          for (const s of rows) {
+            const raw = s.anyRow as Record<string, unknown>
+            const head = String(raw['HeadPartnerCB'] ?? raw['HeadPartner'] ?? '—').trim() || '—'
+            if (!groupMap.has(head)) groupMap.set(head, [])
+            groupMap.get(head)!.push(s)
+          }
+          // Группы сортируем по суммарному накоплению убывания
+          const groups: Group[] = Array.from(groupMap.entries())
+            .map(([head, entries]) => ({ head, entries: entries.sort((a, b) => b.totalAccrual - a.totalAccrual) }))
+            .sort((a, b) => b.entries.reduce((s, e) => s + e.totalAccrual, 0) - a.entries.reduce((s, e) => s + e.totalAccrual, 0))
+
+          const out: Record<string, unknown>[] = []
+          for (const g of groups) {
+            for (const s of g.entries) {
+              const raw = s.anyRow as Record<string, unknown>
+              const r: Record<string, unknown> = {
+                HeadPartnerCB: g.head,
+                CashbookId:    String(raw['CashbookId'] ?? '—').trim(),
+                RenId: s.renId, ФИО: s.fullName, Роль: s.role,
+              }
+              for (const cf of contactFields) r[cf] = raw[cf] ?? '—'
+              r['Накоплено_РБ']        = Math.round(s.totalAccrual)
+              r['Событий_начисления']  = s.accrualCount
+              r['Кол-во_списаний']     = s.spendCount
+              r['Списано_РБ']          = Math.round(s.totalSpend)
+              r['Утилизация_%']        = s.totalAccrual > 0 ? Math.round((s.totalSpend / s.totalAccrual) * 100) : 0
+              r['Последнее_начисление'] = fmtDate(s.lastAccrualDate)
+              out.push(r)
             }
-            for (const cf of contactFields) r[cf] = base[cf] ?? '—'
-            r['Накоплено_РБ_всего']     = Math.round(s.totalAccrual)
-            r['Событий_начисления']      = s.accrualCount
-            r['Списано_РБ_всего']        = Math.round(s.totalSpend)
-            r['Утилизация_%']            = s.totalAccrual > 0 ? Math.round((s.totalSpend / s.totalAccrual) * 100) : 0
-            r['Последнее_начисление']    = fmtDate(s.lastAccrualDate)
-            return r
-          })
-          downloadXlsx(out, 'underutilizers_top.xlsx')
+          }
+          downloadXlsx(out, 'underutilizers_all.xlsx')
         }}
       />
 
@@ -893,6 +919,7 @@ function UnderutilizersBlock({
               ))}
               <th className="px-4 py-2 text-right whitespace-nowrap">Накоплено, РБ</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Начислений</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Списаний</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Списано, РБ</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Утилизация</th>
               <th className="px-4 py-2 text-right whitespace-nowrap">Посл. начисление</th>
@@ -924,6 +951,9 @@ function UnderutilizersBlock({
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
                     {s.accrualCount}
+                  </td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-500">
+                    {s.spendCount > 0 ? s.spendCount : <span className="text-red-400 font-medium">0</span>}
                   </td>
                   <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">
                     {s.totalSpend > 0 ? fmtN(s.totalSpend) : (
