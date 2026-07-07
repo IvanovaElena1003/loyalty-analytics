@@ -1331,19 +1331,41 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
 }
 
 // ── Блок 2: конверсия ОСАГО→Каско по сделкам когорты ────────────────────────
+type SpendSegment = 'all' | '0' | '1' | '2' | '3-9' | '10+'
+
+const SPEND_SEGMENTS: { id: SpendSegment; label: string }[] = [
+  { id: 'all',  label: 'Все' },
+  { id: '0',    label: '0 списаний' },
+  { id: '1',    label: '1 списание' },
+  { id: '2',    label: '2 списания' },
+  { id: '3-9',  label: '3–9 списаний' },
+  { id: '10+',  label: '10+ списаний' },
+]
+
+function inSegment(totalKasko: number, seg: SpendSegment): boolean {
+  if (seg === 'all') return true
+  if (seg === '0')   return totalKasko === 0
+  if (seg === '1')   return totalKasko === 1
+  if (seg === '2')   return totalKasko === 2
+  if (seg === '3-9') return totalKasko >= 3 && totalKasko <= 9
+  if (seg === '10+') return totalKasko >= 10
+  return true
+}
+
 function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [spendSegment, setSpendSegment] = useState<SpendSegment>('all')
 
-  const result = useMemo(() => {
+  // Compute raw data once (independent of segment)
+  const rawData = useMemo(() => {
     const roleSet = new Set(selectedRoles)
     const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
 
-    // Строим когорты (первое начисление РБ)
     const firstAccrualYM = new Map<string, string>()
-    // Для каждого партнёра и месяца: кол-во ОСАГО и кол-во Каско
-    const osagoByPidYM  = new Map<string, Map<string, number>>() // pid → ym → count
-    const kaskoByPidYM  = new Map<string, Map<string, number>>()
+    const osagoByPidYM   = new Map<string, Map<string, number>>()
+    const kaskoByPidYM   = new Map<string, Map<string, number>>()
+    const totalKaskoByPid = new Map<string, number>()
     let maxDataYM = ''
 
     for (const row of rawRows) {
@@ -1357,23 +1379,20 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
 
       if (String(row.State ?? '') === 'PolicyIssued') {
         const lp = toNum(row.LoyaltyPointsInLK)
-        // Первое начисление
         if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
           const ex = firstAccrualYM.get(renId)
           if (!ex || ym < ex) firstAccrualYM.set(renId, ym)
         }
-        // Считаем ОСАГО (любой PolicyIssued)
         if (!osagoByPidYM.has(renId)) osagoByPidYM.set(renId, new Map())
         osagoByPidYM.get(renId)!.set(ym, (osagoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
-        // Считаем Каско (CrossIsBought + списание)
         if (isSpendingRow(row)) {
           if (!kaskoByPidYM.has(renId)) kaskoByPidYM.set(renId, new Map())
           kaskoByPidYM.get(renId)!.set(ym, (kaskoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
+          totalKaskoByPid.set(renId, (totalKaskoByPid.get(renId) ?? 0) + 1)
         }
       }
     }
 
-    // Группируем по когортам
     const cohortMap = new Map<string, string[]>()
     for (const [pid, ym] of firstAccrualYM) {
       if (!cohortMap.has(ym)) cohortMap.set(ym, [])
@@ -1388,9 +1407,17 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
     }
 
-    // Строим строки: в каждой ячейке — конверсия ОСАГО→Каско по всем сделкам когорты
+    return { cohortMap, cohortMonths, osagoByPidYM, kaskoByPidYM, totalKaskoByPid, maxDataYM, dynMax }
+  }, [rawRows, selectedRoles])
+
+  // Compute table rows filtered by segment
+  const result = useMemo(() => {
+    if (!rawData) return null
+    const { cohortMap, cohortMonths, osagoByPidYM, kaskoByPidYM, totalKaskoByPid, maxDataYM, dynMax } = rawData
+
     const cohortRows = cohortMonths.map(cohortYM => {
-      const partners = cohortMap.get(cohortYM)!
+      const allPartners = cohortMap.get(cohortYM)!
+      const partners = allPartners.filter(pid => inSegment(totalKaskoByPid.get(pid) ?? 0, spendSegment))
       const N = partners.length
       const cells: Array<{ osago: number; kasko: number; pct: number } | null> = []
       for (let k = 0; k <= dynMax; k++) {
@@ -1408,16 +1435,15 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
 
     const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
     return { cohortRows, maxOffset: dynMax, maxPct }
-  }, [rawRows, selectedRoles])
+  }, [rawData, spendSegment])
 
   if (!result) return null
 
   function cellBg(pct: number) {
     const i = Math.min(pct / result!.maxPct, 1)
-    return `rgba(99,102,241,${0.08 + i * 0.62})`  // indigo
+    return `rgba(99,102,241,${0.08 + i * 0.62})`
   }
 
-  // Адаптируем CohortTable для ячеек с osago/kasko
   return (
     <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
       <CohortHeader
@@ -1433,16 +1459,40 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           <p><strong>M0</strong> — месяц первого начисления. <strong>Mk</strong> — k-й месяц после первого начисления.</p>
           <p><strong>Ячейка</strong> — конверсия = Каско / ОСАГО × 100%, где считаются все полисы (не партнёры) когорты в данном месяце.</p>
           <p>Например, если в M2 партнёры когорты оформили 500 ОСАГО и из них 80 с Каско — конверсия 16%.</p>
-          <p>Показывает, как меняется уровень кросс-продаж у «возрастной» когорты от месяца к месяцу.</p>
+          <p><strong>Сегмент по списаниям</strong> — фильтр по общему числу кросс-транзакций партнёра за всё время в данных. Позволяет сравнивать конверсию активных и неактивных в кросс-продажах партнёров одной когорты.</p>
           <p>Чем темнее ячейка — тем выше конверсия в Каско в этом месяце.</p>
         </>}
       />
+
+      {/* Сегмент по числу списаний */}
+      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/30">
+        <p className="text-xs font-semibold text-indigo-700 mb-2">Сегмент по количеству кросс-транзакций (за всё время):</p>
+        <div className="flex flex-wrap gap-2">
+          {SPEND_SEGMENTS.map(seg => (
+            <button
+              key={seg.id}
+              onClick={() => setSpendSegment(seg.id)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                spendSegment === seg.id
+                  ? 'bg-indigo-600 text-white border-indigo-600'
+                  : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
+              }`}
+            >
+              {seg.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="overflow-x-auto">
         <table className="text-xs border-collapse">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Когорта</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">Партнёров</th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">
+                Партнёров
+                {spendSegment !== 'all' && <span className="block font-normal text-indigo-500 text-[10px]">в сегменте</span>}
+              </th>
               {Array.from({ length: result.maxOffset + 1 }, (_, k) => (
                 <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[52px]">M{k}</th>
               ))}
@@ -1473,6 +1523,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       </div>
       <div className="px-5 py-3 bg-indigo-50/40 border-t border-indigo-100 text-xs text-indigo-600">
         Конверсия считается по полисам (не по партнёрам): Каско ÷ ОСАГО × 100% за каждый месяц. Наводи на ячейку — увидишь абсолютные числа.
+        {spendSegment !== 'all' && <span className="ml-2 font-medium">· Сегмент: {SPEND_SEGMENTS.find(s => s.id === spendSegment)?.label}</span>}
       </div>
     </div>
   )
