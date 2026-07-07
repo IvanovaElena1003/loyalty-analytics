@@ -26,7 +26,8 @@ const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
 
 // Вкладки ограниченной версии — наполняются по мере необходимости
 const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload', label: '📂 Загрузка' },
+  { id: 'upload',      label: '📂 Загрузка' },
+  { id: 'keymetrics',  label: '🔑 Ключевые метрики', needsData: true },
 ]
 
 const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
