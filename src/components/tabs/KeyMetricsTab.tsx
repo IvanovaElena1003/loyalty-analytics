@@ -289,7 +289,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsTen)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Сумма, РБ</p>
+              <p className="text-xs text-gray-500">Списано, РБ</p>
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendTen)}</p>
             </div>
           </div>
@@ -318,7 +318,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsThree)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Сумма, РБ</p>
+              <p className="text-xs text-gray-500">Списано, РБ</p>
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendThree)}</p>
             </div>
           </div>
@@ -347,7 +347,7 @@ export default function KeyMetricsTab({ rawRows }: Props) {
               <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsB)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Сумма, РБ</p>
+              <p className="text-xs text-gray-500">Списано, РБ</p>
               <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendB)}</p>
             </div>
           </div>
@@ -658,7 +658,8 @@ const GK_TEXT: Record<GK, string> = {
 
 function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
   const { rows: data, N } = useMemo(() => {
-    // 1. Фиксированная база: партнёры с начислениями РБ за всю историю
+    // 1. Фиксированная база: everAccrued ∩ partners2026 (как в SummaryDashboard)
+    const ROLES = new Set(ALL_ALLOWED_ROLES)
     const everAccrued = new Set<string>()
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
@@ -666,14 +667,24 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       const lp = toNum(row.LoyaltyPointsInLK)
       if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
     }
-    const N = everAccrued.size
+    const partners2026 = new Set<string>()
+    for (const row of rawRows) {
+      if (parseYear(row.CreateDate) !== 2026) continue
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || !ROLES.has(String(row['Role'] ?? '').trim())) continue
+      partners2026.add(rid)
+    }
+    // База = только партнёры активные в 2026 с начислениями РБ
+    const base = new Set<string>()
+    for (const rid of everAccrued) { if (partners2026.has(rid)) base.add(rid) }
+    const N = base.size
 
     // 2. Временные метки событий списания по партнёру (отсортированные)
     const spendTs = new Map<string, number[]>()
     for (const row of rawRows) {
       if (!isSpendingRow(row)) continue
       const rid = String(row['RenId'] ?? '').trim()
-      if (!rid || !everAccrued.has(rid)) continue
+      if (!rid || !base.has(rid)) continue
       const d = parseDate(row.CreateDate)
       if (!d) continue
       if (!spendTs.has(rid)) spendTs.set(rid, [])
@@ -682,16 +693,16 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
     for (const ts of spendTs.values()) ts.sort((a, b) => a - b)
 
     // 3. ОСАГО/Каско по месяцам (только для партнёров из базы, с разрешёнными ролями)
-    const ROLES = new Set(ALL_ALLOWED_ROLES)
     const monthSet = new Set<string>()
     const mOsago = new Map<string, Map<string, { o: number; k: number }>>()
 
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
-      if (!rid || !everAccrued.has(rid)) continue
+      if (!rid || !base.has(rid)) continue
       const d = parseDate(row.CreateDate)
       if (!d) continue
       const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      if (ym < '2025-08') continue  // начинаем с августа 2025
       monthSet.add(ym)
       if (!ROLES.has(String(row['Role'] ?? '').trim())) continue
       if (String(row.State ?? '') !== 'PolicyIssued') continue
@@ -708,7 +719,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
     // 4. Накопительный обход: для каждого месяца — группа партнёра на конец месяца
     const grp = (c: number): GK => c >= 10 ? 'ten' : c >= 3 ? 'three' : c >= 1 ? 'oneTwo' : 'zero'
     const cumCnt = new Map<string, number>()
-    for (const rid of everAccrued) cumCnt.set(rid, 0)
+    for (const rid of base) cumCnt.set(rid, 0)
     const ptrs = new Map<string, number>()
     for (const rid of spendTs.keys()) ptrs.set(rid, 0)
 
@@ -728,7 +739,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
 
       // Распределение по группам на этот момент (вся база N)
       const dist: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
-      for (const rid of everAccrued) dist[grp(cumCnt.get(rid) ?? 0)]++
+      for (const rid of base) dist[grp(cumCnt.get(rid) ?? 0)]++
 
       // Конверсия в этом месяце по группе (группа = накопленная на этот момент)
       const osago: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
