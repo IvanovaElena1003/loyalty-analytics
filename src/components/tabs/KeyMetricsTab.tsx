@@ -657,67 +657,95 @@ const GK_TEXT: Record<GK, string> = {
 }
 
 function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
-  const data = useMemo(() => {
-    // Партнёры с начислениями РБ за всю историю (PolicyIssued + LoyaltyPointsInLK > 0)
+  const { rows: data, N } = useMemo(() => {
+    // 1. Фиксированная база: партнёры с начислениями РБ за всю историю
     const everAccrued = new Set<string>()
-    const spendEver = new Map<string, number>()
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
-      if (!rid) continue
-      if (String(row.State ?? '') === 'PolicyIssued') {
-        const lp = toNum(row.LoyaltyPointsInLK)
-        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
-      }
-      if (isSpendingRow(row)) spendEver.set(rid, (spendEver.get(rid) ?? 0) + 1)
+      if (!rid || String(row.State ?? '') !== 'PolicyIssued') continue
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
     }
+    const N = everAccrued.size
 
-    const grp = (rid: string): GK => {
-      const c = spendEver.get(rid) ?? 0
-      if (c >= 10) return 'ten'
-      if (c >= 3)  return 'three'
-      if (c >= 1)  return 'oneTwo'
-      return 'zero'
+    // 2. Временные метки событий списания по партнёру (отсортированные)
+    const spendTs = new Map<string, number[]>()
+    for (const row of rawRows) {
+      if (!isSpendingRow(row)) continue
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || !everAccrued.has(rid)) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      if (!spendTs.has(rid)) spendTs.set(rid, [])
+      spendTs.get(rid)!.push(d.getTime())
     }
+    for (const ts of spendTs.values()) ts.sort((a, b) => a - b)
 
-    type MonthEntry = {
-      ym: string
-      partners: Set<string>
-      pByGrp: Record<GK, Set<string>>
-      osago: Record<GK, number>
-      kasko: Record<GK, number>
-    }
-
-    const mk0 = <T,>(fn: () => T): Record<GK, T> =>
-      ({ zero: fn(), oneTwo: fn(), three: fn(), ten: fn() })
-
+    // 3. ОСАГО/Каско по месяцам (только для партнёров из базы, с разрешёнными ролями)
     const ROLES = new Set(ALL_ALLOWED_ROLES)
-    const months = new Map<string, MonthEntry>()
+    const monthSet = new Set<string>()
+    const mOsago = new Map<string, Map<string, { o: number; k: number }>>()
 
     for (const row of rawRows) {
       const rid = String(row['RenId'] ?? '').trim()
-      if (!rid) continue
-      if (!everAccrued.has(rid)) continue  // только партнёры с начислениями РБ
-      if (!ROLES.has(String(row['Role'] ?? '').trim())) continue
+      if (!rid || !everAccrued.has(rid)) continue
       const d = parseDate(row.CreateDate)
       if (!d) continue
       const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
-      if (!months.has(ym)) months.set(ym, {
-        ym, partners: new Set(),
-        pByGrp: mk0(() => new Set<string>()),
-        osago: mk0(() => 0),
-        kasko: mk0(() => 0),
-      })
-      const m = months.get(ym)!
-      const g = grp(rid)
-      m.partners.add(rid)
-      m.pByGrp[g].add(rid)
-      if (String(row.State ?? '') === 'PolicyIssued') {
-        m.osago[g]++
-        if (String(row.CrossIsBought ?? '').trim() === 'Да') m.kasko[g]++
-      }
+      monthSet.add(ym)
+      if (!ROLES.has(String(row['Role'] ?? '').trim())) continue
+      if (String(row.State ?? '') !== 'PolicyIssued') continue
+      if (!mOsago.has(ym)) mOsago.set(ym, new Map())
+      const mm = mOsago.get(ym)!
+      if (!mm.has(rid)) mm.set(rid, { o: 0, k: 0 })
+      const e = mm.get(rid)!
+      e.o++
+      if (String(row.CrossIsBought ?? '').trim() === 'Да') e.k++
     }
 
-    return Array.from(months.values()).sort((a, b) => a.ym.localeCompare(b.ym))
+    const months = Array.from(monthSet).sort()
+
+    // 4. Накопительный обход: для каждого месяца — группа партнёра на конец месяца
+    const grp = (c: number): GK => c >= 10 ? 'ten' : c >= 3 ? 'three' : c >= 1 ? 'oneTwo' : 'zero'
+    const cumCnt = new Map<string, number>()
+    for (const rid of everAccrued) cumCnt.set(rid, 0)
+    const ptrs = new Map<string, number>()
+    for (const rid of spendTs.keys()) ptrs.set(rid, 0)
+
+    const rows = months.map(ym => {
+      const [y, mo] = ym.split('-').map(Number)
+      const endMs = Date.UTC(y, mo, 1) - 1  // последняя мс месяца
+
+      // Добавляем накопленные списания до конца этого месяца
+      for (const [rid, ts] of spendTs) {
+        let p = ptrs.get(rid) ?? 0
+        while (p < ts.length && ts[p] <= endMs) {
+          cumCnt.set(rid, (cumCnt.get(rid) ?? 0) + 1)
+          p++
+        }
+        ptrs.set(rid, p)
+      }
+
+      // Распределение по группам на этот момент (вся база N)
+      const dist: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
+      for (const rid of everAccrued) dist[grp(cumCnt.get(rid) ?? 0)]++
+
+      // Конверсия в этом месяце по группе (группа = накопленная на этот момент)
+      const osago: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
+      const kasko: Record<GK, number> = { zero: 0, oneTwo: 0, three: 0, ten: 0 }
+      const mm = mOsago.get(ym)
+      if (mm) {
+        for (const [rid, e] of mm) {
+          const g = grp(cumCnt.get(rid) ?? 0)
+          osago[g] += e.o
+          kasko[g] += e.k
+        }
+      }
+
+      return { ym, dist, osago, kasko }
+    })
+
+    return { rows, N }
   }, [rawRows])
 
   const fmtYM = (ym: string) => {
@@ -734,9 +762,10 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100">
         <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
         <p className="text-xs text-indigo-500 mt-1">
-          Только партнёры с начислениями РБ (есть ОСАГО + LoyaltyPointsInLK &gt; 0 за всю историю). Группы — по числу списаний за всю историю. Конверсия — Каско / ОСАГО в конкретном месяце.
+          Фиксированная база: <strong>{fmtN(N)}</strong> партнёров с начислениями РБ.
+          Группы — накопительно на конец каждого месяца. Партнёр перетекает в следующую группу по мере накопления списаний.
+          Конверсия — Каско / ОСАГО в конкретном месяце.
         </p>
-        {/* Легенда */}
         <div className="flex flex-wrap gap-4 mt-2">
           {GKS.map(g => (
             <span key={g} className="flex items-center gap-1 text-xs text-gray-600">
@@ -752,9 +781,8 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr className="border-b border-gray-200">
               <th className="px-4 py-2 text-left" rowSpan={2}>Месяц</th>
-              <th className="px-4 py-2 text-right" rowSpan={2}>Партнёров</th>
-              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля в группе, %</th>
-              <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={4}>Конв. ОСАГО→Каско</th>
+              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля в группе (накопит.), % из {fmtN(N)}</th>
+              <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={4}>Конв. ОСАГО→Каско в месяце</th>
             </tr>
             <tr className="border-b border-gray-200">
               {GKS.map(g => (
@@ -762,23 +790,19 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
               ))}
               <th className="px-3 py-1.5 text-center text-gray-400">Бар</th>
               {GKS.map(g => (
-                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]} border-l border-gray-100 first:border-l-0`}>
-                  {GK_LABEL[g]}
-                </th>
+                <th key={g} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL[g]}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {data.map(m => {
-              const total = m.partners.size
-              const pcts = GKS.map(g => total > 0 ? (m.pByGrp[g].size / total) * 100 : 0)
+              const pcts = GKS.map(g => N > 0 ? (m.dist[g] / N) * 100 : 0)
               return (
                 <tr key={m.ym} className="border-t border-gray-100 hover:bg-indigo-50/30 transition-colors">
                   <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{fmtYM(m.ym)}</td>
-                  <td className="px-4 py-2 text-right tabular-nums text-gray-600">{fmtN(total)}</td>
                   {GKS.map((g, i) => (
                     <td key={g} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]}`}>
-                      {total > 0 ? `${Math.round(pcts[i])}%` : '—'}
+                      {`${Math.round(pcts[i])}%`}
                     </td>
                   ))}
                   <td className="px-3 py-2">
@@ -790,7 +814,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                     </div>
                   </td>
                   {GKS.map(g => (
-                    <td key={g} className={`px-3 py-2 text-center tabular-nums font-medium ${GK_TEXT[g]} border-l border-gray-100`}>
+                    <td key={g} className={`px-3 py-2 text-center tabular-nums font-medium ${GK_TEXT[g]}`}>
                       {fmtPctLocal(m.kasko[g], m.osago[g])}
                     </td>
                   ))}
