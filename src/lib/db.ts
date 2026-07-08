@@ -42,6 +42,7 @@ async function gunzip(blob: Blob): Promise<string> {
 }
 
 async function downloadJson(file: string): Promise<unknown[] | null> {
+  if (!supabase) return null
   const { data, error } = await supabase.storage.from(BUCKET).download(file)
   if (error || !data) return null
   const text = await gunzip(data)
@@ -49,6 +50,7 @@ async function downloadJson(file: string): Promise<unknown[] | null> {
 }
 
 async function uploadJson(file: string, rows: unknown[]): Promise<void> {
+  if (!supabase) throw new Error('Supabase не настроен')
   const blob = await gzip(JSON.stringify(rows))
   const { error } = await supabase.storage.from(BUCKET).upload(file, blob, {
     upsert: true,

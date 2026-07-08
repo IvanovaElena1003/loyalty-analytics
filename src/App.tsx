@@ -32,6 +32,27 @@ const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
 
 function Spinner({ filename }: { filename: string }) {
   const isDb = filename.startsWith('Загружаем данные из базы')
+  if (isDb) {
+    return (
+      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center gap-8 z-50">
+        <div className="flex flex-col items-center gap-4">
+          <div className="relative w-20 h-20">
+            <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
+            <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+          </div>
+          <div className="text-center">
+            <p className="text-gray-800 font-semibold text-lg">Загружаем данные</p>
+            <p className="text-gray-400 text-sm mt-1">Это займёт несколько секунд</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {[0,1,2].map(i => (
+            <div key={i} className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="relative w-16 h-16">
@@ -39,11 +60,9 @@ function Spinner({ filename }: { filename: string }) {
         <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
       </div>
       <div className="text-center">
-        <p className="text-gray-700 font-medium">{isDb ? 'Загружаем данные…' : 'Обрабатываю файл…'}</p>
+        <p className="text-gray-700 font-medium">Обрабатываю файл…</p>
         <p className="text-gray-400 text-sm mt-1 max-w-xs">{filename}</p>
-        <p className="text-gray-400 text-xs mt-2">
-          {isDb ? 'Данные хранятся в базе — файл загружать не нужно' : 'Для большого файла может занять 10–30 секунд'}
-        </p>
+        <p className="text-gray-400 text-xs mt-2">Для большого файла может занять 10–30 секунд</p>
       </div>
     </div>
   )
