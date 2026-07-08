@@ -1330,16 +1330,15 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
   )
 }
 
-// ── Блок 2: рост активности партнёров по когортам ─────────────────────────────
+// ── Блок 2: выход партнёров в активность по когортам ──────────────────────────
 type CohortType = 'accrual' | 'spend'
-const SPEND_THRESHOLDS = [1, 2, 3, 5, 10] as const
-type SpendThreshold = typeof SPEND_THRESHOLDS[number]
+type ActivitySegment = '3-9' | '10+'
 
 function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [cohortType, setCohortType] = useState<CohortType>('accrual')
-  const [threshold, setThreshold] = useState<SpendThreshold>(10)
+  const [segment, setSegment] = useState<ActivitySegment>('10+')
 
   // Сырые данные: не зависят от cohortType и threshold
   const rawData = useMemo(() => {
@@ -1384,7 +1383,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
     return { firstAccrualYM, firstSpendYM, crossSorted, maxDataYM }
   }, [rawRows, selectedRoles])
 
-  // Таблица: зависит от cohortType и threshold
+  // Таблица: зависит от cohortType и segment
   const result = useMemo(() => {
     const { firstAccrualYM, firstSpendYM, crossSorted, maxDataYM } = rawData
     const sourceMap = cohortType === 'accrual' ? firstAccrualYM : firstSpendYM
@@ -1403,7 +1402,6 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
     }
 
-    // Кумулятивное кол-во кросс-транзакций партнёра по targetYM включительно
     function cumCross(pid: string, targetYM: string): number {
       const months = crossSorted.get(pid)
       if (!months) return 0
@@ -1415,6 +1413,11 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       return total
     }
 
+    function inSeg(n: number): boolean {
+      if (segment === '3-9') return n >= 3 && n <= 9
+      return n >= 10
+    }
+
     const cohortRows = cohortMonths.map(cohortYM => {
       const partners = cohortMap.get(cohortYM)!
       const N = partners.length
@@ -1424,7 +1427,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         if (tYM > maxDataYM) { cells.push(null); continue }
         let count = 0
         for (const pid of partners) {
-          if (cumCross(pid, tYM) >= threshold) count++
+          if (inSeg(cumCross(pid, tYM))) count++
         }
         cells.push({ count, pct: N > 0 ? (count / N) * 100 : 0 })
       }
@@ -1433,7 +1436,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
 
     const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
     return { cohortRows, maxOffset: dynMax, maxPct }
-  }, [rawData, cohortType, threshold])
+  }, [rawData, cohortType, segment])
 
   if (!result) return null
 
@@ -1442,13 +1445,13 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
     return `rgba(99,102,241,${0.08 + i * 0.65})`
   }
 
-  const thresholdLabel = `${threshold}+ списаний`
+  const segmentLabel = segment === '3-9' ? '3–9 списаний' : '10+ списаний'
 
   return (
     <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
       <CohortHeader
-        title="📊 Когортный анализ: рост активности партнёров"
-        subtitle={`Ячейка — сколько партнёров из когорты набрали ${thresholdLabel} нарастающим итогом к этому месяцу.`}
+        title="📊 Когортный анализ: выход партнёров в активность"
+        subtitle={`Ячейка — сколько партнёров из когорты вошли в сегмент «${segmentLabel}» нарастающим итогом к этому месяцу.`}
         accentColor="bg-indigo-50 text-indigo-800 border-indigo-200"
         selectedRoles={selectedRoles}
         onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
@@ -1458,14 +1461,15 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           <p><strong>Когорта по первому начислению</strong> — партнёры, у которых первый PolicyIssued с LoyaltyPointsInLK&gt;0 был в этом месяце.</p>
           <p><strong>Когорта по первому списанию</strong> — партнёры, у которых первая кросс-транзакция (CrossIsBought=Да + списание РБ) была в этом месяце.</p>
           <p><strong>M0</strong> — месяц формирования когорты. <strong>Mk</strong> — k-й месяц после него.</p>
-          <p><strong>Ячейка</strong> — число и % партнёров когорты, которые к данному месяцу (нарастающим итогом) совершили не менее N кросс-транзакций.</p>
-          <p>Показывает, как быстро когорта «дозревает» до активных кросс-продавцов. Чем правее значение — тем дольше разогрев.</p>
-          <p><strong>Порог</strong> меняется кнопками ниже: 1+ (хоть раз), 5+ (регулярно), 10+ (активный продавец).</p>
+          <p><strong>Ячейка</strong> — число и % партнёров когорты, у которых к данному месяцу нарастающим итогом кросс-транзакций попало в выбранный сегмент.</p>
+          <p><strong>3–9 списаний</strong> — «умеренно активные»: начали делать кроссы, но ещё не вышли на стабильный поток.</p>
+          <p><strong>10+ списаний</strong> — «высокоактивные»: сформировавшаяся привычка к кросс-продажам.</p>
+          <p>Чем раньше появляются числа в строке — тем быстрее когорта «созревает».</p>
         </>}
       />
 
-      {/* Фильтры: тип когорты + порог */}
-      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/20 flex flex-wrap gap-6">
+      {/* Фильтры */}
+      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/20 flex flex-wrap gap-8">
         <div>
           <p className="text-xs font-semibold text-indigo-700 mb-2">Тип когорты:</p>
           <div className="flex gap-4">
@@ -1480,16 +1484,16 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-indigo-700 mb-2">Порог кросс-транзакций (нарастающим итогом):</p>
+          <p className="text-xs font-semibold text-indigo-700 mb-2">Сегмент по кол-ву кросс-транзакций:</p>
           <div className="flex gap-2">
-            {SPEND_THRESHOLDS.map(t => (
-              <button key={t} onClick={() => setThreshold(t)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                  threshold === t
+            {(['3-9', '10+'] as const).map(s => (
+              <button key={s} onClick={() => setSegment(s)}
+                className={`px-4 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  segment === s
                     ? 'bg-indigo-600 text-white border-indigo-600'
                     : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
                 }`}>
-                {t}+
+                {s === '3-9' ? '3–9 списаний' : '10+ списаний'}
               </button>
             ))}
           </div>
@@ -1516,7 +1520,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
                   if (!cell) return <td key={k} className="px-2 py-1.5 text-center text-gray-200">—</td>
                   return (
                     <td key={k}
-                      title={`${cell.count} из ${row.N} партнёров набрали ${thresholdLabel} к M${k}`}
+                      title={`${cell.count} из ${row.N} партнёров в сегменте «${segmentLabel}» к M${k}`}
                       className="px-2 py-1.5 text-center tabular-nums font-medium leading-tight"
                       style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
                       {cell.count > 0 ? (
@@ -1534,7 +1538,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         </table>
       </div>
       <div className="px-5 py-3 bg-indigo-50/40 border-t border-indigo-100 text-xs text-indigo-600">
-        Ячейка = число партнёров (и % под ним), набравших <strong>{thresholdLabel}</strong> нарастающим итогом к этому месяцу.
+        Ячейка = партнёры в сегменте <strong>«{segmentLabel}»</strong> нарастающим итогом к этому месяцу.
         {' '}Когорта: <strong>{cohortType === 'accrual' ? 'по первому начислению' : 'по первому списанию'}</strong>.
       </div>
     </div>
