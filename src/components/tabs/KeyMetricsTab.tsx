@@ -493,11 +493,11 @@ export default function KeyMetricsTab({ rawRows }: Props) {
         }}
       />
 
-      {/* ── Когортный анализ (по месяцам) ─────────────────────────────── */}
-      <CohortBlock rawRows={rawRows} />
-
-      {/* ── Когортный анализ (накопительно) ───────────────────────────── */}
+      {/* ── Когортный анализ: выход в активность ──────────────────────── */}
       <CohortCumulativeBlock rawRows={rawRows} />
+
+      {/* ── Когортный анализ: хотя бы 1 кросс в месяц ────────────────── */}
+      <CohortBlock rawRows={rawRows} />
 
     </div>
   )
@@ -960,7 +960,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                   </td>
                   {GKS.map((g, i) => (
                     <td key={g} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]}`}>
-                      {`${Math.round(pcts[i])}%`}
+                      {g === 'zero' ? `${Math.round(pcts[i])}%` : `${pcts[i].toFixed(1)}%`}
                     </td>
                   ))}
                   <td className="px-3 py-2">
@@ -1307,7 +1307,7 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
   return (
     <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden shadow-sm">
       <CohortHeader
-        title="📅 Когортный анализ: кросс-продажи по месяцам"
+        title="📅 Когортный анализ: Хотя бы 1 кросс-продажа в указанный месяц"
         subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — % когорты, купивших Каско именно в этом относительном месяце (M0, M1 и т.д.)."
         accentColor="bg-emerald-50 text-emerald-800 border-emerald-200"
         selectedRoles={selectedRoles}
@@ -1458,13 +1458,10 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         methodologyOpen={methodologyOpen}
         onToggleMethodology={() => setMethodologyOpen(o => !o)}
         methodologyText={<>
-          <p><strong>Когорта по первому начислению</strong> — партнёры, у которых первый PolicyIssued с LoyaltyPointsInLK&gt;0 был в этом месяце.</p>
-          <p><strong>Когорта по первому списанию</strong> — партнёры, у которых первая кросс-транзакция (CrossIsBought=Да + списание РБ) была в этом месяце.</p>
-          <p><strong>M0</strong> — месяц формирования когорты. <strong>Mk</strong> — k-й месяц после него.</p>
-          <p><strong>Ячейка</strong> — число и % партнёров когорты, у которых к данному месяцу нарастающим итогом кросс-транзакций попало в выбранный сегмент.</p>
-          <p><strong>3–9 списаний</strong> — «умеренно активные»: начали делать кроссы, но ещё не вышли на стабильный поток.</p>
-          <p><strong>10+ списаний</strong> — «высокоактивные»: сформировавшаяся привычка к кросс-продажам.</p>
-          <p>Чем раньше появляются числа в строке — тем быстрее когорта «созревает».</p>
+          <p><strong>Когорта</strong> — партнёры, у которых первое начисление РБ (или первое списание) произошло в данном месяце.</p>
+          <p><strong>M0</strong> — месяц формирования когорты. <strong>M1</strong> — следующий месяц и т.д.</p>
+          <p><strong>Ячейка</strong> — сколько партнёров из когорты к этому месяцу нарастающим итогом набрали 3–9 или 10+ кросс-транзакций.</p>
+          <p>Чем раньше появляются числа в строке — тем быстрее когорта выходит в активность.</p>
         </>}
       />
 
