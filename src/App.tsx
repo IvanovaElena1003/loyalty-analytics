@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { parseWorkbook, aggregate } from './utils/aggregate'
 import type { AggregateResult, RawRow } from './types'
 import UploadTab from './components/tabs/UploadTab'
@@ -8,6 +8,9 @@ import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
 import { isFullMode } from './config/mode'
+import { loadMainRowsFromDB, loadAgentRowsFromDB, saveMainRowsToDB, saveAgentRowsToDB } from './lib/db'
+
+const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
 type Tab = 'upload' | 'funnel' | 'distribution' | 'keymetrics' | 'methodology' | 'anomalies'
 
@@ -28,6 +31,7 @@ const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
 const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
 
 function Spinner({ filename }: { filename: string }) {
+  const isDb = filename.startsWith('Загружаем данные из базы')
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="relative w-16 h-16">
@@ -35,9 +39,11 @@ function Spinner({ filename }: { filename: string }) {
         <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
       </div>
       <div className="text-center">
-        <p className="text-gray-700 font-medium">Обрабатываю файл…</p>
+        <p className="text-gray-700 font-medium">{isDb ? 'Загружаем данные…' : 'Обрабатываю файл…'}</p>
         <p className="text-gray-400 text-sm mt-1 max-w-xs">{filename}</p>
-        <p className="text-gray-400 text-xs mt-2">Для большого файла может занять 10–30 секунд</p>
+        <p className="text-gray-400 text-xs mt-2">
+          {isDb ? 'Данные хранятся в базе — файл загружать не нужно' : 'Для большого файла может занять 10–30 секунд'}
+        </p>
       </div>
     </div>
   )
@@ -51,6 +57,37 @@ export default function App() {
   const [error, setError]   = useState<string | null>(null)
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
+  const [dbSaving, setDbSaving] = useState(false)
+
+  // On mount: try to load data from Supabase Storage
+  useEffect(() => {
+    if (!DB_ENABLED) return
+    let cancelled = false
+    setLoading(true)
+    setLoadingName('Загружаем данные из базы…')
+    ;(async () => {
+      try {
+        const [mainRows, agRows] = await Promise.all([
+          loadMainRowsFromDB(),
+          loadAgentRowsFromDB(),
+        ])
+        if (cancelled) return
+        if (mainRows && mainRows.length > 0) {
+          const agg = aggregate(mainRows)
+          setResult(agg)
+          setTab('funnel')
+        }
+        if (agRows && agRows.length > 0) {
+          setAgentRows(agRows)
+        }
+      } catch {
+        // DB unavailable — fall through to upload screen
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [])
 
   const handleFile = useCallback((data: ArrayBuffer, filename: string) => {
     setLoading(true)
@@ -62,6 +99,13 @@ export default function App() {
         const agg  = aggregate(rows)
         setResult(agg)
         setTab('funnel')
+        // Save to DB in background
+        if (DB_ENABLED) {
+          setDbSaving(true)
+          saveMainRowsToDB(rows)
+            .catch(e => setError(`БД: ${e instanceof Error ? e.message : String(e)}`))
+            .finally(() => setDbSaving(false))
+        }
       } catch (e) {
         setError(`Ошибка при разборе файла: ${e instanceof Error ? e.message : String(e)}`)
       } finally {
@@ -75,6 +119,11 @@ export default function App() {
       const rows = parseWorkbook(data)
       setAgentRows(rows)
       setAgentFilename(filename)
+      // Save to DB in background
+      if (DB_ENABLED) {
+        saveAgentRowsToDB(rows)
+          .catch(e => setError(`БД (агент. сеть): ${e instanceof Error ? e.message : String(e)}`))
+      }
     } catch (e) {
       setError(`Ошибка при разборе файла агентской сети: ${e instanceof Error ? e.message : String(e)}`)
     }
@@ -95,6 +144,11 @@ export default function App() {
               {result && !loading && result.maxCreateDate && (
                 <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
                   Данные по {new Date(result.maxCreateDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </span>
+              )}
+              {dbSaving && (
+                <span className="text-xs text-blue-500 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full animate-pulse">
+                  Сохраняем в БД…
                 </span>
               )}
             </div>
