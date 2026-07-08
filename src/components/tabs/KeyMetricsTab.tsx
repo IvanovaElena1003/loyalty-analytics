@@ -205,7 +205,7 @@ export default function KeyMetricsTab({ rawRows, agentRows }: Props) {
       const agent = key ? lookup.get(key) : undefined
       if (!agent) return r
       // Добавляем только 6 фильтровых полей — не копируем весь объект агента
-      const extra: RawRow = {}
+      const extra: Record<string, unknown> = {}
       for (const k of AGENT_FILTER_KEYS) extra[k] = agent[k] ?? null
       return { ...r, ...extra }
     })
