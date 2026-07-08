@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import { parseWorkbook, aggregate } from './utils/aggregate'
-import type { AggregateResult } from './types'
+import type { AggregateResult, RawRow } from './types'
 import UploadTab from './components/tabs/UploadTab'
 import FunnelTab from './components/tabs/FunnelTab'
 import MethodologyTab from './components/tabs/MethodologyTab'
@@ -49,6 +49,8 @@ export default function App() {
   const [loading, setLoading]   = useState(false)
   const [loadingName, setLoadingName] = useState('')
   const [error, setError]   = useState<string | null>(null)
+  const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
+  const [agentFilename, setAgentFilename] = useState<string | undefined>()
 
   const handleFile = useCallback((data: ArrayBuffer, filename: string) => {
     setLoading(true)
@@ -66,6 +68,16 @@ export default function App() {
         setLoading(false)
       }
     }, 50)
+  }, [])
+
+  const handleAgentFile = useCallback((data: ArrayBuffer, filename: string) => {
+    try {
+      const rows = parseWorkbook(data)
+      setAgentRows(rows)
+      setAgentFilename(filename)
+    } catch (e) {
+      setError(`Ошибка при разборе файла агентской сети: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }, [])
 
   return (
@@ -130,10 +142,10 @@ export default function App() {
 
         {loading && <Spinner filename={loadingName} />}
 
-        {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} />}
+        {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
-        {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} />}
+        {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
 
