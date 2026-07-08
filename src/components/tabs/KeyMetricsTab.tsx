@@ -1525,8 +1525,8 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
                       style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
                       {cell.count > 0 ? (
                         <>
-                          <span className="block">{cell.count}</span>
-                          <span className="block text-[10px] font-normal opacity-70">{cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%</span>
+                          <span className="block">{cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%</span>
+                          <span className="block text-[10px] font-normal opacity-70">{cell.count}</span>
                         </>
                       ) : <span className="text-gray-300">—</span>}
                     </td>
