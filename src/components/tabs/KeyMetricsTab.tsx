@@ -1330,42 +1330,25 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
   )
 }
 
-// ── Блок 2: конверсия ОСАГО→Каско по сделкам когорты ────────────────────────
-type SpendSegment = 'all' | '0' | '1' | '2' | '3-9' | '10+'
-
-const SPEND_SEGMENTS: { id: SpendSegment; label: string }[] = [
-  { id: 'all',  label: 'Все' },
-  { id: '0',    label: '0 списаний' },
-  { id: '1',    label: '1 списание' },
-  { id: '2',    label: '2 списания' },
-  { id: '3-9',  label: '3–9 списаний' },
-  { id: '10+',  label: '10+ списаний' },
-]
-
-function inSegment(totalKasko: number, seg: SpendSegment): boolean {
-  if (seg === 'all') return true
-  if (seg === '0')   return totalKasko === 0
-  if (seg === '1')   return totalKasko === 1
-  if (seg === '2')   return totalKasko === 2
-  if (seg === '3-9') return totalKasko >= 3 && totalKasko <= 9
-  if (seg === '10+') return totalKasko >= 10
-  return true
-}
+// ── Блок 2: рост активности партнёров по когортам ─────────────────────────────
+type CohortType = 'accrual' | 'spend'
+const SPEND_THRESHOLDS = [1, 2, 3, 5, 10] as const
+type SpendThreshold = typeof SPEND_THRESHOLDS[number]
 
 function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
-  const [spendSegment, setSpendSegment] = useState<SpendSegment>('all')
+  const [cohortType, setCohortType] = useState<CohortType>('accrual')
+  const [threshold, setThreshold] = useState<SpendThreshold>(10)
 
-  // Compute raw data once (independent of segment)
+  // Сырые данные: не зависят от cohortType и threshold
   const rawData = useMemo(() => {
     const roleSet = new Set(selectedRoles)
     const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
-
     const firstAccrualYM = new Map<string, string>()
-    const osagoByPidYM   = new Map<string, Map<string, number>>()
-    const kaskoByPidYM   = new Map<string, Map<string, number>>()
-    const totalKaskoByPid = new Map<string, number>()
+    const firstSpendYM   = new Map<string, string>()
+    // pid → sorted [(ym, count)] — для быстрого cumulative подсчёта
+    const tempCross = new Map<string, Map<string, number>>()
     let maxDataYM = ''
 
     for (const row of rawRows) {
@@ -1383,18 +1366,31 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           const ex = firstAccrualYM.get(renId)
           if (!ex || ym < ex) firstAccrualYM.set(renId, ym)
         }
-        if (!osagoByPidYM.has(renId)) osagoByPidYM.set(renId, new Map())
-        osagoByPidYM.get(renId)!.set(ym, (osagoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
         if (isSpendingRow(row)) {
-          if (!kaskoByPidYM.has(renId)) kaskoByPidYM.set(renId, new Map())
-          kaskoByPidYM.get(renId)!.set(ym, (kaskoByPidYM.get(renId)!.get(ym) ?? 0) + 1)
-          totalKaskoByPid.set(renId, (totalKaskoByPid.get(renId) ?? 0) + 1)
+          const ex = firstSpendYM.get(renId)
+          if (!ex || ym < ex) firstSpendYM.set(renId, ym)
+          if (!tempCross.has(renId)) tempCross.set(renId, new Map())
+          tempCross.get(renId)!.set(ym, (tempCross.get(renId)!.get(ym) ?? 0) + 1)
         }
       }
     }
 
+    // Сортируем месяцы кросс-продаж для быстрого prefix-sum
+    const crossSorted = new Map<string, [string, number][]>()
+    for (const [pid, m] of tempCross) {
+      crossSorted.set(pid, Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0])))
+    }
+
+    return { firstAccrualYM, firstSpendYM, crossSorted, maxDataYM }
+  }, [rawRows, selectedRoles])
+
+  // Таблица: зависит от cohortType и threshold
+  const result = useMemo(() => {
+    const { firstAccrualYM, firstSpendYM, crossSorted, maxDataYM } = rawData
+    const sourceMap = cohortType === 'accrual' ? firstAccrualYM : firstSpendYM
+
     const cohortMap = new Map<string, string[]>()
-    for (const [pid, ym] of firstAccrualYM) {
+    for (const [pid, ym] of sourceMap) {
       if (!cohortMap.has(ym)) cohortMap.set(ym, [])
       cohortMap.get(ym)!.push(pid)
     }
@@ -1407,80 +1403,96 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
     }
 
-    return { cohortMap, cohortMonths, osagoByPidYM, kaskoByPidYM, totalKaskoByPid, maxDataYM, dynMax }
-  }, [rawRows, selectedRoles])
-
-  // Compute table rows filtered by segment
-  const result = useMemo(() => {
-    if (!rawData) return null
-    const { cohortMap, cohortMonths, osagoByPidYM, kaskoByPidYM, totalKaskoByPid, maxDataYM, dynMax } = rawData
+    // Кумулятивное кол-во кросс-транзакций партнёра по targetYM включительно
+    function cumCross(pid: string, targetYM: string): number {
+      const months = crossSorted.get(pid)
+      if (!months) return 0
+      let total = 0
+      for (const [ym, cnt] of months) {
+        if (ym > targetYM) break
+        total += cnt
+      }
+      return total
+    }
 
     const cohortRows = cohortMonths.map(cohortYM => {
-      const allPartners = cohortMap.get(cohortYM)!
-      const partners = allPartners.filter(pid => inSegment(totalKaskoByPid.get(pid) ?? 0, spendSegment))
+      const partners = cohortMap.get(cohortYM)!
       const N = partners.length
-      const cells: Array<{ osago: number; kasko: number; pct: number } | null> = []
+      const cells: Array<{ count: number; pct: number } | null> = []
       for (let k = 0; k <= dynMax; k++) {
         const tYM = addMonthsToYM(cohortYM, k)
         if (tYM > maxDataYM) { cells.push(null); continue }
-        let osago = 0, kasko = 0
+        let count = 0
         for (const pid of partners) {
-          osago += osagoByPidYM.get(pid)?.get(tYM) ?? 0
-          kasko += kaskoByPidYM.get(pid)?.get(tYM) ?? 0
+          if (cumCross(pid, tYM) >= threshold) count++
         }
-        cells.push({ osago, kasko, pct: osago > 0 ? (kasko / osago) * 100 : 0 })
+        cells.push({ count, pct: N > 0 ? (count / N) * 100 : 0 })
       }
       return { cohortYM, N, cells }
     })
 
     const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
     return { cohortRows, maxOffset: dynMax, maxPct }
-  }, [rawData, spendSegment])
+  }, [rawData, cohortType, threshold])
 
   if (!result) return null
 
   function cellBg(pct: number) {
     const i = Math.min(pct / result!.maxPct, 1)
-    return `rgba(99,102,241,${0.08 + i * 0.62})`
+    return `rgba(99,102,241,${0.08 + i * 0.65})`
   }
+
+  const thresholdLabel = `${threshold}+ списаний`
 
   return (
     <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
       <CohortHeader
-        title="📊 Когортный анализ: конверсия ОСАГО → Каско"
-        subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — конверсия ОСАГО→Каско по всем сделкам партнёров когорты в этом месяце."
+        title="📊 Когортный анализ: рост активности партнёров"
+        subtitle={`Ячейка — сколько партнёров из когорты набрали ${thresholdLabel} нарастающим итогом к этому месяцу.`}
         accentColor="bg-indigo-50 text-indigo-800 border-indigo-200"
         selectedRoles={selectedRoles}
         onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
         methodologyOpen={methodologyOpen}
         onToggleMethodology={() => setMethodologyOpen(o => !o)}
         methodologyText={<>
-          <p><strong>Когорта</strong> — все партнёры, у которых первое начисление РБ (State=PolicyIssued, LoyaltyPointsInLK&gt;0) произошло в данном месяце.</p>
-          <p><strong>M0</strong> — месяц первого начисления. <strong>Mk</strong> — k-й месяц после первого начисления.</p>
-          <p><strong>Ячейка</strong> — конверсия = Каско / ОСАГО × 100%, где считаются все полисы (не партнёры) когорты в данном месяце.</p>
-          <p>Например, если в M2 партнёры когорты оформили 500 ОСАГО и из них 80 с Каско — конверсия 16%.</p>
-          <p><strong>Сегмент по списаниям</strong> — фильтр по общему числу кросс-транзакций партнёра за всё время в данных. Позволяет сравнивать конверсию активных и неактивных в кросс-продажах партнёров одной когорты.</p>
-          <p>Чем темнее ячейка — тем выше конверсия в Каско в этом месяце.</p>
+          <p><strong>Когорта по первому начислению</strong> — партнёры, у которых первый PolicyIssued с LoyaltyPointsInLK&gt;0 был в этом месяце.</p>
+          <p><strong>Когорта по первому списанию</strong> — партнёры, у которых первая кросс-транзакция (CrossIsBought=Да + списание РБ) была в этом месяце.</p>
+          <p><strong>M0</strong> — месяц формирования когорты. <strong>Mk</strong> — k-й месяц после него.</p>
+          <p><strong>Ячейка</strong> — число и % партнёров когорты, которые к данному месяцу (нарастающим итогом) совершили не менее N кросс-транзакций.</p>
+          <p>Показывает, как быстро когорта «дозревает» до активных кросс-продавцов. Чем правее значение — тем дольше разогрев.</p>
+          <p><strong>Порог</strong> меняется кнопками ниже: 1+ (хоть раз), 5+ (регулярно), 10+ (активный продавец).</p>
         </>}
       />
 
-      {/* Сегмент по числу списаний */}
-      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/30">
-        <p className="text-xs font-semibold text-indigo-700 mb-2">Сегмент по количеству кросс-транзакций (за всё время):</p>
-        <div className="flex flex-wrap gap-2">
-          {SPEND_SEGMENTS.map(seg => (
-            <button
-              key={seg.id}
-              onClick={() => setSpendSegment(seg.id)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
-                spendSegment === seg.id
-                  ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
-              }`}
-            >
-              {seg.label}
-            </button>
-          ))}
+      {/* Фильтры: тип когорты + порог */}
+      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/20 flex flex-wrap gap-6">
+        <div>
+          <p className="text-xs font-semibold text-indigo-700 mb-2">Тип когорты:</p>
+          <div className="flex gap-4">
+            {([['accrual', 'По первому начислению РБ'], ['spend', 'По первому списанию РБ']] as const).map(([v, label]) => (
+              <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input type="radio" name="cohortTypeBlock2" value={v}
+                  checked={cohortType === v} onChange={() => setCohortType(v)}
+                  className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className={cohortType === v ? 'font-medium text-indigo-700' : 'text-gray-500'}>{label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-indigo-700 mb-2">Порог кросс-транзакций (нарастающим итогом):</p>
+          <div className="flex gap-2">
+            {SPEND_THRESHOLDS.map(t => (
+              <button key={t} onClick={() => setThreshold(t)}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  threshold === t
+                    ? 'bg-indigo-600 text-white border-indigo-600'
+                    : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
+                }`}>
+                {t}+
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -1489,12 +1501,9 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
               <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-0 bg-gray-50 z-10 border-r border-gray-200">Когорта</th>
-              <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">
-                Партнёров
-                {spendSegment !== 'all' && <span className="block font-normal text-indigo-500 text-[10px]">в сегменте</span>}
-              </th>
+              <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">Всего<br/>партнёров</th>
               {Array.from({ length: result.maxOffset + 1 }, (_, k) => (
-                <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[52px]">M{k}</th>
+                <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[56px]">M{k}</th>
               ))}
             </tr>
           </thead>
@@ -1507,12 +1516,15 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
                   if (!cell) return <td key={k} className="px-2 py-1.5 text-center text-gray-200">—</td>
                   return (
                     <td key={k}
-                      title={`${cell.kasko} Каско из ${cell.osago} ОСАГО`}
-                      className="px-2 py-1.5 text-center tabular-nums font-medium"
+                      title={`${cell.count} из ${row.N} партнёров набрали ${thresholdLabel} к M${k}`}
+                      className="px-2 py-1.5 text-center tabular-nums font-medium leading-tight"
                       style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
-                      {cell.pct > 0
-                        ? `${cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%`
-                        : <span className="text-gray-300">—</span>}
+                      {cell.count > 0 ? (
+                        <>
+                          <span className="block">{cell.count}</span>
+                          <span className="block text-[10px] font-normal opacity-70">{cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%</span>
+                        </>
+                      ) : <span className="text-gray-300">—</span>}
                     </td>
                   )
                 })}
@@ -1522,8 +1534,8 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         </table>
       </div>
       <div className="px-5 py-3 bg-indigo-50/40 border-t border-indigo-100 text-xs text-indigo-600">
-        Конверсия считается по полисам (не по партнёрам): Каско ÷ ОСАГО × 100% за каждый месяц. Наводи на ячейку — увидишь абсолютные числа.
-        {spendSegment !== 'all' && <span className="ml-2 font-medium">· Сегмент: {SPEND_SEGMENTS.find(s => s.id === spendSegment)?.label}</span>}
+        Ячейка = число партнёров (и % под ним), набравших <strong>{thresholdLabel}</strong> нарастающим итогом к этому месяцу.
+        {' '}Когорта: <strong>{cohortType === 'accrual' ? 'по первому начислению' : 'по первому списанию'}</strong>.
       </div>
     </div>
   )
