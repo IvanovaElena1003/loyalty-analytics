@@ -71,4 +71,5 @@ export interface AggregateResult {
   accrualValues: number[]   // LoyaltyPointsInLK per qualifying PolicyIssued row
   spendingValues: number[]  // total spend per CrossIsBought row with spending
   rawRows: RawRow[]         // все исходные строки для вкладки Аномалии
+  maxCreateDate: string | null  // YYYY-MM-DD последней котировки
 }

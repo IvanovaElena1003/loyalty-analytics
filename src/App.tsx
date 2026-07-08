@@ -6,28 +6,23 @@ import FunnelTab from './components/tabs/FunnelTab'
 import MethodologyTab from './components/tabs/MethodologyTab'
 import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
-import EngagementTab from './components/tabs/EngagementTab'
-import InsightsTab from './components/tabs/InsightsTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
 import { isFullMode } from './config/mode'
 
-type Tab = 'upload' | 'funnel' | 'distribution' | 'engagement' | 'insights' | 'keymetrics' | 'methodology' | 'anomalies'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'keymetrics' | 'methodology' | 'anomalies'
 
 const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: '📂 Загрузка' },
   { id: 'funnel',       label: '📊 Воронка',        needsData: true },
   { id: 'distribution', label: '📈 Распределение',  needsData: true },
-  { id: 'engagement',   label: '👥 Вовлечённость',   needsData: true },
-  { id: 'insights',     label: '💡 Выводы',          needsData: true },
   { id: 'keymetrics',   label: '🔑 Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: '🔧 Тех. вкладка',    needsData: true },
 ]
 
-// Вкладки ограниченной версии — наполняются по мере необходимости
 const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload',      label: '📂 Загрузка' },
-  { id: 'keymetrics',  label: '🔑 Ключевые метрики', needsData: true },
+  { id: 'upload',     label: '📂 Загрузка' },
+  { id: 'keymetrics', label: '🔑 Ключевые метрики', needsData: true },
 ]
 
 const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
@@ -49,11 +44,11 @@ function Spinner({ filename }: { filename: string }) {
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>('upload')
+  const [tab, setTab]       = useState<Tab>('upload')
   const [result, setResult] = useState<AggregateResult | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
   const [loadingName, setLoadingName] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError]   = useState<string | null>(null)
 
   const handleFile = useCallback((data: ArrayBuffer, filename: string) => {
     setLoading(true)
@@ -62,7 +57,7 @@ export default function App() {
     setTimeout(() => {
       try {
         const rows = parseWorkbook(data)
-        const agg = aggregate(rows)
+        const agg  = aggregate(rows)
         setResult(agg)
         setTab('funnel')
       } catch (e) {
@@ -83,6 +78,11 @@ export default function App() {
               {result && !loading && (
                 <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                   {result.totals.total_quotes.toLocaleString('ru-RU')} котировок
+                </span>
+              )}
+              {result && !loading && result.maxCreateDate && (
+                <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                  Данные по {new Date(result.maxCreateDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                 </span>
               )}
             </div>
@@ -133,13 +133,10 @@ export default function App() {
         {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
-        {!loading && tab === 'engagement'    && result && <EngagementTab rawRows={result.rawRows} />}
-        {!loading && tab === 'insights'      && result && <InsightsTab result={result} />}
         {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
 
-        {/* Заглушка для limited-режима после загрузки файла */}
         {!loading && !isFullMode && result && tab === 'upload' && (
           <div className="mt-6 bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
             <p className="text-lg font-medium text-gray-500">Аналитика загружена</p>

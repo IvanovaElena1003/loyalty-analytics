@@ -220,5 +220,15 @@ export function aggregate(rows: RawRow[]): AggregateResult {
     tot.bonus_spent_kv += m.bonus_spent_kv
   }
 
-  return { months, totals: finalise(tot), accrualValues, spendingValues, rawRows: rows }
+  let maxMs = -Infinity
+  for (const row of rows) {
+    const d = parseDate(row.CreateDate)
+    if (d) { const ms = d.getTime(); if (ms > maxMs) maxMs = ms }
+  }
+  const maxD = maxMs > -Infinity ? new Date(maxMs) : null
+  const maxCreateDate = maxD
+    ? `${maxD.getFullYear()}-${String(maxD.getMonth() + 1).padStart(2, '0')}-${String(maxD.getDate()).padStart(2, '0')}`
+    : null
+
+  return { months, totals: finalise(tot), accrualValues, spendingValues, rawRows: rows, maxCreateDate }
 }
