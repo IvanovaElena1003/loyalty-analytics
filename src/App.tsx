@@ -74,7 +74,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <span className="font-semibold text-gray-800 text-sm">Лояльность ОСАГО ФЛ</span>
+              <span className="font-semibold text-gray-800 text-sm">Лояльность: ОСАГО ФЛ + Кросс Каско от бесполисных</span>
               {result && !loading && (
                 <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                   {result.totals.total_quotes.toLocaleString('ru-RU')} котировок
