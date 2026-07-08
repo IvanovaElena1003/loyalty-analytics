@@ -15,6 +15,14 @@ const AGENT_FIELDS = [
   'subj_id', 'ДИВИЗИОН', 'ФИЛИАЛ', 'УПРАВЛЕНИЕ', 'КОД_КП', 'КУРАТОР', 'ПОСРЕДНИК',
 ] as const
 
+function parseYear(value: unknown): number | null {
+  if (!value) return null
+  if (value instanceof Date) return value.getFullYear()
+  if (typeof value === 'number') return new Date((value - 25569) * 86400000).getFullYear()
+  if (typeof value === 'string') { const d = new Date(value); return isNaN(d.getTime()) ? null : d.getFullYear() }
+  return null
+}
+
 function slim(rows: RawRow[], fields: readonly string[]): Record<string, unknown>[] {
   return rows.map(r => {
     const obj: Record<string, unknown> = {}
@@ -60,7 +68,8 @@ export async function loadAgentRowsFromDB(): Promise<RawRow[] | null> {
 }
 
 export async function saveMainRowsToDB(rows: RawRow[]): Promise<void> {
-  await uploadJson(MAIN_FILE, slim(rows, MAIN_FIELDS))
+  const rows2026 = rows.filter(r => parseYear(r.CreateDate) === 2026)
+  await uploadJson(MAIN_FILE, slim(rows2026, MAIN_FIELDS))
 }
 
 export async function saveAgentRowsToDB(rows: RawRow[]): Promise<void> {
