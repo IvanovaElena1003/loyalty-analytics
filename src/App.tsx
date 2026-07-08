@@ -75,7 +75,7 @@ export default function App() {
         if (mainRows && mainRows.length > 0) {
           const agg = aggregate(mainRows)
           setResult(agg)
-          setTab('funnel')
+          setTab(isFullMode ? 'funnel' : 'keymetrics')
         }
         if (agRows && agRows.length > 0) {
           setAgentRows(agRows)
@@ -98,7 +98,7 @@ export default function App() {
         const rows = parseWorkbook(data)
         const agg  = aggregate(rows)
         setResult(agg)
-        setTab('funnel')
+        setTab(isFullMode ? 'funnel' : 'keymetrics')
         // Save to DB in background
         if (DB_ENABLED) {
           setDbSaving(true)
