@@ -24,7 +24,6 @@ const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
 ]
 
 const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload',     label: '📂 Загрузка' },
   { id: 'keymetrics', label: '🔑 Ключевые метрики', needsData: true },
 ]
 
@@ -171,7 +170,7 @@ export default function App() {
                 </span>
               )}
             </div>
-            {result && !loading && (
+            {result && !loading && isFullMode && (
               <button
                 onClick={() => { setResult(null); setTab('upload') }}
                 className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
@@ -215,17 +214,18 @@ export default function App() {
 
         {loading && <Spinner filename={loadingName} />}
 
-        {!loading && tab === 'upload'        && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
+        {!loading && isFullMode  && tab === 'upload'       && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
         {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
 
-        {!loading && !isFullMode && result && tab === 'upload' && (
-          <div className="mt-6 bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-400">
-            <p className="text-lg font-medium text-gray-500">Аналитика загружена</p>
-            <p className="text-sm mt-1">Разделы этой версии дашборда появятся здесь</p>
+        {!loading && !isFullMode && !result && (
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center">
+            <div className="text-4xl">📊</div>
+            <p className="text-gray-500 font-medium">Данные обновляются</p>
+            <p className="text-gray-400 text-sm">Попробуйте обновить страницу чуть позже</p>
           </div>
         )}
       </main>
