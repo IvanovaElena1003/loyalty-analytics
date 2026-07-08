@@ -190,7 +190,7 @@ const fmtPct  = (num: number, den: number) =>
 export default function KeyMetricsTab({ rawRows, agentRows }: Props) {
   const [agentFilters, setAgentFilters] = useState<AgentFilters>(EMPTY_AGENT_FILTERS)
 
-  // Join: обогащаем rawRows данными из агентской сети по subj_id = CashbookId (или HeadPartnerCB)
+  // Join: добавляем только нужные поля из агентской сети (не спредим весь объект — экономим память)
   const enrichedRows = useMemo<RawRow[]>(() => {
     if (!agentRows || agentRows.length === 0) return rawRows
     const lookup = new Map<string, RawRow>()
@@ -202,7 +202,11 @@ export default function KeyMetricsTab({ rawRows, agentRows }: Props) {
       const cb  = String(r['CashbookId'] ?? '').trim()
       const hcb = String(r['HeadPartnerCB'] ?? '').trim()
       const key = (cb && cb !== '[NULL]') ? cb : hcb
-      const extra = key ? (lookup.get(key) ?? {}) : {}
+      const agent = key ? lookup.get(key) : undefined
+      if (!agent) return r
+      // Добавляем только 6 фильтровых полей — не копируем весь объект агента
+      const extra: RawRow = {}
+      for (const k of AGENT_FILTER_KEYS) extra[k] = agent[k] ?? null
       return { ...r, ...extra }
     })
   }, [rawRows, agentRows])
