@@ -7,6 +7,7 @@ import MethodologyTab from './components/tabs/MethodologyTab'
 import DistributionTab from './components/tabs/DistributionTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
+import LoginScreen, { type AuthSession } from './components/LoginScreen'
 import { isFullMode } from './config/mode'
 import { loadMainRowsFromDB, loadAgentRowsFromDB, saveMainRowsToDB, saveAgentRowsToDB } from './lib/db'
 
@@ -76,6 +77,7 @@ export default function App() {
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
   const [dbSaving, setDbSaving] = useState(false)
+  const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
 
   // On mount: try to load data from Supabase Storage
   useEffect(() => {
@@ -147,6 +149,13 @@ export default function App() {
     }
   }, [])
 
+  // Limited mode: show login screen until authenticated
+  if (!isFullMode && !session) {
+    return <LoginScreen onAuth={setSession} />
+  }
+
+  const lockedCurator = (!isFullMode && session?.role === 'curator') ? session.name : undefined
+
   return (
     <div className="min-h-screen bg-gray-100">
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
@@ -170,6 +179,14 @@ export default function App() {
                 </span>
               )}
             </div>
+            {!isFullMode && session && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500">
+                  {session.role === 'director' ? '👤 Директор' : `👤 ${session.name.split(' ')[0]} ${session.name.split(' ')[1] ?? ''}`}
+                </span>
+                <button onClick={() => setSession(null)} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Выйти</button>
+              </div>
+            )}
             {result && !loading && isFullMode && (
               <button
                 onClick={() => { setResult(null); setTab('upload') }}
@@ -217,7 +234,7 @@ export default function App() {
         {!loading && isFullMode  && tab === 'upload'       && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
         {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
-        {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} />}
+        {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
 

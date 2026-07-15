@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type { RawRow } from '../../types'
 import { downloadXlsx } from '../../utils/engagement'
 
-interface Props { rawRows: RawRow[]; agentRows?: RawRow[] }
+interface Props { rawRows: RawRow[]; agentRows?: RawRow[]; lockedCurator?: string }
 
 // ─── Фильтры агентской сети ──────────────────────────────────────────────────
 const AGENT_FILTER_KEYS = ['ДИВИЗИОН', 'ФИЛИАЛ', 'УПРАВЛЕНИЕ', 'КОД_КП', 'КУРАТОР', 'ПОСРЕДНИК'] as const
@@ -15,11 +15,12 @@ const AGENT_FILTER_LABELS: Record<AgentFilterKey, string> = {
 }
 
 function AgentFilterBar({
-  enrichedRows, filters, setFilters,
+  enrichedRows, filters, setFilters, lockedCurator,
 }: {
   enrichedRows: RawRow[]
   filters: AgentFilters
   setFilters: React.Dispatch<React.SetStateAction<AgentFilters>>
+  lockedCurator?: string
 }) {
   const [open, setOpen] = useState<AgentFilterKey | null>(null)
 
@@ -62,12 +63,20 @@ function AgentFilterBar({
         )}
       </div>
 
+      {lockedCurator && (
+        <div className="mb-2 flex items-center gap-2">
+          <span className="text-xs bg-blue-100 text-blue-700 border border-blue-300 px-3 py-1 rounded-lg font-medium">
+            🔒 Куратор: {lockedCurator}
+          </span>
+        </div>
+      )}
       <div className="flex flex-wrap gap-2">
         {AGENT_FILTER_KEYS.map(key => {
           const opts = options[key]
           const sel  = filters[key]
           const isOpen = open === key
           if (opts.length === 0) return null
+          if (key === 'КУРАТОР' && lockedCurator) return null
           return (
             <div key={key} className="relative">
               <button
@@ -187,8 +196,12 @@ const fmtPct  = (num: number, den: number) =>
   den > 0 ? `${Math.round((num / den) * 100)}%` : '—'
 
 // ─── Компонент ────────────────────────────────────────────────────────────────
-export default function KeyMetricsTab({ rawRows, agentRows }: Props) {
-  const [agentFilters, setAgentFilters] = useState<AgentFilters>(EMPTY_AGENT_FILTERS)
+export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Props) {
+  const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
+    lockedCurator
+      ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] }
+      : EMPTY_AGENT_FILTERS
+  )
 
   // Join: добавляем только нужные поля из агентской сети (не спредим весь объект — экономим память)
   const enrichedRows = useMemo<RawRow[]>(() => {
@@ -452,7 +465,7 @@ export default function KeyMetricsTab({ rawRows, agentRows }: Props) {
 
       {/* ── Фильтры агентской сети ──────────────────────────────────────── */}
       {agentRows && agentRows.length > 0 && (
-        <AgentFilterBar enrichedRows={enrichedRows} filters={agentFilters} setFilters={setAgentFilters} />
+        <AgentFilterBar enrichedRows={enrichedRows} filters={agentFilters} setFilters={setAgentFilters} lockedCurator={lockedCurator} />
       )}
 
       {/* Сводный дашборд */}
