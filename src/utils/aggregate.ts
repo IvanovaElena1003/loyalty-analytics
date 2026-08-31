@@ -106,11 +106,42 @@ export function mergeMetrics(months: MonthMetrics[], label: string, sortKey: str
   return finalise(b)
 }
 
+/** Last column with a real text header in row 0 (ignores stray numeric garbage cells). */
+function getHeaderMaxCol(sheet: XLSX.WorkSheet): number {
+  let maxCol = 0
+  for (const key of Object.keys(sheet)) {
+    if (key.startsWith('!')) continue
+    const { r, c } = XLSX.utils.decode_cell(key)
+    if (r !== 0) continue
+    const v = sheet[key]?.v
+    if (typeof v === 'string' && v.trim() !== '' && Number.isNaN(Number(v))) {
+      if (c > maxCol) maxCol = c
+    }
+  }
+  return maxCol > 0 ? maxCol : 35 // AJ — last known data column
+}
+
+/** Trim bloated Excel ranges (e.g. A1:XFD22762 from accidental far-column cells). */
+function limitSheetColumns(sheet: XLSX.WorkSheet): XLSX.WorkSheet {
+  const maxCol = getHeaderMaxCol(sheet)
+  const limited: XLSX.WorkSheet = { ...sheet }
+  for (const key of Object.keys(limited)) {
+    if (key.startsWith('!')) continue
+    if (XLSX.utils.decode_cell(key).c > maxCol) delete limited[key]
+  }
+  if (limited['!ref']) {
+    const range = XLSX.utils.decode_range(limited['!ref'])
+    range.e.c = Math.min(range.e.c, maxCol)
+    limited['!ref'] = XLSX.utils.encode_range(range)
+  }
+  return limited
+}
+
 export function parseWorkbook(data: ArrayBuffer): RawRow[] {
   const wb = XLSX.read(data, { type: 'array', cellDates: true })
   const rows: RawRow[] = []
   for (const name of wb.SheetNames) {
-    const sheet = wb.Sheets[name]
+    const sheet = limitSheetColumns(wb.Sheets[name])
     rows.push(...XLSX.utils.sheet_to_json<RawRow>(sheet, { defval: null }))
   }
   return rows
