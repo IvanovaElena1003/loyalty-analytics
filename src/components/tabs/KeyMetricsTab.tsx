@@ -595,8 +595,7 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       </p>
 
       {/* ── Динамика по месяцам ───────────────────────────────────────── */}
-      <EngagementTrend rawRows={filteredRows} mode="cumulative" />
-      <EngagementTrend rawRows={filteredRows} mode="monthly" />
+      <EngagementTrend rawRows={filteredRows} />
 
       {/* ── Топ: копят, но не тратят ──────────────────────────────────── */}
       <UnderutilizersBlock
@@ -891,8 +890,11 @@ const GK_TEXT: Record<GK, string> = {
   zero: 'text-slate-500', oneTwo: 'text-amber-600', three: 'text-green-700', ten: 'text-emerald-700',
 }
 
-function EngagementTrend({ rawRows, mode = 'cumulative' }: { rawRows: RawRow[]; mode?: 'cumulative' | 'monthly' }) {
-  const isMonthly = mode === 'monthly'
+type EngagementViewMode = 'cumulative' | 'monthly'
+
+function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
+  const [viewMode, setViewMode] = useState<EngagementViewMode>('cumulative')
+  const isMonthly = viewMode === 'monthly'
   const [legendOpen, setLegendOpen] = useState(false)
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const toggleRole = (role: string) =>
@@ -1071,37 +1073,60 @@ function EngagementTrend({ rawRows, mode = 'cumulative' }: { rawRows: RawRow[]; 
     den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
 
   return (
-    <div className={`bg-white rounded-xl border overflow-hidden shadow-sm ${isMonthly ? 'border-violet-100' : 'border-indigo-100'}`}>
-      <div className={`px-5 py-4 border-b space-y-3 ${isMonthly ? 'bg-violet-50 border-violet-100' : 'bg-indigo-50 border-indigo-100'}`}>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className={`font-bold text-base ${isMonthly ? 'text-violet-900' : 'text-indigo-900'}`}>
-              {isMonthly ? 'Динамика вовлечённости по месяцам (за месяц)' : 'Динамика вовлечённости по месяцам'}
-            </h3>
-            <p className={`text-xs mt-0.5 ${isMonthly ? 'text-violet-500' : 'text-indigo-500'}`}>
+    <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
+      <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
+            <p className="text-xs text-indigo-500 mt-0.5">
               {isMonthly
                 ? 'Доля партнёров по количеству списаний — только внутри каждого календарного месяца'
                 : 'Доля партнёров по количеству списаний — накопительно на конец каждого месяца'}
             </p>
           </div>
-          {/* База */}
-          <div className={`shrink-0 text-center bg-white border-2 rounded-xl px-4 py-2 shadow-sm ${isMonthly ? 'border-violet-300' : 'border-indigo-300'}`}>
-            <p className={`text-2xl font-bold leading-none ${isMonthly ? 'text-violet-700' : 'text-indigo-700'}`}>{fmtN(N)}</p>
-            <p className={`text-[10px] mt-0.5 ${isMonthly ? 'text-violet-400' : 'text-indigo-400'}`}>партнёров с начислениями РБ</p>
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            {/* Переключатель режима */}
+            <div className="inline-flex rounded-lg border border-indigo-200 bg-white p-0.5 shadow-sm">
+              <button
+                type="button"
+                onClick={() => setViewMode('cumulative')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                  !isMonthly
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                Накопительный результат
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('monthly')}
+                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
+                  isMonthly
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-indigo-600 hover:bg-indigo-50'
+                }`}
+              >
+                Ежемесячный результат
+              </button>
+            </div>
+            {/* База */}
+            <div className="text-center bg-white border-2 border-indigo-300 rounded-xl px-4 py-2 shadow-sm">
+              <p className="text-2xl font-bold text-indigo-700 leading-none">{fmtN(N)}</p>
+              <p className="text-[10px] text-indigo-400 mt-0.5">партнёров с начислениями РБ</p>
+            </div>
           </div>
         </div>
 
         {/* Фильтр по роли */}
         <div>
-          <p className={`text-xs font-semibold mb-1.5 ${isMonthly ? 'text-violet-700' : 'text-indigo-700'}`}>Фильтр по роли:</p>
+          <p className="text-xs font-semibold text-indigo-700 mb-1.5">Фильтр по роли:</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {ALL_ALLOWED_ROLES.map(role => (
               <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={selectedRoles.includes(role)}
-                  onChange={() => toggleRole(role)} className={`w-3.5 h-3.5 ${isMonthly ? 'accent-violet-600' : 'accent-indigo-600'}`} />
-                <span className={selectedRoles.includes(role)
-                  ? (isMonthly ? 'text-violet-800 font-medium' : 'text-indigo-800 font-medium')
-                  : (isMonthly ? 'text-violet-300' : 'text-indigo-300')}>{role}</span>
+                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 accent-indigo-600" />
+                <span className={selectedRoles.includes(role) ? 'text-indigo-800 font-medium' : 'text-indigo-300'}>{role}</span>
               </label>
             ))}
           </div>
@@ -1121,23 +1146,23 @@ function EngagementTrend({ rawRows, mode = 'cumulative' }: { rawRows: RawRow[]; 
         <div>
           <button
             onClick={() => setLegendOpen(o => !o)}
-            className={`flex items-center gap-1 text-xs font-medium transition-colors ${isMonthly ? 'text-violet-600 hover:text-violet-800' : 'text-indigo-600 hover:text-indigo-800'}`}
+            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
           >
             <span>{legendOpen ? '▾' : '▸'}</span>
             <span>Как читать этот отчёт</span>
           </button>
           {legendOpen && (
-            <div className={`mt-2 text-xs space-y-1.5 border-t pt-2 ${isMonthly ? 'text-violet-700 border-violet-100' : 'text-indigo-700 border-indigo-100'}`}>
+            <div className="mt-2 text-xs text-indigo-700 space-y-1.5 border-t border-indigo-100 pt-2">
               <p><strong>Фиксированная база ({fmtN(N)} партнёров)</strong> — все, у кого хоть раз было PolicyIssued с LoyaltyPointsInLK&nbsp;&gt;&nbsp;0 и есть разрешённая роль (Агент / Субагент / Директор партнёра и др.). База не меняется от месяца к месяцу.</p>
               {isMonthly ? (
                 <>
-                  <p><strong>Доля по частоте списания</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров списывал РБ столько раз <em>именно в этом календарном месяце</em>. Суммируется в 100% по строке.</p>
-                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «10+ раз» в другом. Доли по месяцам не монотонны, в отличие от накопительного отчёта выше.</p>
+                  <p><strong>Ежемесячный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров списывал РБ столько раз <em>именно в этом календарном месяце</em>. Суммируется в 100% по строке.</p>
+                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «10+ раз» в другом. Доли по месяцам не монотонны, в отличие от накопительного режима.</p>
                   <p><strong>Списали в месяце</strong> — число партнёров из базы, у которых было хотя бы одно списание РБ в данном месяце.</p>
                 </>
               ) : (
                 <>
-                  <p><strong>Доля по частоте списания</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Суммируется в 100% по строке (без столбца конверсии).</p>
+                  <p><strong>Накопительный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Суммируется в 100% по строке (без столбца конверсии).</p>
                   <p><strong>Накопительно</strong> — однажды перейдя в группу «Списано 3–9 раз», партнёр остаётся в ней и не возвращается назад. Поэтому доля «Не списывали» со временем только уменьшается.</p>
                 </>
               )}
@@ -1152,8 +1177,8 @@ function EngagementTrend({ rawRows, mode = 'cumulative' }: { rawRows: RawRow[]; 
           <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
             <tr className="border-b border-gray-200">
               <th className="px-4 py-2 text-left" rowSpan={2}>Месяц</th>
-              <th className={`px-4 py-2 text-center border-l ${isMonthly ? 'border-violet-100' : 'border-indigo-100'}`} rowSpan={2}>
-                <span className={isMonthly ? 'text-violet-600' : 'text-indigo-600'}>
+              <th className="px-4 py-2 text-center border-l border-indigo-100" rowSpan={2}>
+                <span className="text-indigo-600">
                   {isMonthly ? <>Списали<br/>в месяце</> : <>Партнёров<br/>с РБ (накопит.)</>}
                 </span>
               </th>
@@ -1176,9 +1201,9 @@ function EngagementTrend({ rawRows, mode = 'cumulative' }: { rawRows: RawRow[]; 
               const prevCumActive = idx > 0 ? data[idx - 1].cumActive : 0
               const growthPct = prevCumActive > 0 ? ((m.cumActive - prevCumActive) / prevCumActive) * 100 : null
               return (
-                <tr key={m.ym} className={`border-t border-gray-100 transition-colors ${isMonthly ? 'hover:bg-violet-50/30' : 'hover:bg-indigo-50/30'}`}>
+                <tr key={m.ym} className="border-t border-gray-100 hover:bg-indigo-50/30 transition-colors">
                   <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{fmtYM(m.ym)}</td>
-                  <td className={`px-4 py-2 text-center tabular-nums font-semibold border-l ${isMonthly ? 'text-violet-600 border-violet-100' : 'text-indigo-600 border-indigo-100'}`}>
+                  <td className="px-4 py-2 text-center tabular-nums font-semibold text-indigo-600 border-l border-indigo-100">
                     {fmtN(m.cumActive)}
                     {growthPct !== null && growthPct !== 0 && (
                       <span className="block text-[10px] font-normal text-emerald-600 leading-tight">
