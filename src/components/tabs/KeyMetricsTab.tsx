@@ -47,7 +47,7 @@ function AgentFilterBar({
   }
 
   return (
-    <div className="ren-card mb-4">
+    <div className="ren-card ren-card--popover mb-4">
       <div className="ren-card__header">
         <div className="flex items-center justify-between mb-0">
         <div className="flex items-center gap-2">
@@ -96,9 +96,9 @@ function AgentFilterBar({
               </button>
 
               {isOpen && (
-                <div className="absolute top-full left-0 mt-1 z-50 bg-white border border-gray-200 rounded-xl shadow-xl min-w-[200px] max-w-[280px]">
-                  <div className="flex items-center justify-between px-3 py-2 border-b border-gray-100">
-                    <span className="text-xs font-semibold text-gray-600">{AGENT_FILTER_LABELS[key]}</span>
+                <div className="ren-popover">
+                  <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--stroke-divider)]">
+                    <span className="text-xs font-semibold ren-text-brand">{AGENT_FILTER_LABELS[key]}</span>
                     {sel.length > 0 && (
                       <button onClick={() => setFilters(p => ({ ...p, [key]: [] }))}
                         className="ren-link text-[10px]">
@@ -108,14 +108,14 @@ function AgentFilterBar({
                   </div>
                   <div className="max-h-52 overflow-y-auto py-1">
                     {opts.map(v => (
-                      <label key={v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-50 cursor-pointer">
+                      <label key={v} className="flex items-center gap-2 px-3 py-1.5 hover:bg-[var(--bg-brand-primary-00)] cursor-pointer">
                         <input type="checkbox" checked={sel.includes(v)} onChange={() => toggle(key, v)}
-                          className="w-3.5 h-3.5 accent-blue-600 flex-shrink-0" />
-                        <span className={`text-xs truncate ${sel.includes(v) ? 'font-medium text-gray-800' : 'text-gray-600'}`}>{v}</span>
+                          className="w-3.5 h-3.5 ren-checkbox flex-shrink-0" />
+                        <span className={`text-xs truncate ${sel.includes(v) ? 'font-medium ren-text-brand' : 'ren-text-secondary'}`}>{v}</span>
                       </label>
                     ))}
                   </div>
-                  <div className="px-3 py-2 border-t border-gray-100 text-[10px] text-gray-400">
+                  <div className="px-3 py-2 border-t border-[var(--stroke-divider)] text-[10px] ren-text-secondary">
                     {sel.length === 0 ? `Все ${opts.length}` : `Выбрано ${sel.length} из ${opts.length}`}
                   </div>
                 </div>

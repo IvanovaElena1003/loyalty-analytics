@@ -116,6 +116,11 @@ body {
   overflow: hidden;
 }
 
+/* Карточки с выпадающими меню — не обрезать popover */
+.ren-card--popover {
+  overflow: visible;
+}
+
 .ren-card__header {
   padding: 16px 20px;
   background: var(--bg-brand-primary-00);
@@ -363,6 +368,20 @@ body {
 
 .ren-link:hover {
   color: var(--text-link-hover);
+}
+
+.ren-popover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  margin-top: 4px;
+  z-index: 100;
+  min-width: 200px;
+  max-width: 280px;
+  background: var(--bg-content);
+  border: 1px solid var(--stroke-border);
+  border-radius: var(--rounding-interactive-ds-m);
+  box-shadow: var(--shadow-standard);
 }
 
 .ren-spinner {
