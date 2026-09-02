@@ -47,26 +47,29 @@ function AgentFilterBar({
   }
 
   return (
-    <div className="bg-white border border-blue-200 rounded-xl p-4 mb-4 shadow-sm">
-      <div className="flex items-center justify-between mb-3">
+    <div className="ren-card mb-4">
+      <div className="ren-card__header">
+        <div className="flex items-center justify-between mb-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold text-blue-800">🔍 Фильтры по агентской сети</span>
+          <span className="text-sm font-semibold ren-text-brand">Фильтры по агентской сети</span>
           {activeCount > 0 && (
-            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">{activeCount} активных</span>
+            <span className="ren-badge">{activeCount} активных</span>
           )}
         </div>
         {activeCount > 0 && (
-          <button onClick={() => setFilters(EMPTY_AGENT_FILTERS)}
-            className="text-xs text-blue-500 hover:text-blue-700 transition-colors">
+          <button type="button" onClick={() => setFilters(EMPTY_AGENT_FILTERS)}
+            className="ren-link">
             Сбросить всё
           </button>
         )}
+        </div>
       </div>
+      <div className="ren-card__body pt-3 pb-4">
 
       {lockedCurator && (
         <div className="mb-2 flex items-center gap-2">
-          <span className="text-xs bg-blue-100 text-blue-700 border border-blue-300 px-3 py-1 rounded-lg font-medium">
-            🔒 Куратор: {lockedCurator}
+          <span className="ren-badge">
+            Куратор: {lockedCurator}
           </span>
         </div>
       )}
@@ -81,10 +84,10 @@ function AgentFilterBar({
             <div key={key} className="relative">
               <button
                 onClick={() => setOpen(isOpen ? null : key)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                className={`ren-btn text-xs py-1.5 px-3 ${
                   sel.length > 0
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
+                    ? 'ren-btn--primary'
+                    : 'ren-btn--secondary'
                 }`}
               >
                 <span>{AGENT_FILTER_LABELS[key]}</span>
@@ -98,7 +101,7 @@ function AgentFilterBar({
                     <span className="text-xs font-semibold text-gray-600">{AGENT_FILTER_LABELS[key]}</span>
                     {sel.length > 0 && (
                       <button onClick={() => setFilters(p => ({ ...p, [key]: [] }))}
-                        className="text-[10px] text-blue-500 hover:text-blue-700">
+                        className="ren-link text-[10px]">
                         Сбросить
                       </button>
                     )}
@@ -120,6 +123,7 @@ function AgentFilterBar({
             </div>
           )
         })}
+      </div>
       </div>
     </div>
   )
@@ -476,120 +480,120 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
         {/* Группа 10+: супер-активные */}
-        <div className="bg-white rounded-xl border border-emerald-300 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 bg-emerald-50 border-b border-emerald-200 flex items-center justify-between gap-3">
+        <div className="ren-card">
+          <div className="ren-card__header flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-emerald-800 text-base">🏆 Списали 10+ раз</h3>
-              <p className="text-xs text-emerald-600 mt-0.5">Супер-активные пользователи</p>
+              <h3 className="ren-card__title">Списали 10+ раз</h3>
+              <p className="ren-card__subtitle">Супер-активные пользователи</p>
             </div>
             <button
               onClick={() => handleDownload(tenOrMore, 'spent_10plus_2026.xlsx')}
               disabled={tenOrMore.length === 0}
-              className="shrink-0 text-xs bg-emerald-600 text-white hover:bg-emerald-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
+              className="ren-btn ren-btn--primary shrink-0 text-xs"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 bg-emerald-50/30">
+          <div className="ren-card__body flex flex-wrap gap-5">
             <div>
-              <p className="text-xs text-gray-500">Партнёров</p>
-              <p className="text-3xl font-bold text-emerald-700">{fmtN(tenOrMore.length)}</p>
+              <p className="text-xs ren-text-secondary">Партнёров</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(tenOrMore.length)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Событий</p>
-              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsTen)}</p>
+              <p className="text-xs ren-text-secondary">Событий</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsTen)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Списано, РБ</p>
-              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendTen)}</p>
+              <p className="text-xs ren-text-secondary">Списано, РБ</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendTen)}</p>
             </div>
           </div>
         </div>
 
         {/* Группа 3–9: активные */}
-        <div className="bg-white rounded-xl border border-green-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 bg-green-50 border-b border-green-200 flex items-center justify-between gap-3">
+        <div className="ren-card">
+          <div className="ren-card__header flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-green-800 text-base">✅ Списали 3–9 раз</h3>
-              <p className="text-xs text-green-600 mt-0.5">Активные пользователи</p>
+              <h3 className="ren-card__title">Списали 3–9 раз</h3>
+              <p className="ren-card__subtitle">Активные пользователи</p>
             </div>
             <button
               onClick={() => handleDownload(threeToNine, 'spent_3_9_2026.xlsx')}
               disabled={threeToNine.length === 0}
-              className="shrink-0 text-xs bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
+              className="ren-btn ren-btn--primary shrink-0 text-xs"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 bg-green-50/30">
+          <div className="ren-card__body flex flex-wrap gap-5">
             <div>
-              <p className="text-xs text-gray-500">Партнёров</p>
-              <p className="text-3xl font-bold text-green-700">{fmtN(threeToNine.length)}</p>
+              <p className="text-xs ren-text-secondary">Партнёров</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(threeToNine.length)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Событий</p>
-              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsThree)}</p>
+              <p className="text-xs ren-text-secondary">Событий</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsThree)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Списано, РБ</p>
-              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendThree)}</p>
+              <p className="text-xs ren-text-secondary">Списано, РБ</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendThree)}</p>
             </div>
           </div>
         </div>
 
         {/* Группа B: 1–2 списания */}
-        <div className="bg-white rounded-xl border border-amber-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 bg-amber-50 border-b border-amber-200 flex items-center justify-between gap-3">
+        <div className="ren-card">
+          <div className="ren-card__header flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-amber-800 text-base">⚠️ Списали 1–2 раза</h3>
-              <p className="text-xs text-amber-600 mt-0.5">Низкая активность</p>
+              <h3 className="ren-card__title">Списали 1–2 раза</h3>
+              <p className="ren-card__subtitle">Низкая активность</p>
             </div>
             <button
               onClick={() => handleDownload(oneOrTwo, 'spent_1_2_2026.xlsx')}
               disabled={oneOrTwo.length === 0}
-              className="shrink-0 text-xs bg-amber-500 text-white hover:bg-amber-600 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
+              className="ren-btn ren-btn--primary shrink-0 text-xs"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 bg-amber-50/30">
+          <div className="ren-card__body flex flex-wrap gap-5">
             <div>
-              <p className="text-xs text-gray-500">Партнёров</p>
-              <p className="text-3xl font-bold text-amber-700">{fmtN(oneOrTwo.length)}</p>
+              <p className="text-xs ren-text-secondary">Партнёров</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(oneOrTwo.length)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Событий</p>
-              <p className="text-3xl font-bold text-gray-800">{fmtN(totalEventsB)}</p>
+              <p className="text-xs ren-text-secondary">Событий</p>
+              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsB)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Списано, РБ</p>
-              <p className="text-3xl font-bold text-indigo-700">{fmtN(totalSpendB)}</p>
+              <p className="text-xs ren-text-secondary">Списано, РБ</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendB)}</p>
             </div>
           </div>
         </div>
 
         {/* Группа C: 0 списаний, но с историей начислений */}
-        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between gap-3">
+        <div className="ren-card">
+          <div className="ren-card__header flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-bold text-slate-700 text-base">🔴 Списали 0 раз</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Есть начисления за всю историю, но ни разу не списывали</p>
+              <h3 className="ren-card__title">Списали 0 раз</h3>
+              <p className="ren-card__subtitle">Есть начисления за всю историю, но ни разу не списывали</p>
             </div>
             <button
               onClick={() => handleDownload(neverSpent, 'spent_0_with_accruals_2026.xlsx')}
               disabled={neverSpent.length === 0}
-              className="shrink-0 text-xs bg-slate-500 text-white hover:bg-slate-600 disabled:bg-gray-200 disabled:text-gray-400 px-3 py-1.5 rounded-full transition-colors font-medium"
+              className="ren-btn ren-btn--primary shrink-0 text-xs"
             >↓ xlsx</button>
           </div>
-          <div className="px-5 py-4 flex flex-wrap gap-5 bg-slate-50/30">
+          <div className="ren-card__body flex flex-wrap gap-5">
             <div>
-              <p className="text-xs text-gray-500">Партнёров</p>
-              <p className="text-3xl font-bold text-slate-600">{fmtN(neverSpent.length)}</p>
+              <p className="text-xs ren-text-secondary">Партнёров</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(neverSpent.length)}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500">Списаний всего</p>
-              <p className="text-3xl font-bold text-gray-400">0</p>
+              <p className="text-xs ren-text-secondary">Списаний всего</p>
+              <p className="text-3xl font-bold text-[var(--text-tertiary)]">0</p>
             </div>
           </div>
         </div>
 
       </div>
 
-      <p className="text-xs text-gray-400 px-1">
+      <p className="text-xs ren-text-secondary px-1">
         Excel-выгрузка: одна строка на партнёра со всеми идентификационными полями из исходника
         + Кол-во_списаний_2026 и Сумма_РБ_2026.
       </p>
@@ -767,21 +771,21 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
   ]
 
   return (
-    <div className="bg-white rounded-xl border border-blue-200 overflow-hidden shadow-sm">
+    <div className="ren-card">
 
       {/* Шапка */}
-      <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-3">
-        <h3 className="font-bold text-blue-800 text-base">Вовлечённость партнёров в программу лояльности</h3>
+      <div className="ren-card__header space-y-3">
+        <h3 className="ren-card__title">Вовлечённость партнёров в программу лояльности</h3>
 
         {/* Фильтр по роли */}
         <div>
-          <p className="text-xs font-semibold text-blue-700 mb-1.5">Фильтр по роли:</p>
+          <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {ALL_ALLOWED_ROLES.map(role => (
               <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={selectedRoles.includes(role)}
-                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 accent-blue-600" />
-                <span className={selectedRoles.includes(role) ? 'text-blue-800 font-medium' : 'text-blue-300'}>{role}</span>
+                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 ren-checkbox" />
+                <span className={selectedRoles.includes(role) ? 'ren-text-brand font-medium' : 'text-[var(--text-tertiary)]'}>{role}</span>
               </label>
             ))}
           </div>
@@ -791,13 +795,13 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
         <div>
           <button
             onClick={() => setMethodologyOpen(o => !o)}
-            className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+            className="ren-link flex items-center gap-1"
           >
             <span>{methodologyOpen ? '▾' : '▸'}</span>
             <span>Как читать этот отчёт</span>
           </button>
           {methodologyOpen && (
-            <div className="mt-2 text-xs text-blue-700 space-y-1 border-t border-blue-100 pt-2">
+            <div className="mt-2 text-xs ren-text-brand space-y-1 border-t border-[var(--stroke-divider)] pt-2">
               <p>Партнёры из данных 2026 года. Вся история — данные за все годы из загруженного файла.</p>
               <p><strong>Нет оформленных ОСАГО, только котировки</strong> — за всю историю нет ни одной строки State = PolicyIssued.</p>
               <p><strong>Есть ОСАГО, без начислений РБ</strong> — PolicyIssued есть, но LoyaltyPointsInLK никогда не был &gt; 0.</p>
@@ -827,10 +831,10 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
               <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, total)} от всех</p>
               <p className="text-xs text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, hasIssued)} из имеющих ОСАГО</p>
             </div>
-            <div className="px-5 py-4 bg-blue-50">
-              <p className="text-xs text-blue-700 font-medium mb-1 leading-snug">Есть ОСАГО с начислением РБ</p>
-              <p className="text-3xl font-bold text-blue-700">{fmtN(withBalTotal)} <span className="text-sm font-normal text-blue-400">партнёров</span></p>
-              <p className="text-sm text-blue-500 mt-0.5">{fmtPct(withBalTotal, total)} от всех</p>
+            <div className="px-5 py-4 ren-bg-brand-soft">
+              <p className="text-xs ren-text-brand font-medium mb-1 leading-snug">Есть ОСАГО с начислением РБ</p>
+              <p className="text-3xl font-bold ren-text-brand">{fmtN(withBalTotal)} <span className="text-sm font-normal ren-text-secondary">партнёров</span></p>
+              <p className="text-sm ren-text-secondary mt-0.5">{fmtPct(withBalTotal, total)} от всех</p>
               <p className="text-xs text-gray-400 mt-0.5">{fmtPct(withBalTotal, hasIssued)} из имеющих ОСАГО</p>
             </div>
           </div>
@@ -838,14 +842,14 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
       })()}
 
       {/* Разбивка по частоте списания */}
-      <div className="px-5 py-3 bg-blue-50/40 border-b border-blue-100">
-        <p className="text-xs font-semibold text-blue-700">
+      <div className="px-5 py-3 ren-bg-brand-soft border-b border-[var(--stroke-divider)]">
+        <p className="text-xs font-semibold ren-text-brand">
           Из {fmtN(withBalTotal)} партнёров с начислениями РБ — частота списания за всю историю:
         </p>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+        <table className="ren-table w-full text-sm">
+          <thead className="border-b border-[var(--stroke-divider)]">
             <tr>
               <th className="px-4 py-2.5 text-left whitespace-nowrap">Частота списания РБ</th>
               <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
@@ -860,14 +864,14 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
             {spendRows.map(({ key, label, color }) => {
               const a = G.agg[key]
               return (
-                <tr key={key} className="border-t border-gray-100 hover:bg-blue-50/30 transition-colors">
+                <tr key={key} className="border-t border-[var(--stroke-divider)] transition-colors">
                   <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">{fmtN(G.cnt[key])}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-600">{fmtPct(G.cnt[key], withBalTotal)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">{fmtN(a.osago26)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">{fmtN(a.kasko26)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-500">{fmtPct(a.kasko25, a.osago25)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-blue-700 font-semibold">{fmtPct(a.kasko26, a.osago26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[var(--text-primary)]">{fmtN(G.cnt[key])}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">{fmtPct(G.cnt[key], withBalTotal)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-primary)]">{fmtN(a.osago26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">{fmtN(a.kasko26)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-secondary">{fmtPct(a.kasko25, a.osago25)}</td>
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-semibold">{fmtPct(a.kasko26, a.osago26)}</td>
                 </tr>
               )
             })}
@@ -1073,60 +1077,50 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
     den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
 
   return (
-    <div className="bg-white rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
-      <div className="px-5 py-4 bg-indigo-50 border-b border-indigo-100 space-y-3">
+    <div className="ren-card">
+      <div className="ren-card__header space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h3 className="font-bold text-indigo-900 text-base">Динамика вовлечённости по месяцам</h3>
-            <p className="text-xs text-indigo-500 mt-0.5">
+            <h3 className="ren-card__title">Динамика вовлечённости по месяцам</h3>
+            <p className="ren-card__subtitle">
               {isMonthly
                 ? 'Доля партнёров по количеству списаний — только внутри каждого календарного месяца'
                 : 'Доля партнёров по количеству списаний — накопительно на конец каждого месяца'}
             </p>
           </div>
           <div className="flex items-center gap-3 shrink-0 flex-wrap">
-            {/* Переключатель режима */}
-            <div className="inline-flex rounded-lg border border-indigo-200 bg-white p-0.5 shadow-sm">
+            <div className="ren-segmented">
               <button
                 type="button"
                 onClick={() => setViewMode('cumulative')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                  !isMonthly
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-indigo-600 hover:bg-indigo-50'
-                }`}
+                className={`ren-segmented__btn ${!isMonthly ? 'ren-segmented__btn--active' : ''}`}
               >
                 Накопительный результат
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('monthly')}
-                className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors whitespace-nowrap ${
-                  isMonthly
-                    ? 'bg-indigo-600 text-white shadow-sm'
-                    : 'text-indigo-600 hover:bg-indigo-50'
-                }`}
+                className={`ren-segmented__btn ${isMonthly ? 'ren-segmented__btn--active' : ''}`}
               >
                 Ежемесячный результат
               </button>
             </div>
-            {/* База */}
-            <div className="text-center bg-white border-2 border-indigo-300 rounded-xl px-4 py-2 shadow-sm">
-              <p className="text-2xl font-bold text-indigo-700 leading-none">{fmtN(N)}</p>
-              <p className="text-[10px] text-indigo-400 mt-0.5">партнёров с начислениями РБ</p>
+            <div className="ren-kpi">
+              <p className="ren-kpi__value">{fmtN(N)}</p>
+              <p className="ren-kpi__label">партнёров с начислениями РБ</p>
             </div>
           </div>
         </div>
 
         {/* Фильтр по роли */}
         <div>
-          <p className="text-xs font-semibold text-indigo-700 mb-1.5">Фильтр по роли:</p>
+          <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {ALL_ALLOWED_ROLES.map(role => (
               <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
                 <input type="checkbox" checked={selectedRoles.includes(role)}
-                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 accent-indigo-600" />
-                <span className={selectedRoles.includes(role) ? 'text-indigo-800 font-medium' : 'text-indigo-300'}>{role}</span>
+                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 ren-checkbox" />
+                <span className={selectedRoles.includes(role) ? 'ren-text-brand font-medium' : 'text-[var(--text-tertiary)]'}>{role}</span>
               </label>
             ))}
           </div>
@@ -1135,7 +1129,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         {/* Цветовая легенда */}
         <div className="flex flex-wrap gap-4">
           {GKS.map(g => (
-            <span key={g} className="flex items-center gap-1.5 text-xs text-gray-600">
+            <span key={g} className="flex items-center gap-1.5 text-xs ren-text-secondary">
               <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: GK_COLOR[g] }} />
               {GK_LABEL[g]}
             </span>
@@ -1146,13 +1140,13 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         <div>
           <button
             onClick={() => setLegendOpen(o => !o)}
-            className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+            className="ren-link flex items-center gap-1"
           >
             <span>{legendOpen ? '▾' : '▸'}</span>
             <span>Как читать этот отчёт</span>
           </button>
           {legendOpen && (
-            <div className="mt-2 text-xs text-indigo-700 space-y-1.5 border-t border-indigo-100 pt-2">
+            <div className="mt-2 text-xs ren-text-brand space-y-1.5 border-t border-[var(--stroke-divider)] pt-2">
               <p><strong>Фиксированная база ({fmtN(N)} партнёров)</strong> — все, у кого хоть раз было PolicyIssued с LoyaltyPointsInLK&nbsp;&gt;&nbsp;0 и есть разрешённая роль (Агент / Субагент / Директор партнёра и др.). База не меняется от месяца к месяцу.</p>
               {isMonthly ? (
                 <>
@@ -1173,12 +1167,12 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
-            <tr className="border-b border-gray-200">
+        <table className="ren-table w-full text-sm min-w-[900px]">
+          <thead>
+            <tr className="border-b border-[var(--stroke-divider)]">
               <th className="px-4 py-2 text-left" rowSpan={2}>Месяц</th>
-              <th className="px-4 py-2 text-center border-l border-indigo-100" rowSpan={2}>
-                <span className="text-indigo-600">
+              <th className="px-4 py-2 text-center border-l border-[var(--stroke-divider)]" rowSpan={2}>
+                <span className="ren-text-brand">
                   {isMonthly ? <>Списали<br/>в месяце</> : <>Партнёров<br/>с РБ (накопит.)</>}
                 </span>
               </th>
@@ -1201,12 +1195,12 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
               const prevCumActive = idx > 0 ? data[idx - 1].cumActive : 0
               const growthPct = prevCumActive > 0 ? ((m.cumActive - prevCumActive) / prevCumActive) * 100 : null
               return (
-                <tr key={m.ym} className="border-t border-gray-100 hover:bg-indigo-50/30 transition-colors">
-                  <td className="px-4 py-2 font-medium text-gray-700 whitespace-nowrap">{fmtYM(m.ym)}</td>
-                  <td className="px-4 py-2 text-center tabular-nums font-semibold text-indigo-600 border-l border-indigo-100">
+                <tr key={m.ym} className="border-t border-[var(--stroke-divider)] transition-colors">
+                  <td className="px-4 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{fmtYM(m.ym)}</td>
+                  <td className="px-4 py-2 text-center tabular-nums font-semibold ren-text-brand border-l border-[var(--stroke-divider)]">
                     {fmtN(m.cumActive)}
                     {growthPct !== null && growthPct !== 0 && (
-                      <span className="block text-[10px] font-normal text-emerald-600 leading-tight">
+                      <span className="block text-[10px] font-normal text-[var(--text-success-contrast)] leading-tight">
                         +{growthPct < 1 ? growthPct.toFixed(1) : Math.round(growthPct)}%
                       </span>
                     )}
@@ -1259,22 +1253,20 @@ function UnderutilizersBlock({
   if (top.length === 0) return null
 
   return (
-    <div className="bg-white rounded-xl border border-purple-200 overflow-hidden shadow-sm">
-
-      {/* Шапка */}
-      <div className="px-5 py-4 bg-purple-50 border-b border-purple-200 flex items-center justify-between gap-3">
+    <div className="ren-card">
+      <div className="ren-card__header flex items-center justify-between gap-3">
         <div>
-          <h3 className="font-bold text-purple-800 text-base">
+          <h3 className="ren-card__title">
             ТОП: копят, но не используют баллы
           </h3>
-          <p className="text-xs text-purple-500 mt-0.5">
+          <p className="ren-card__subtitle">
             Ранжированы по неиспользованному остатку РБ (накоплено − списано) за всю историю.
             Потенциальные клиенты для активации программы.
           </p>
         </div>
         <button
           onClick={() => onDownload(data)}
-          className="shrink-0 text-xs bg-purple-600 text-white hover:bg-purple-700 px-3 py-1.5 rounded-full transition-colors font-medium"
+          className="ren-btn ren-btn--primary shrink-0 text-xs"
         >
           ↓ xlsx (все)
         </button>
@@ -1282,8 +1274,8 @@ function UnderutilizersBlock({
 
       {/* Таблица */}
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide border-b border-gray-200">
+        <table className="ren-table w-full text-sm">
+          <thead className="border-b border-[var(--stroke-divider)]">
             <tr>
               <th className="px-4 py-2 text-left whitespace-nowrap">#</th>
               <th className="px-4 py-2 text-left whitespace-nowrap">ФИО / RenId</th>
@@ -1300,7 +1292,7 @@ function UnderutilizersBlock({
                   Утилизация
                   <span
                     title="Утилизация = Списано РБ / Накоплено РБ × 100%. Показывает, какую долю накопленных рен-бонусов партнёр уже потратил. 0% — ни разу не списывал, 100% — потратил всё накопленное."
-                    className="cursor-help inline-flex items-center justify-center w-4 h-4 rounded-full border border-gray-400 text-gray-400 hover:border-indigo-500 hover:text-indigo-600 hover:bg-indigo-50 text-[10px] font-bold leading-none transition-colors"
+                    className="cursor-help inline-flex items-center justify-center w-4 h-4 rounded-full border border-[var(--stroke-border)] text-[var(--text-tertiary)] hover:border-[var(--stroke-brand-primary)] hover:text-[var(--text-brand-primary)] hover:bg-[var(--bg-brand-primary-00)] text-[10px] font-bold leading-none transition-colors"
                   >?</span>
                 </span>
               </th>
@@ -1313,28 +1305,28 @@ function UnderutilizersBlock({
               const unused = s.totalAccrual - s.totalSpend
               const isZeroSpend = s.spendCount === 0
               return (
-                <tr key={s.renId} className="border-t border-gray-100 hover:bg-purple-50/30 transition-colors">
-                  <td className="px-4 py-2.5 text-gray-400 font-medium">{i + 1}</td>
+                <tr key={s.renId} className="border-t border-[var(--stroke-divider)] transition-colors">
+                  <td className="px-4 py-2.5 text-[var(--text-tertiary)] font-medium">{i + 1}</td>
                   <td className="px-4 py-2.5">
-                    <span className="font-medium text-gray-800">{s.fullName}</span>
-                    <span className="block text-xs text-gray-400">{s.renId}</span>
+                    <span className="font-medium text-[var(--text-primary)]">{s.fullName}</span>
+                    <span className="block text-xs text-[var(--text-tertiary)]">{s.renId}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-xs text-gray-500">{s.role}</td>
+                  <td className="px-4 py-2.5 text-xs ren-text-secondary">{s.role}</td>
                   {contactFields.map(cf => (
                     <td key={cf} className="px-4 py-2.5 text-xs text-gray-700 whitespace-nowrap">
                       {String(base[cf] ?? '—')}
                     </td>
                   ))}
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-gray-800">
+                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[var(--text-primary)]">
                     {fmtN(s.totalAccrual)}
-                    <span className="block text-[10px] text-purple-400 font-normal">
+                    <span className="block text-[10px] ren-text-secondary font-normal">
                       не исп.: {fmtN(unused)}
                     </span>
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-gray-600">
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-secondary">
                     {s.accrualCount}
                   </td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600">
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">
                     {s.totalSpend > 0 ? fmtN(s.totalSpend) : (
                       <span className="text-red-400 font-medium">0</span>
                     )}
@@ -1357,7 +1349,7 @@ function UnderutilizersBlock({
         </table>
       </div>
 
-      <div className="px-5 py-3 bg-purple-50/50 border-t border-purple-100 text-xs text-purple-400">
+      <div className="ren-card__body border-t border-[var(--stroke-divider)] text-xs ren-text-secondary py-3">
         Показаны топ-{TOP} из {data.length} партнёров с начислениями. Кнопка «xlsx» выгружает всех.
       </div>
     </div>
@@ -1430,38 +1422,38 @@ function buildCohortData(rawRows: RawRow[], selectedRoles: string[]) {
 
 // Общий хедер с фильтрами и методологией
 function CohortHeader({
-  title, subtitle, accentColor, selectedRoles, onToggle, methodologyOpen, onToggleMethodology, methodologyText,
+  title, subtitle, selectedRoles, onToggle, methodologyOpen, onToggleMethodology, methodologyText,
 }: {
-  title: string; subtitle: string; accentColor: string
+  title: string; subtitle: string
   selectedRoles: string[]; onToggle: (r: string) => void
   methodologyOpen: boolean; onToggleMethodology: () => void; methodologyText: React.ReactNode
 }) {
   return (
-    <div className={`px-5 py-4 border-b ${accentColor} space-y-3`}>
+    <div className="ren-card__header space-y-3">
       <div>
-        <h2 className="font-bold text-base">{title}</h2>
-        <p className="text-xs mt-0.5 opacity-80">{subtitle}</p>
+        <h2 className="ren-card__title">{title}</h2>
+        <p className="ren-card__subtitle">{subtitle}</p>
       </div>
       <div>
-        <p className="text-xs font-semibold mb-1.5">Фильтр по роли:</p>
+        <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {ALL_ALLOWED_ROLES.map(role => (
             <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
               <input type="checkbox" checked={selectedRoles.includes(role)}
-                onChange={() => onToggle(role)} className="w-3.5 h-3.5" />
-              <span className={selectedRoles.includes(role) ? 'font-medium' : 'opacity-40'}>{role}</span>
+                onChange={() => onToggle(role)} className="w-3.5 h-3.5 ren-checkbox" />
+              <span className={selectedRoles.includes(role) ? 'ren-text-brand font-medium' : 'text-[var(--text-tertiary)]'}>{role}</span>
             </label>
           ))}
         </div>
       </div>
       <div>
         <button onClick={onToggleMethodology}
-          className="flex items-center gap-1 text-xs font-medium opacity-70 hover:opacity-100 transition-opacity">
+          className="ren-link flex items-center gap-1">
           <span>{methodologyOpen ? '▾' : '▸'}</span>
           <span>Как читать этот отчёт</span>
         </button>
         {methodologyOpen && (
-          <div className="mt-2 text-xs space-y-1 border-t border-current/10 pt-2 opacity-80">
+          <div className="mt-2 text-xs ren-text-brand space-y-1 border-t border-[var(--stroke-divider)] pt-2">
             {methodologyText}
           </div>
         )}
@@ -1554,15 +1546,14 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
 
   function cellBg(pct: number) {
     const i = Math.min(pct / result!.maxPct, 1)
-    return `rgba(16,185,129,${0.1 + i * 0.65})`  // emerald
+    return `rgba(51, 0, 102, ${0.08 + i * 0.55})`
   }
 
   return (
-    <div className="bg-white rounded-xl border border-emerald-200 overflow-hidden shadow-sm">
+    <div className="ren-card">
       <CohortHeader
-        title="📅 Когортный анализ: Хотя бы 1 кросс-продажа в указанный месяц"
+        title="Когортный анализ: Хотя бы 1 кросс-продажа в указанный месяц"
         subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — % когорты, купивших Каско именно в этом относительном месяце (M0, M1 и т.д.)."
-        accentColor="bg-emerald-50 text-emerald-800 border-emerald-200"
         selectedRoles={selectedRoles}
         onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
         methodologyOpen={methodologyOpen}
@@ -1576,7 +1567,7 @@ function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
         </>}
       />
       <CohortTable cohortRows={result.cohortRows} maxOffset={result.maxOffset} cellBg={cellBg} />
-      <div className="px-5 py-3 bg-emerald-50/40 border-t border-emerald-100 text-xs text-emerald-600">
+      <div className="ren-card__body border-t border-[var(--stroke-divider)] text-xs ren-text-secondary py-3">
         Показывает активность когорты в каждом конкретном месяце. Не накопительно — один и тот же партнёр учитывается заново в каждом месяце, когда делает кросс.
       </div>
     </div>
@@ -1695,17 +1686,16 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
 
   function cellBg(pct: number) {
     const i = Math.min(pct / result!.maxPct, 1)
-    return `rgba(99,102,241,${0.08 + i * 0.65})`
+    return `rgba(51, 0, 102, ${0.08 + i * 0.55})`
   }
 
   const segmentLabel = segment === '3-9' ? '3–9 списаний' : '10+ списаний'
 
   return (
-    <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
+    <div className="ren-card">
       <CohortHeader
-        title="📊 Когортный анализ: выход партнёров в активность"
+        title="Когортный анализ: выход партнёров в активность"
         subtitle={`Ячейка — сколько партнёров из когорты вошли в сегмент «${segmentLabel}» нарастающим итогом к этому месяцу.`}
-        accentColor="bg-indigo-50 text-indigo-800 border-indigo-200"
         selectedRoles={selectedRoles}
         onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
         methodologyOpen={methodologyOpen}
@@ -1719,30 +1709,26 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
       />
 
       {/* Фильтры */}
-      <div className="px-5 py-3 border-b border-indigo-100 bg-indigo-50/20 flex flex-wrap gap-8">
+      <div className="ren-card__body border-t border-[var(--stroke-divider)] flex flex-wrap gap-8 py-3">
         <div>
-          <p className="text-xs font-semibold text-indigo-700 mb-2">Тип когорты:</p>
+          <p className="text-xs font-semibold ren-text-brand mb-2">Тип когорты:</p>
           <div className="flex gap-4">
             {([['accrual', 'По первому начислению РБ'], ['spend', 'По первому списанию РБ']] as const).map(([v, label]) => (
               <label key={v} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
                 <input type="radio" name="cohortTypeBlock2" value={v}
                   checked={cohortType === v} onChange={() => setCohortType(v)}
-                  className="w-3.5 h-3.5 accent-indigo-600" />
-                <span className={cohortType === v ? 'font-medium text-indigo-700' : 'text-gray-500'}>{label}</span>
+                  className="w-3.5 h-3.5 ren-checkbox" />
+                <span className={cohortType === v ? 'ren-text-brand font-medium' : 'ren-text-secondary'}>{label}</span>
               </label>
             ))}
           </div>
         </div>
         <div>
-          <p className="text-xs font-semibold text-indigo-700 mb-2">Сегмент по кол-ву кросс-транзакций:</p>
-          <div className="flex gap-2">
+          <p className="text-xs font-semibold ren-text-brand mb-2">Сегмент по кол-ву кросс-транзакций:</p>
+          <div className="ren-segmented">
             {(['3-9', '10+'] as const).map(s => (
               <button key={s} onClick={() => setSegment(s)}
-                className={`px-4 py-1 rounded-full text-xs font-medium transition-colors border ${
-                  segment === s
-                    ? 'bg-indigo-600 text-white border-indigo-600'
-                    : 'bg-white text-indigo-600 border-indigo-300 hover:bg-indigo-50'
-                }`}>
+                className={`ren-segmented__btn ${segment === s ? 'ren-segmented__btn--active' : ''}`}>
                 {s === '3-9' ? '3–9 списаний' : '10+ списаний'}
               </button>
             ))}
@@ -1787,7 +1773,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
           </tbody>
         </table>
       </div>
-      <div className="px-5 py-3 bg-indigo-50/40 border-t border-indigo-100 text-xs text-indigo-600">
+      <div className="ren-card__body border-t border-[var(--stroke-divider)] text-xs ren-text-secondary py-3">
         Ячейка = партнёры в сегменте <strong>«{segmentLabel}»</strong> нарастающим итогом к этому месяцу.
         {' '}Когорта: <strong>{cohortType === 'accrual' ? 'по первому начислению' : 'по первому списанию'}</strong>.
       </div>

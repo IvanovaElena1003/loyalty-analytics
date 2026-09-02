@@ -1,1 +1,3 @@
+@import "./styles/renins-tokens.css";
+@import "./styles/renins-ui.css";
 @import "tailwindcss";

@@ -134,35 +134,33 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
 
   // ─── cell background helpers ──────────────────────────────────────────────
   function stickyBg(col: ColSpec) {
-    return col.isTotal ? 'bg-blue-50' : col.isYearSummary ? 'bg-violet-50' : 'bg-gray-50'
+    return col.isTotal ? 'ren-bg-brand-soft' : col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]' : 'bg-[var(--bg-bg-secondary)]'
   }
   function dataBg(col: ColSpec) {
-    return col.isTotal ? 'bg-blue-50' : col.isYearSummary ? 'bg-violet-50/40' : ''
+    return col.isTotal ? 'ren-bg-brand-soft' : col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]/40' : ''
   }
   function colBorder(col: ColSpec) {
-    return col.isTotal ? 'border-l-2 border-blue-200' : col.isYearSummary ? 'border-l border-violet-200' : ''
+    return col.isTotal ? 'border-l-2 border-[var(--stroke-brand-primary)]' : col.isYearSummary ? 'border-l border-[var(--stroke-divider)]' : ''
   }
 
   return (
     <div className="space-y-6">
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div className="ren-card">
 
       {/* ── Year toggle bar ─────────────────────────────────────────────────── */}
-      <div className="border-b border-gray-100 px-4 py-2.5 flex items-center gap-2 flex-wrap bg-gray-50 rounded-t-xl">
-        <span className="text-xs text-gray-400 font-medium mr-1">Периоды:</span>
+      <div className="ren-card__header border-b border-[var(--stroke-divider)] px-4 py-2.5 flex items-center gap-2 flex-wrap">
+        <span className="text-xs ren-text-secondary font-medium mr-1">Периоды:</span>
         {years.map(yr => {
           const isCollapsed = collapsed.has(yr)
           const count = byYear.get(yr)?.length ?? 0
           return (
             <button key={yr} onClick={() => toggle(yr)}
               title={isCollapsed ? `Развернуть ${yr}` : `Свернуть ${yr}`}
-              className={`inline-flex items-center gap-1.5 text-xs px-3 py-1 rounded-full border font-medium transition-colors ${
-                isCollapsed
-                  ? 'bg-white border-gray-300 text-gray-600 hover:bg-gray-100'
-                  : 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100'
+              className={`ren-btn text-xs py-1 px-3 ${
+                isCollapsed ? 'ren-btn--secondary' : 'ren-btn--primary'
               }`}>
               <span className="text-[10px]">{isCollapsed ? '▶' : '▼'}</span>
-              {yr} <span className="text-gray-400 font-normal">({count} мес.)</span>
+              {yr} <span className="font-normal opacity-70">({count} мес.)</span>
             </button>
           )
         })}
@@ -180,7 +178,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
               {cols.map(col => (
                 <th key={col.key} colSpan={2}
                   className={`sticky top-0 z-20 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200 whitespace-nowrap ${stickyBg(col)} ${colBorder(col)}`}>
-                  <div className={col.isTotal ? 'text-blue-700' : col.isYearSummary ? 'text-violet-700' : 'text-gray-600'}>
+                  <div className={col.isTotal || col.isYearSummary ? 'ren-text-brand' : 'ren-text-secondary'}>
                     {col.header}
                   </div>
                   {col.subLabel && (
@@ -235,7 +233,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
               const isIndent   = row.kind === 'sub'
               const isTotalRow = row.kind === 'data'
               const isHighlight = !!row.highlight
-              const pctCls = 'text-blue-700 font-semibold'
+              const pctCls = 'ren-text-brand font-semibold'
 
               return (
                 <tr key={`dr${ri}`} className={`group transition-colors
@@ -296,8 +294,8 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
     </div>
 
     {/* ── Состав Кросс-Каско по месяцам (уважает фильтр Периоды) ─────── */}
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <h3 className="text-sm font-semibold text-gray-600 mb-4">Состав Кросс-Каско по месяцам</h3>
+    <div className="ren-card ren-card__body">
+      <h3 className="ren-card__title text-sm mb-4">Состав Кросс-Каско по месяцам</h3>
       <CrossCompositionChart months={cols.filter(c => !c.isTotal).map(c => c.metrics)} />
     </div>
     </div>

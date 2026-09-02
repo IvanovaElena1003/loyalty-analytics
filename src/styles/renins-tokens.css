@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Renaissance UI — design tokens (design-kit/tokens.css) */
+:root {
+  --font-headings: Gerbera, Inter, sans-serif;
+  --font-body: Inter, sans-serif;
+
+  --text-primary: #200040;
+  --text-secondary: #6e748c;
+  --text-tertiary: #cccfde;
+  --text-on-color: #ffffff;
+  --text-brand-primary: #330066;
+  --text-brand-secondary: #99ff66;
+  --text-brand-secondary-contrast: #339900;
+  --text-warning: #ff9833;
+  --text-error: #ff3333;
+  --text-success-contrast: #339900;
+  --text-disabled: #6b6a9a;
+  --text-link: #3a89ff;
+  --text-link-hover: #0058dd;
+
+  --bg-bg: #ffffff;
+  --bg-bg-secondary: #f6f6f7;
+  --bg-content: #ffffff;
+  --bg-brand-primary-00: #e9e5ff;
+  --bg-brand-primary-01: #d4ccff;
+  --bg-brand-primary-02: #aa99ff;
+  --bg-brand-primary-03: #330066;
+  --bg-brand-primary-04: #200040;
+  --bg-brand-secondary-01: #f6fff2;
+  --bg-brand-secondary-02: #ddffcc;
+  --bg-brand-secondary-03: #99ff66;
+  --bg-states-brand-primary-hover: #26004d;
+  --bg-states-brand-primary-pressed: #200040;
+  --bg-states-brand-primary-alt-hover: #d4ccff;
+  --bg-states-disabled: #f8f8f9;
+
+  --stroke-border: #cccfde;
+  --stroke-brand-primary: #330066;
+  --stroke-divider: #cccfde;
+  --stroke-focused: #bdddff;
+
+  --special-shadow-02: #5b68713d;
+
+  --rounding-interactive-ds-s: 8px;
+  --rounding-interactive-ds-m: 12px;
+  --rounding-interactive-ds-l: 16px;
+  --rounding-interactive-ds-full: 999px;
+  --rounding-other-ds-l: 16px;
+  --rounding-other-ds-xl: 24px;
+
+  --shadow-standard: 0px 8px 16px var(--special-shadow-02);
+  --shadow-header: 0px 1px 2px var(--special-shadow-02);
+  --animation-default: 0.25s ease-in-out;
+}

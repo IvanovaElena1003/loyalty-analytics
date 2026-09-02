@@ -304,8 +304,8 @@ function humanLabel(b: { from: number; to: number }, unit: string): string {
 }
 
 const BAR_COLORS = [
-  'bg-blue-200', 'bg-blue-300', 'bg-blue-500',
-  'bg-blue-500', 'bg-blue-300', 'bg-blue-200',
+  'ren-bar-chart', 'ren-bar-chart--mid', 'ren-bar-chart--strong',
+  'ren-bar-chart--strong', 'ren-bar-chart--mid', 'ren-bar-chart',
 ]
 
 // ─── Один блок распределения ─────────────────────────────────────────────────
@@ -328,7 +328,7 @@ function DistBlock({
 }) {
   if (dist.total === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-6 text-center text-gray-400 text-sm">
+      <div className="ren-card ren-card__body text-center ren-text-secondary text-sm">
         Нет данных для «{title}»
       </div>
     )
@@ -344,35 +344,31 @@ function DistBlock({
   const totalBucketSum = dist.buckets.reduce((s, b) => s + b.sum, 0)
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Заголовок */}
-      <div className="px-5 py-4 border-b border-gray-100 bg-gray-50">
-        <h3 className="font-semibold text-gray-800">{title}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
+    <div className="ren-card">
+      <div className="ren-card__header">
+        <h3 className="ren-card__title">{title}</h3>
+        <p className="ren-card__subtitle">{subtitle}</p>
       </div>
 
-      {/* Параметры */}
-      <div className="px-5 py-3 flex flex-wrap gap-6 border-b border-gray-100 bg-blue-50/40">
+      <div className="ren-card__body flex flex-wrap gap-6 border-b border-[var(--stroke-divider)] ren-bg-brand-soft">
         <div>
-          <span className="text-xs text-gray-500">Всего событий</span>
-          <p className="text-lg font-bold text-gray-800">{fmtN(dist.total)}</p>
+          <span className="text-xs ren-text-secondary">Всего событий</span>
+          <p className="text-lg font-bold text-[var(--text-primary)]">{fmtN(dist.total)}</p>
         </div>
         {dist.nonZeroCount > 0 && (
           <>
             <div>
-              <span className="text-xs text-gray-500">С ненулевым значением</span>
-              <p className="text-lg font-bold text-blue-700">{fmtN(dist.nonZeroCount)}</p>
+              <span className="text-xs ren-text-secondary">С ненулевым значением</span>
+              <p className="text-lg font-bold ren-text-brand">{fmtN(dist.nonZeroCount)}</p>
             </div>
-            {/* Среднее ненулевые — п.2/п.3: целое число + «Рен-бонусов» */}
             <div>
-              <span className="text-xs text-gray-500">{meanLabel}</span>
-              <p className="text-lg font-bold text-blue-700">{fmtN(Math.round(meanNonZeroValue))} {unit}</p>
+              <span className="text-xs ren-text-secondary">{meanLabel}</span>
+              <p className="text-lg font-bold ren-text-brand">{fmtN(Math.round(meanNonZeroValue))} {unit}</p>
             </div>
-            {/* Среднее все (включая нули) — только для блоков с showMeanAll */}
             {showMeanAll && (
               <div>
-                <span className="text-xs text-gray-500">{meanAllLabelResolved}</span>
-                <p className="text-lg font-bold text-indigo-600">{fmtN(Math.round(meanAllValue))} {unit}</p>
+                <span className="text-xs ren-text-secondary">{meanAllLabelResolved}</span>
+                <p className="text-lg font-bold ren-text-brand">{fmtN(Math.round(meanAllValue))} {unit}</p>
               </div>
             )}
           </>
@@ -413,9 +409,9 @@ function DistBlock({
 
       {/* Таблица диапазонов
           п.4/п.7: «Доля» (бар) удалена, «% от итого» → «Доля», добавлена строка ИТОГО */}
-      <div className="overflow-x-auto border-t border-gray-100">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+      <div className="overflow-x-auto border-t border-[var(--stroke-divider)]">
+        <table className="ren-table w-full text-sm">
+          <thead>
             <tr>
               <th className="px-4 py-2 text-left">Диапазон</th>
               <th className="px-4 py-2 text-left text-gray-400 font-normal">Характеристика</th>
@@ -441,9 +437,9 @@ function DistBlock({
                 <td className="px-4 py-2.5 font-medium text-gray-800">{humanLabel(b, unit)}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-400">{b.name}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtN(b.count)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-blue-600 font-medium">{fmtF(b.pct)}%</td>
+                <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-medium">{fmtF(b.pct)}%</td>
                 {showSumColumn && (
-                  <td className="px-4 py-2.5 text-right tabular-nums text-indigo-600 font-medium">
+                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-medium">
                     {fmtN(b.sum)}
                   </td>
                 )}
@@ -456,7 +452,7 @@ function DistBlock({
               <td className="px-4 py-2.5 text-right tabular-nums">{fmtN(dist.total)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">100%</td>
               {showSumColumn && (
-                <td className="px-4 py-2.5 text-right tabular-nums text-indigo-700">
+                <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">
                   {fmtN(totalBucketSum)}
                 </td>
               )}
@@ -473,11 +469,11 @@ function AvgCard({ title, value, value2, sub }: {
   title: string; value: string; value2?: string; sub?: string
 }) {
   return (
-    <div className="bg-white rounded-xl border border-rose-200 p-4 flex flex-col gap-0.5">
-      <p className="text-xs text-rose-500 font-medium uppercase tracking-wide leading-tight">{title}</p>
-      <p className="text-xl font-bold text-gray-800 mt-0.5">{value}</p>
-      {value2 && <p className="text-base font-semibold text-gray-500">{value2}</p>}
-      {sub && <p className="text-xs text-gray-400 mt-0.5 leading-snug">{sub}</p>}
+    <div className="ren-card ren-card__body flex flex-col gap-0.5">
+      <p className="text-xs ren-text-brand font-medium uppercase tracking-wide leading-tight">{title}</p>
+      <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5">{value}</p>
+      {value2 && <p className="text-base font-semibold ren-text-secondary">{value2}</p>}
+      {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
     </div>
   )
 }
@@ -520,10 +516,10 @@ function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: Month
   ]
 
   return (
-    <div className="bg-white rounded-xl border border-rose-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-rose-100 bg-rose-50">
-        <h3 className="text-sm font-bold text-rose-700 uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
-        <p className="text-xs text-rose-400 mt-0.5">Среднее арифметическое по {n} месяцам наблюдений</p>
+    <div className="ren-card">
+      <div className="ren-card__header">
+        <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
+        <p className="ren-card__subtitle">Среднее арифметическое по {n} месяцам наблюдений</p>
       </div>
       <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <AvgCard
@@ -561,21 +557,21 @@ function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: Month
           sub="Событий повышенного КВ"
         />
       </div>
-      <div className="border-t border-rose-100 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="bg-rose-50 text-xs text-rose-500 uppercase tracking-wide">
+      <div className="border-t border-[var(--stroke-divider)] overflow-x-auto">
+        <table className="ren-table w-full text-sm">
+          <thead>
             <tr>
               <th className="px-4 py-2 text-left">Показатель</th>
               <th className="px-4 py-2 text-right">Итого (за всё время)</th>
               <th className="px-4 py-2 text-right">Среднее в месяц</th>
             </tr>
           </thead>
-          <tbody className="text-gray-700">
+          <tbody className="text-[var(--text-primary)]">
             {tableRows.map((r, i) => (
-              <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
+              <tr key={i} className="border-t border-[var(--stroke-divider)]">
                 <td className="px-4 py-2.5">{r.label}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-medium">{r.total}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-rose-600 font-semibold">{r.avg}</td>
+                <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-semibold">{r.avg}</td>
               </tr>
             ))}
           </tbody>
@@ -600,47 +596,47 @@ function AccrualSpendingBlock({
   return (
     <div className="space-y-3">
       {/* Сводка по воронке */}
-      <div className="bg-white rounded-xl border border-indigo-200 overflow-hidden shadow-sm">
-        <div className="px-5 py-3 bg-indigo-50 border-b border-indigo-100">
-          <h3 className="text-sm font-bold text-indigo-800 uppercase tracking-wide">
+      <div className="ren-card">
+        <div className="ren-card__header">
+          <h3 className="ren-card__title text-sm uppercase tracking-wide">
             Из начисляющих партнёров — кто списывал?
           </h3>
-          <p className="text-xs text-indigo-500 mt-0.5">
+          <p className="ren-card__subtitle">
             База: партнёры, у которых есть хотя бы одно начисление (State = PolicyIssued, LoyaltyPointsInLK &gt; 0)
           </p>
         </div>
-        <div className="px-5 py-4 flex flex-wrap gap-6">
+        <div className="ren-card__body flex flex-wrap gap-6">
           <div>
-            <p className="text-xs text-gray-500">Партнёров с начислениями</p>
-            <p className="text-3xl font-bold text-indigo-700">{fmtN(data.accrualPartnersCount)}</p>
+            <p className="text-xs ren-text-secondary">Партнёров с начислениями</p>
+            <p className="text-3xl font-bold ren-text-brand">{fmtN(data.accrualPartnersCount)}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Из них списали хоть раз</p>
-            <p className="text-3xl font-bold text-green-600">{fmtN(data.spentAtLeastOnce)}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{fmtF(spentPct)}% от начисляющих</p>
+            <p className="text-xs ren-text-secondary">Из них списали хоть раз</p>
+            <p className="text-3xl font-bold ren-text-brand">{fmtN(data.spentAtLeastOnce)}</p>
+            <p className="text-xs ren-text-secondary mt-0.5">{fmtF(spentPct)}% от начисляющих</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Ни разу не списали</p>
-            <p className="text-3xl font-bold text-amber-500">{fmtN(data.accrualPartnersCount - data.spentAtLeastOnce)}</p>
-            <p className="text-xs text-gray-400 mt-0.5">{fmtF(neverPct)}% от начисляющих</p>
+            <p className="text-xs ren-text-secondary">Ни разу не списали</p>
+            <p className="text-3xl font-bold text-[var(--text-secondary)]">{fmtN(data.accrualPartnersCount - data.spentAtLeastOnce)}</p>
+            <p className="text-xs ren-text-secondary mt-0.5">{fmtF(neverPct)}% от начисляющих</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Событий списания, шт.</p>
-            <p className="text-3xl font-bold text-gray-800">{fmtN(data.totalEvents)}</p>
+            <p className="text-xs ren-text-secondary">Событий списания, шт.</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(data.totalEvents)}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Списали итого, РБ</p>
-            <p className="text-3xl font-bold text-indigo-600">{fmtN(Math.round(data.totalRb))}</p>
+            <p className="text-xs ren-text-secondary">Списали итого, РБ</p>
+            <p className="text-3xl font-bold ren-text-brand">{fmtN(Math.round(data.totalRb))}</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Ср. списание на 1 (кто списывал)</p>
-            <p className="text-3xl font-bold text-gray-700">{fmtN(Math.round(meanAmongSpent))}</p>
-            <p className="text-xs text-gray-400 mt-0.5">РБ</p>
+            <p className="text-xs ren-text-secondary">Ср. списание на 1 (кто списывал)</p>
+            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(Math.round(meanAmongSpent))}</p>
+            <p className="text-xs ren-text-secondary mt-0.5">РБ</p>
           </div>
           <div>
-            <p className="text-xs text-gray-500">Ср. списание на 1 (все начисляющие)</p>
-            <p className="text-3xl font-bold text-gray-500">{fmtN(Math.round(meanAmongAll))}</p>
-            <p className="text-xs text-gray-400 mt-0.5">РБ</p>
+            <p className="text-xs ren-text-secondary">Ср. списание на 1 (все начисляющие)</p>
+            <p className="text-3xl font-bold ren-text-secondary">{fmtN(Math.round(meanAmongAll))}</p>
+            <p className="text-xs ren-text-secondary mt-0.5">РБ</p>
           </div>
         </div>
       </div>
@@ -718,19 +714,19 @@ export default function DistributionTab({ result }: Props) {
       <AvgBonusBlock totals={totals} months={months} />
 
       {/* Пояснение */}
-      <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+      <div className="ren-card ren-card__body ren-bg-brand-soft ren-text-brand text-sm">
         <strong>Как читать таблицы распределения.</strong>&nbsp;
         Диапазоны строятся от 0 и выше вокруг среднего значения (±σ).
         Строки с нулевым значением выделены отдельно. Пустые срезы скрыты.
       </div>
 
       {/* Фильтр по периоду */}
-      <div className="flex items-center gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3">
-        <span className="text-sm text-gray-600 font-medium shrink-0">Период:</span>
+      <div className="ren-card ren-card__body flex items-center gap-3">
+        <span className="text-sm ren-text-brand font-medium shrink-0">Период:</span>
         <select
           value={selectedMonth ?? ''}
           onChange={e => setSelectedMonth(e.target.value || null)}
-          className="text-sm border border-gray-300 rounded-lg px-3 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          className="ren-select text-sm"
         >
           <option value="">Все периоды</option>
           {months.map(m => (
@@ -740,7 +736,7 @@ export default function DistributionTab({ result }: Props) {
         {selectedMonth && (
           <button
             onClick={() => setSelectedMonth(null)}
-            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+            className="ren-link text-xs"
           >
             ✕ сбросить
           </button>
@@ -749,11 +745,9 @@ export default function DistributionTab({ result }: Props) {
 
       {/* ── В разрезе партнёров ── */}
       <div className="flex items-center gap-4">
-        <div className="h-0.5 flex-1 bg-blue-300" />
-        <span className="text-sm font-bold text-blue-700 uppercase tracking-wider whitespace-nowrap bg-blue-50 border border-blue-300 rounded-full px-5 py-1.5 shadow-sm">
-          👥 В разрезе партнёров
-        </span>
-        <div className="h-0.5 flex-1 bg-blue-300" />
+        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
+        <span className="ren-section-marker">В разрезе партнёров</span>
+        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
       </div>
 
       {/* п.6 (был п.6 в чередовании): начисления в разрезе партнёров */}
@@ -789,11 +783,9 @@ export default function DistributionTab({ result }: Props) {
 
       {/* ── В разрезе полисов ── */}
       <div className="flex items-center gap-4">
-        <div className="h-0.5 flex-1 bg-emerald-300" />
-        <span className="text-sm font-bold text-emerald-700 uppercase tracking-wider whitespace-nowrap bg-emerald-50 border border-emerald-300 rounded-full px-5 py-1.5 shadow-sm">
-          📋 В разрезе полисов
-        </span>
-        <div className="h-0.5 flex-1 bg-emerald-300" />
+        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
+        <span className="ren-section-marker">В разрезе полисов</span>
+        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
       </div>
 
       {/* п.5: Распределение начислений по полису ОСАГО ФЛ */}

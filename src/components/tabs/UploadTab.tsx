@@ -47,41 +47,39 @@ function DropZone({
     e.target.value = ''
   }, [handle])
 
+  const zoneClass = loadedFilename
+    ? 'ren-dropzone ren-dropzone--loaded'
+    : dragging
+      ? 'ren-dropzone ren-dropzone--dragging'
+      : 'ren-dropzone'
+
   return (
     <label
       onDragOver={e => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
-      className={`
-        w-full max-w-lg border-2 border-dashed rounded-2xl p-8
-        flex flex-col items-center gap-3 cursor-pointer transition-all
-        ${loadedFilename
-          ? 'border-emerald-400 bg-emerald-50'
-          : dragging
-            ? 'border-blue-500 bg-blue-50'
-            : 'border-gray-300 bg-gray-50 hover:border-blue-400 hover:bg-blue-50'}
-      `}
+      className={zoneClass}
     >
-      <div className="text-4xl">{loadedFilename ? '✅' : '📂'}</div>
+      <div className="text-4xl">{loadedFilename ? '✓' : '📂'}</div>
       <div className="text-center">
         {loadedFilename
           ? <>
-              <p className="text-emerald-700 font-medium text-sm">{loadedFilename}</p>
-              <p className="text-emerald-500 text-xs mt-0.5">Загружен · нажмите чтобы заменить</p>
+              <p className="ren-text-brand font-medium text-sm">{loadedFilename}</p>
+              <p className="ren-text-secondary text-xs mt-0.5">Загружен · нажмите чтобы заменить</p>
             </>
           : <>
-              <p className="text-gray-700 font-medium text-sm">{label}</p>
-              <p className="text-gray-400 text-xs mt-0.5">{sub}</p>
+              <p className="text-[var(--text-primary)] font-medium text-sm">{label}</p>
+              <p className="ren-text-secondary text-xs mt-0.5">{sub}</p>
             </>
         }
       </div>
       <input type="file" accept=".xlsx,.xlsb,.xls" className="hidden" onChange={onInputChange} />
       {!loadedFilename && (
-        <span className={`px-3 py-1.5 text-white text-xs rounded-lg transition-colors ${optional ? 'bg-gray-400 hover:bg-gray-500' : 'bg-blue-600 hover:bg-blue-700'}`}>
+        <span className={`ren-btn text-xs ${optional ? 'ren-btn--secondary' : 'ren-btn--primary'}`}>
           Выбрать файл
         </span>
       )}
-      {error && <p className="text-red-500 text-xs">{error}</p>}
+      {error && <p className="ren-field-error">{error}</p>}
     </label>
   )
 }
@@ -90,8 +88,8 @@ export default function UploadTab({ onFile, onAgentFile, agentFilename }: Props)
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
       <div className="text-center">
-        <h1 className="text-2xl font-semibold text-gray-800 mb-2">Аналитика лояльности ОСАГО ФЛ</h1>
-        <p className="text-gray-500 text-sm">Загрузите детализацию котировок из ЛК партнёра</p>
+        <h1 className="text-2xl font-semibold ren-text-brand mb-2">Аналитика лояльности ОСАГО ФЛ</h1>
+        <p className="ren-text-secondary text-sm">Загрузите детализацию котировок из ЛК партнёра</p>
       </div>
 
       <DropZone
@@ -102,8 +100,8 @@ export default function UploadTab({ onFile, onAgentFile, agentFilename }: Props)
 
       <div className="w-full max-w-lg">
         <div className="flex items-center gap-2 mb-3">
-          <span className="text-sm font-medium text-gray-500">🗂️</span>
-          <span className="text-sm font-semibold text-gray-600">Агентская сеть <span className="font-normal text-gray-400">(опционально)</span></span>
+          <span className="text-sm font-semibold ren-text-brand">Агентская сеть</span>
+          <span className="text-sm ren-text-secondary">(опционально)</span>
         </div>
         <DropZone
           onFile={onAgentFile ?? (() => {})}
@@ -112,13 +110,13 @@ export default function UploadTab({ onFile, onAgentFile, agentFilename }: Props)
           optional
           loadedFilename={agentFilename}
         />
-        <p className="text-xs text-gray-400 mt-2 px-1">
+        <p className="text-xs ren-text-secondary mt-2 px-1">
           Загрузите для фильтров по Дивизиону, Филиалу, Управлению, КП, Куратору, Посреднику.
-          Файл должен содержать колонку <code className="bg-gray-100 px-1 rounded">subj_id</code> — она сопоставляется с&nbsp;CashbookId основного файла.
+          Файл должен содержать колонку <code className="ren-bg-brand-soft px-1 rounded">subj_id</code> — она сопоставляется с&nbsp;CashbookId основного файла.
         </p>
       </div>
 
-      <p className="text-xs text-gray-400 max-w-sm text-center">
+      <p className="text-xs ren-text-secondary max-w-sm text-center">
         Файлы обрабатываются локально в браузере — никуда не отправляются
       </p>
     </div>

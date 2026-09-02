@@ -16,16 +16,16 @@ const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_
 type Tab = 'upload' | 'funnel' | 'distribution' | 'keymetrics' | 'methodology' | 'anomalies'
 
 const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'upload',       label: '📂 Загрузка' },
-  { id: 'funnel',       label: '📊 Воронка',        needsData: true },
-  { id: 'distribution', label: '📈 Распределение',  needsData: true },
-  { id: 'keymetrics',   label: '🔑 Ключевые метрики', needsData: true },
+  { id: 'upload',       label: 'Загрузка' },
+  { id: 'funnel',       label: 'Воронка',        needsData: true },
+  { id: 'distribution', label: 'Распределение',  needsData: true },
+  { id: 'keymetrics',   label: 'Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
-  { id: 'anomalies',    label: '🔧 Тех. вкладка',    needsData: true },
+  { id: 'anomalies',    label: 'Тех. вкладка',    needsData: true },
 ]
 
 const TABS_LIMITED: { id: Tab; label: string; needsData?: true }[] = [
-  { id: 'keymetrics', label: '🔑 Ключевые метрики', needsData: true },
+  { id: 'keymetrics', label: 'Ключевые метрики', needsData: true },
 ]
 
 const TABS = isFullMode ? TABS_FULL : TABS_LIMITED
@@ -34,21 +34,16 @@ function Spinner({ filename }: { filename: string }) {
   const isDb = filename.startsWith('Загружаем данные из базы')
   if (isDb) {
     return (
-      <div className="fixed inset-0 bg-white flex flex-col items-center justify-center gap-8 z-50">
+      <div className="fixed inset-0 bg-[var(--bg-content)] flex flex-col items-center justify-center gap-8 z-50">
         <div className="flex flex-col items-center gap-4">
           <div className="relative w-20 h-20">
-            <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-            <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+            <div className="absolute inset-0 rounded-full border-4 ren-spinner opacity-30" />
+            <div className="absolute inset-0 rounded-full border-4 ren-spinner border-t-transparent animate-spin" />
           </div>
           <div className="text-center">
-            <p className="text-gray-800 font-semibold text-lg">Загружаем данные</p>
-            <p className="text-gray-400 text-sm mt-1">Это займёт несколько секунд</p>
+            <p className="ren-text-brand font-semibold text-lg">Загружаем данные</p>
+            <p className="ren-text-secondary text-sm mt-1">Это займёт несколько секунд</p>
           </div>
-        </div>
-        <div className="flex gap-2">
-          {[0,1,2].map(i => (
-            <div key={i} className="w-2 h-2 rounded-full bg-blue-400 animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
-          ))}
         </div>
       </div>
     )
@@ -56,13 +51,13 @@ function Spinner({ filename }: { filename: string }) {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
       <div className="relative w-16 h-16">
-        <div className="absolute inset-0 rounded-full border-4 border-blue-100" />
-        <div className="absolute inset-0 rounded-full border-4 border-blue-600 border-t-transparent animate-spin" />
+        <div className="absolute inset-0 rounded-full border-4 ren-spinner opacity-30" />
+        <div className="absolute inset-0 rounded-full border-4 ren-spinner border-t-transparent animate-spin" />
       </div>
       <div className="text-center">
-        <p className="text-gray-700 font-medium">Обрабатываю файл…</p>
-        <p className="text-gray-400 text-sm mt-1 max-w-xs">{filename}</p>
-        <p className="text-gray-400 text-xs mt-2">Для большого файла может занять 10–30 секунд</p>
+        <p className="font-medium ren-text-brand">Обрабатываю файл…</p>
+        <p className="ren-text-secondary text-sm mt-1 max-w-xs">{filename}</p>
+        <p className="ren-text-secondary text-xs mt-2">Для большого файла может занять 10–30 секунд</p>
       </div>
     </div>
   )
@@ -79,7 +74,6 @@ export default function App() {
   const [dbSaving, setDbSaving] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
 
-  // On mount: try to load data from Supabase Storage
   useEffect(() => {
     if (!DB_ENABLED) return
     let cancelled = false
@@ -119,7 +113,6 @@ export default function App() {
         const agg  = aggregate(rows)
         setResult(agg)
         setTab(isFullMode ? 'funnel' : 'keymetrics')
-        // Save to DB in background
         if (DB_ENABLED) {
           setDbSaving(true)
           saveMainRowsToDB(rows)
@@ -139,7 +132,6 @@ export default function App() {
       const rows = parseWorkbook(data)
       setAgentRows(rows)
       setAgentFilename(filename)
-      // Save to DB in background
       if (DB_ENABLED) {
         saveAgentRowsToDB(rows)
           .catch(e => setError(`БД (агент. сеть): ${e instanceof Error ? e.message : String(e)}`))
@@ -149,7 +141,6 @@ export default function App() {
     }
   }, [])
 
-  // Limited mode: show login screen until authenticated
   if (!isFullMode && !session) {
     return <LoginScreen onAuth={setSession} />
   }
@@ -157,62 +148,58 @@ export default function App() {
   const lockedCurator = (!isFullMode && session?.role === 'curator') ? session.name : undefined
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      <header className="bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-3">
-              <span className="font-semibold text-gray-800 text-sm">Лояльность: ОСАГО ФЛ + Кросс Каско от бесполисных</span>
+    <div className="ren-page">
+      <header className="ren-header">
+        <div className="ren-container">
+          <div className="ren-header__inner">
+            <div className="ren-header__brand">
+              <img src="/renins-logo.svg" alt="Ренессанс страхование" className="ren-header__logo" />
+              <div className="min-w-0">
+                <p className="ren-header__title">Лояльность: ОСАГО ФЛ + Кросс Каско</p>
+                {result && !loading && result.maxCreateDate && (
+                  <p className="text-xs ren-text-secondary mt-0.5">
+                    Данные по {new Date(result.maxCreateDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  </p>
+                )}
+              </div>
               {result && !loading && (
-                <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                <span className="ren-badge hidden sm:inline-flex">
                   {result.totals.total_quotes.toLocaleString('ru-RU')} котировок
                 </span>
               )}
-              {result && !loading && result.maxCreateDate && (
-                <span className="text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                  Данные по {new Date(result.maxCreateDate + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
-                </span>
-              )}
               {dbSaving && (
-                <span className="text-xs text-blue-500 bg-blue-50 border border-blue-200 px-2.5 py-0.5 rounded-full animate-pulse">
-                  Сохраняем в БД…
-                </span>
+                <span className="ren-badge animate-pulse">Сохраняем в БД…</span>
               )}
             </div>
             {!isFullMode && session && (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">
-                  {session.role === 'director' ? '👤 Директор' : `👤 ${session.name.split(' ')[0]} ${session.name.split(' ')[1] ?? ''}`}
+              <div className="flex items-center gap-3">
+                <span className="text-xs ren-text-secondary">
+                  {session.role === 'director' ? 'Директор' : session.name.split(' ').slice(0, 2).join(' ')}
                 </span>
-                <button onClick={() => setSession(null)} className="text-xs text-gray-400 hover:text-red-500 transition-colors">Выйти</button>
+                <button type="button" onClick={() => setSession(null)} className="ren-btn ren-btn--ghost">Выйти</button>
               </div>
             )}
             {result && !loading && isFullMode && (
               <button
+                type="button"
                 onClick={() => { setResult(null); setTab('upload') }}
-                className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                className="ren-link"
               >
                 Загрузить другой файл
               </button>
             )}
           </div>
 
-          <nav className="flex gap-0 -mb-px">
+          <nav className="ren-tabs">
             {TABS.map(t => {
               const disabled = !!t.needsData && !result
               return (
                 <button
                   key={t.id}
+                  type="button"
                   onClick={() => { if (!disabled && !loading) setTab(t.id) }}
                   disabled={disabled || loading}
-                  className={`
-                    px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap
-                    ${tab === t.id
-                      ? 'border-blue-600 text-blue-600'
-                      : disabled || loading
-                        ? 'border-transparent text-gray-300 cursor-not-allowed'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}
-                  `}
+                  className={`ren-tab ${tab === t.id ? 'ren-tab--active' : ''}`}
                 >
                   {t.label}
                 </button>
@@ -222,12 +209,8 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 rounded-lg px-4 py-3 text-sm">
-            {error}
-          </div>
-        )}
+      <main className="ren-container py-6">
+        {error && <div className="ren-alert">{error}</div>}
 
         {loading && <Spinner filename={loadingName} />}
 
@@ -239,10 +222,9 @@ export default function App() {
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}
 
         {!loading && !isFullMode && !result && (
-          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center">
-            <div className="text-4xl">📊</div>
-            <p className="text-gray-500 font-medium">Данные обновляются</p>
-            <p className="text-gray-400 text-sm">Попробуйте обновить страницу чуть позже</p>
+          <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3 text-center ren-card ren-card__body max-w-md mx-auto">
+            <p className="font-medium ren-text-brand">Данные обновляются</p>
+            <p className="ren-text-secondary text-sm">Попробуйте обновить страницу чуть позже</p>
           </div>
         )}
       </main>

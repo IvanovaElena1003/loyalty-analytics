@@ -148,12 +148,12 @@ const SECTIONS: Section[] = [
 ]
 
 // ─── Цвета секций ──────────────────────────────────────────────────────────────
-const COLORS: Record<string, { header: string; label: string; badge: string }> = {
-  blue:   { header: 'bg-blue-50 border-blue-200',   label: 'text-blue-800',   badge: 'bg-blue-100 text-blue-700' },
-  green:  { header: 'bg-green-50 border-green-200', label: 'text-green-800',  badge: 'bg-green-100 text-green-700' },
-  violet: { header: 'bg-violet-50 border-violet-200', label: 'text-violet-800', badge: 'bg-violet-100 text-violet-700' },
-  amber:  { header: 'bg-amber-50 border-amber-200', label: 'text-amber-800',  badge: 'bg-amber-100 text-amber-700' },
-  rose:   { header: 'bg-rose-50 border-rose-200',   label: 'text-rose-800',   badge: 'bg-rose-100 text-rose-700' },
+const COLORS: Record<string, { wrapper: string; badge: string }> = {
+  blue:   { wrapper: 'ren-card', badge: 'ren-badge' },
+  green:  { wrapper: 'ren-card', badge: 'ren-badge' },
+  violet: { wrapper: 'ren-card', badge: 'ren-badge' },
+  amber:  { wrapper: 'ren-card', badge: 'ren-badge' },
+  rose:   { wrapper: 'ren-card', badge: 'ren-badge' },
 }
 
 // ─── Компонент ─────────────────────────────────────────────────────────────────
@@ -162,24 +162,23 @@ export default function MethodologyTab() {
     <div className="space-y-6 max-w-4xl">
 
       {/* Правила фильтрации */}
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4">
-        <h2 className="text-sm font-bold text-red-800 uppercase tracking-wide mb-2">Правила фильтрации</h2>
-        <p className="text-sm text-red-700">
+      <div className="ren-alert">
+        <h2 className="text-sm font-bold uppercase tracking-wide mb-2">Правила фильтрации</h2>
+        <p className="text-sm">
           Из всех расчётов исключаются строки со статусами:&nbsp;
-          <code className="bg-red-100 px-1.5 py-0.5 rounded font-mono">PolicyAnnulled</code>
+          <code className="ren-bg-brand-soft px-1.5 py-0.5 rounded font-mono">PolicyAnnulled</code>
           &nbsp;и&nbsp;
-          <code className="bg-red-100 px-1.5 py-0.5 rounded font-mono">PolicyTerminated</code>.
+          <code className="ren-bg-brand-soft px-1.5 py-0.5 rounded font-mono">PolicyTerminated</code>.
           Все остальные статусы учитываются.
         </p>
       </div>
 
-      {/* Важное замечание о независимости условий */}
-      <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
-        <h2 className="text-sm font-bold text-orange-800 uppercase tracking-wide mb-2">Важно: условия списания независимы</h2>
-        <p className="text-sm text-orange-700">
+      <div className="ren-card ren-card__body ren-bg-brand-soft ren-text-brand text-sm">
+        <h2 className="text-sm font-bold uppercase tracking-wide mb-2">Важно: условия списания независимы</h2>
+        <p>
           Начиная с текущей версии, условия списания в <strong>скидку КВ</strong> и в <strong>повышенное КВ</strong> проверяются независимо.
-          Одна строка может одновременно попасть в оба счётчика, если <code className="bg-orange-100 px-1 rounded font-mono">FinalPrice ≠ 2490</code> <strong>и</strong>{' '}
-          <code className="bg-orange-100 px-1 rounded font-mono">ChargedToIncreasedKV ≠ 0</code>.
+          Одна строка может одновременно попасть в оба счётчика, если <code className="ren-bg-brand-soft px-1 rounded font-mono">FinalPrice ≠ 2490</code> <strong>и</strong>{' '}
+          <code className="ren-bg-brand-soft px-1 rounded font-mono">ChargedToIncreasedKV ≠ 0</code>.
         </p>
       </div>
 
@@ -187,32 +186,32 @@ export default function MethodologyTab() {
       {SECTIONS.map(section => {
         const c = COLORS[section.color]
         return (
-          <div key={section.title} className={`rounded-xl border ${c.header} overflow-hidden`}>
-            <div className={`px-4 py-3 border-b ${c.header}`}>
-              <h2 className={`text-sm font-bold uppercase tracking-wide ${c.label}`}>{section.title}</h2>
+          <div key={section.title} className={c.wrapper}>
+            <div className="ren-card__header">
+              <h2 className="ren-card__title text-sm uppercase tracking-wide">{section.title}</h2>
             </div>
-            <div className="bg-white">
-              <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+              <table className="ren-table w-full text-sm">
                 <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-[220px]">Метрика</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Формула / условие расчёта</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-[260px]">Примечание</th>
+                  <tr className="border-b border-[var(--stroke-divider)]">
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide w-[220px]">Метрика</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide">Формула / условие расчёта</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide w-[260px]">Примечание</th>
                   </tr>
                 </thead>
                 <tbody>
                   {section.metrics.map((m, i) => (
-                    <tr key={i} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
+                    <tr key={i} className="border-t border-[var(--stroke-divider)] transition-colors">
                       <td className="px-4 py-3 align-top">
-                        <div className="font-medium text-gray-800">{m.label}</div>
+                        <div className="font-medium text-[var(--text-primary)]">{m.label}</div>
                         {m.field && (
                           <div className={`inline-block mt-1 text-[11px] font-mono px-1.5 py-0.5 rounded ${c.badge}`}>
                             {m.field}
                           </div>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-gray-600 align-top">{m.formula}</td>
-                      <td className="px-4 py-3 text-gray-400 text-xs align-top">{m.note ?? ''}</td>
+                      <td className="px-4 py-3 ren-text-secondary align-top">{m.formula}</td>
+                      <td className="px-4 py-3 text-xs ren-text-secondary align-top">{m.note ?? ''}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -223,16 +222,16 @@ export default function MethodologyTab() {
       })}
 
       {/* Маппинг колонок */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <h2 className="text-sm font-bold text-gray-600 uppercase tracking-wide">Маппинг колонок Excel</h2>
+      <div className="ren-card">
+        <div className="ren-card__header">
+          <h2 className="ren-card__title text-sm uppercase tracking-wide">Маппинг колонок Excel</h2>
         </div>
-        <table className="w-full text-sm">
+        <table className="ren-table w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-100">
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-16">Кол.</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Имя поля</th>
-              <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">Описание</th>
+            <tr className="border-b border-[var(--stroke-divider)]">
+              <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide w-16">Кол.</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide">Имя поля</th>
+              <th className="px-4 py-2.5 text-left text-xs font-semibold ren-text-secondary uppercase tracking-wide">Описание</th>
             </tr>
           </thead>
           <tbody>
@@ -244,20 +243,19 @@ export default function MethodologyTab() {
               ['AG', 'FinalPrice',            'Итоговая цена Кросс-Каско (руб.). PolicyPrice (базовая) = 2490'],
               ['AH', 'ChargedToIncreasedKV',  'Сумма, списанная в повышенное КВ (руб.); null/0 если не применялось'],
             ].map(([col, field, desc]) => (
-              <tr key={field} className="border-t border-gray-100 hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-2.5 font-mono font-bold text-gray-400 text-center">{col}</td>
-                <td className="px-4 py-2.5 font-mono text-gray-800">{field}</td>
-                <td className="px-4 py-2.5 text-gray-600">{desc}</td>
+              <tr key={field} className="border-t border-[var(--stroke-divider)] transition-colors">
+                <td className="px-4 py-2.5 font-mono font-bold ren-text-secondary text-center">{col}</td>
+                <td className="px-4 py-2.5 font-mono text-[var(--text-primary)]">{field}</td>
+                <td className="px-4 py-2.5 ren-text-secondary">{desc}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      {/* Null */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
+      <div className="ren-card ren-card__body ren-bg-brand-soft ren-text-brand text-sm">
         <strong>Обработка пустых значений:</strong> значение{' '}
-        <code className="bg-amber-100 px-1 rounded">[NULL]</code>, пустая строка или отсутствие значения
+        <code className="ren-bg-brand-soft px-1 rounded">[NULL]</code>, пустая строка или отсутствие значения
         интерпретируются как 0. Деление на ноль отображается как «—».
       </div>
 
