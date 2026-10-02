@@ -883,23 +883,24 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 }
 
 // ── Динамика вовлечённости по месяцам ───────────────────────────────────────
-type GK = 'zero' | 'oneTwo' | 'threePlus'
-const GKS: GK[] = ['zero', 'oneTwo', 'threePlus']
-const GK_LABEL: Record<GK, string> = { zero: 'Не списывали', oneTwo: 'Списано 1–2 раза', threePlus: 'Списано 3+ раз' }
-const GK_LABEL_SHORT: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2 раза', threePlus: '3+ раз' }
+type GK = 'zero' | 'oneTwo' | 'threePlus' | 'ten'
+const GKS: GK[] = ['zero', 'oneTwo', 'threePlus', 'ten']
+const GK_LABEL: Record<GK, string> = { zero: 'Не списывали', oneTwo: 'Списано 1–2 раза', threePlus: 'Списано 3+ раз', ten: 'Списано 10+ раз' }
+const GK_LABEL_SHORT: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2 раза', threePlus: '3+ раз', ten: '10+ раз' }
 const GK_COLOR: Record<GK, string> = {
-  zero: '#94a3b8', oneTwo: '#fbbf24', threePlus: '#059669',
+  zero: '#94a3b8', oneTwo: '#fbbf24', threePlus: '#4ade80', ten: '#059669',
 }
 const GK_TEXT: Record<GK, string> = {
-  zero: 'text-slate-500', oneTwo: 'text-amber-600', threePlus: 'text-emerald-700',
+  zero: 'text-slate-500', oneTwo: 'text-amber-600', threePlus: 'text-green-700', ten: 'text-emerald-700',
 }
 function engagementGroup(spendCount: number): GK {
+  if (spendCount >= 10) return 'ten'
   if (spendCount >= 3) return 'threePlus'
   if (spendCount >= 1) return 'oneTwo'
   return 'zero'
 }
 function emptyGkDist(): Record<GK, number> {
-  return { zero: 0, oneTwo: 0, threePlus: 0 }
+  return { zero: 0, oneTwo: 0, threePlus: 0, ten: 0 }
 }
 
 type EngagementViewMode = 'cumulative' | 'monthly'
@@ -1158,13 +1159,13 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
               {isMonthly ? (
                 <>
                   <p><strong>Ежемесячный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров списывал РБ столько раз <em>именно в этом календарном месяце</em>. Суммируется в 100% по строке.</p>
-                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «3+ раз» в другом. Доли по месяцам не монотонны, в отличие от накопительного режима.</p>
+                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «3+ раз» или «10+ раз» в другом. Доли по месяцам не монотонны, в отличие от накопительного режима.</p>
                   <p><strong>Списали в месяце</strong> — число партнёров из базы, у которых было хотя бы одно списание РБ в данном месяце.</p>
                 </>
               ) : (
                 <>
                   <p><strong>Накопительный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Суммируется в 100% по строке (без столбца конверсии).</p>
-                  <p><strong>Накопительно</strong> — однажды перейдя в группу «Списано 3+ раз», партнёр остаётся в ней и не возвращается назад. Поэтому доля «Не списывали» со временем только уменьшается.</p>
+                  <p><strong>Накопительно</strong> — однажды перейдя в группу «Списано 3+ раз» или «10+ раз», партнёр не возвращается в более низкую группу. Поэтому доля «Не списывали» со временем только уменьшается.</p>
                 </>
               )}
               <p><strong>Конв. ОСАГО→Каско</strong> — Каско (шт.) / ОСАГО (шт.) именно в этом конкретном месяце для партнёров данной группы{isMonthly ? ' (по списаниям за этот месяц)' : ' (по накопленной группе на конец месяца)'}.</p>
@@ -1183,8 +1184,8 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                   {isMonthly ? <>Списали<br/>в месяце</> : <>Партнёров<br/>с РБ (накопит.)</>}
                 </span>
               </th>
-              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={4}>Доля партнёров по количеству списаний</th>
-              <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={3}>Конв. ОСАГО→Каско в месяце</th>
+              <th className="px-4 py-2 text-center border-l border-gray-100" colSpan={5}>Доля партнёров по количеству списаний</th>
+              <th className="px-4 py-2 text-center border-l border-gray-200" colSpan={4}>Конв. ОСАГО→Каско в месяце</th>
             </tr>
             <tr className="border-b border-gray-200">
               {GKS.map(g => (
