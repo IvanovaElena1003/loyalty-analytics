@@ -599,7 +599,10 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       </p>
 
       {/* ── Динамика по месяцам ───────────────────────────────────────── */}
-      <EngagementTrend rawRows={filteredRows} />
+      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start">
+        <EngagementTrend rawRows={filteredRows} />
+        <EngagementTrendBySegment rawRows={filteredRows} />
+      </div>
 
       {/* ── Топ: копят, но не тратят ──────────────────────────────────── */}
       <UnderutilizersBlock
@@ -1251,6 +1254,319 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                       {fmtPctLocal(m.kasko[g], m.osago[g])}
                     </td>
                   ))}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Вовлечённость по сегментам ОСАГО ────────────────────────────────────────
+type OsagoSegId = '0-9' | '10-19' | '20-39' | '40+' | 'total'
+const OSAGO_SEGMENTS: { id: OsagoSegId; label: string }[] = [
+  { id: '0-9', label: '0–9/мес.' },
+  { id: '10-19', label: '10–19/мес.' },
+  { id: '20-39', label: '20–39/мес.' },
+  { id: '40+', label: '40+/мес.' },
+  { id: 'total', label: 'Итого' },
+]
+
+function quarterMonthsFor(ym: string): string[] {
+  const [y, m] = ym.split('-').map(Number)
+  const qStart = Math.floor((m - 1) / 3) * 3 + 1
+  return [0, 1, 2].map(i => `${y}-${String(qStart + i).padStart(2, '0')}`)
+}
+
+function osagoSegmentFromAvg(avgMonthly: number): Exclude<OsagoSegId, 'total'> {
+  if (avgMonthly >= 40) return '40+'
+  if (avgMonthly >= 20) return '20-39'
+  if (avgMonthly >= 10) return '10-19'
+  return '0-9'
+}
+
+function osagoQuarterThrough(
+  cb: string,
+  ym: string,
+  osagoByCbMonth: Map<string, Map<string, number>>,
+): number {
+  let sum = 0
+  for (const qm of quarterMonthsFor(ym)) {
+    if (qm > ym) break
+    sum += osagoByCbMonth.get(cb)?.get(qm) ?? 0
+  }
+  return sum
+}
+
+type SegCell = { N: number; dist: Record<GK, number> }
+
+function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
+  const [viewMode, setViewMode] = useState<EngagementViewMode>('cumulative')
+  const isMonthly = viewMode === 'monthly'
+  const [legendOpen, setLegendOpen] = useState(false)
+  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
+  const toggleRole = (role: string) =>
+    setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
+
+  const { rows: data, N } = useMemo(() => {
+    const ROLES = new Set(selectedRoles)
+
+    const everAccrued = new Set<string>()
+    for (const row of rawRows) {
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || String(row.State ?? '') !== 'PolicyIssued') continue
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(rid)
+    }
+    const partnersWithRole = new Set<string>()
+    for (const row of rawRows) {
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || !ROLES.has(String(row['Role'] ?? '').trim())) continue
+      partnersWithRole.add(rid)
+    }
+    const base = new Set<string>()
+    for (const rid of everAccrued) { if (partnersWithRole.has(rid)) base.add(rid) }
+    const N = base.size
+
+    const renIdToCb = new Map<string, string>()
+    for (const row of rawRows) {
+      const rid = String(row['RenId'] ?? '').trim()
+      const cb = String(row['CashbookId'] ?? '').trim()
+      if (!rid || !cb || !base.has(rid)) continue
+      if (!renIdToCb.has(rid)) renIdToCb.set(rid, cb)
+    }
+
+    const osagoByCbMonth = new Map<string, Map<string, number>>()
+    for (const row of rawRows) {
+      if (String(row.State ?? '') !== 'PolicyIssued') continue
+      const cb = String(row['CashbookId'] ?? '').trim()
+      if (!cb) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      if (ym < '2025-08') continue
+      if (!osagoByCbMonth.has(cb)) osagoByCbMonth.set(cb, new Map())
+      const mm = osagoByCbMonth.get(cb)!
+      mm.set(ym, (mm.get(ym) ?? 0) + 1)
+    }
+
+    const spendTs = new Map<string, number[]>()
+    for (const row of rawRows) {
+      if (!isSpendingRow(row)) continue
+      const rid = String(row['RenId'] ?? '').trim()
+      if (!rid || !base.has(rid)) continue
+      const d = parseDate(row.CreateDate)
+      if (!d) continue
+      const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+      if (ym < '2025-08') continue
+      if (!spendTs.has(rid)) spendTs.set(rid, [])
+      spendTs.get(rid)!.push(d.getTime())
+    }
+    for (const ts of spendTs.values()) ts.sort((a, b) => a - b)
+
+    const monthSet = new Set<string>()
+    for (const mm of osagoByCbMonth.values()) {
+      for (const ym of mm.keys()) monthSet.add(ym)
+    }
+    for (const ts of spendTs.values()) {
+      for (const t of ts) {
+        const d = new Date(t)
+        const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+        if (ym >= '2025-08') monthSet.add(ym)
+      }
+    }
+    const months = Array.from(monthSet).sort()
+
+    function emptySegMap(): Record<OsagoSegId, SegCell> {
+      return {
+        '0-9': { N: 0, dist: emptyGkDist() },
+        '10-19': { N: 0, dist: emptyGkDist() },
+        '20-39': { N: 0, dist: emptyGkDist() },
+        '40+': { N: 0, dist: emptyGkDist() },
+        total: { N: 0, dist: emptyGkDist() },
+      }
+    }
+
+    function segmentForRenAtMonth(rid: string, ym: string): Exclude<OsagoSegId, 'total'> | null {
+      const cb = renIdToCb.get(rid)
+      if (!cb) return null
+      const avg = osagoQuarterThrough(cb, ym, osagoByCbMonth) / 3
+      return osagoSegmentFromAvg(avg)
+    }
+
+    function addToSeg(segments: Record<OsagoSegId, SegCell>, rid: string, ym: string, spendCount: number) {
+      const seg = segmentForRenAtMonth(rid, ym)
+      segments.total.N++
+      addEngagementCounts(segments.total.dist, spendCount)
+      if (!seg) return
+      segments[seg].N++
+      addEngagementCounts(segments[seg].dist, spendCount)
+    }
+
+    if (isMonthly) {
+      const spendByMonth = new Map<string, Map<string, number>>()
+      for (const row of rawRows) {
+        if (!isSpendingRow(row)) continue
+        const rid = String(row['RenId'] ?? '').trim()
+        if (!rid || !base.has(rid)) continue
+        const d = parseDate(row.CreateDate)
+        if (!d) continue
+        const ym = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+        if (ym < '2025-08') continue
+        if (!spendByMonth.has(rid)) spendByMonth.set(rid, new Map())
+        const byMonth = spendByMonth.get(rid)!
+        byMonth.set(ym, (byMonth.get(ym) ?? 0) + 1)
+      }
+
+      const rows = months.map(ym => {
+        const segments = emptySegMap()
+        let monthSpenders = 0
+        for (const rid of base) {
+          const monthlyCount = spendByMonth.get(rid)?.get(ym) ?? 0
+          if (monthlyCount > 0) monthSpenders++
+          addToSeg(segments, rid, ym, monthlyCount)
+        }
+        return { ym, segments, cumActive: monthSpenders }
+      })
+      return { rows, N }
+    }
+
+    const cumCnt = new Map<string, number>()
+    for (const rid of base) cumCnt.set(rid, 0)
+    const ptrs = new Map<string, number>()
+    for (const rid of spendTs.keys()) ptrs.set(rid, 0)
+
+    const rows = months.map(ym => {
+      const [y, mo] = ym.split('-').map(Number)
+      const endMs = Date.UTC(y, mo, 1) - 1
+
+      for (const [rid, ts] of spendTs) {
+        let p = ptrs.get(rid) ?? 0
+        while (p < ts.length && ts[p] <= endMs) {
+          cumCnt.set(rid, (cumCnt.get(rid) ?? 0) + 1)
+          p++
+        }
+        ptrs.set(rid, p)
+      }
+
+      const segments = emptySegMap()
+      let cumSpenders = 0
+      for (const rid of base) {
+        const count = cumCnt.get(rid) ?? 0
+        if (count > 0) cumSpenders++
+        addToSeg(segments, rid, ym, count)
+      }
+
+      return { ym, segments, cumActive: cumSpenders }
+    })
+
+    return { rows, N }
+  }, [rawRows, selectedRoles, isMonthly])
+
+  const fmtYM = (ym: string) => {
+    const [, mo] = ym.split('-')
+    const names = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
+    const [y] = ym.split('-')
+    return `${names[parseInt(mo) - 1]} '${y.slice(2)}`
+  }
+
+  return (
+    <div className="ren-card">
+      <div className="ren-card__header space-y-3">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0">
+            <h3 className="ren-card__title">Вовлечённость 3+ по сегментам ОСАГО</h3>
+            <p className="ren-card__subtitle">
+              Сегмент = ОСАГО за квартал ÷ 3 (среднее в месяц): 0–9 / 10–19 / 20–39 / 40+
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0 flex-wrap">
+            <div className="ren-segmented">
+              <button
+                type="button"
+                onClick={() => setViewMode('cumulative')}
+                className={`ren-segmented__btn ${!isMonthly ? 'ren-segmented__btn--active' : ''}`}
+              >
+                Накопительный
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('monthly')}
+                className={`ren-segmented__btn ${isMonthly ? 'ren-segmented__btn--active' : ''}`}
+              >
+                Ежемесячный
+              </button>
+            </div>
+            <div className="ren-kpi">
+              <p className="ren-kpi__value">{fmtN(N)}</p>
+              <p className="ren-kpi__label">база с РБ</p>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+            {ALL_ALLOWED_ROLES.map(role => (
+              <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
+                <input type="checkbox" checked={selectedRoles.includes(role)}
+                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 ren-checkbox" />
+                <span className={selectedRoles.includes(role) ? 'ren-text-brand font-medium' : 'text-[var(--text-tertiary)]'}>{role}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <button onClick={() => setLegendOpen(o => !o)} className="ren-link flex items-center gap-1">
+            <span>{legendOpen ? '▾' : '▸'}</span>
+            <span>Как читать этот отчёт</span>
+          </button>
+          {legendOpen && (
+            <div className="mt-2 text-xs ren-text-brand space-y-1.5 border-t border-[var(--stroke-divider)] pt-2">
+              <p><strong>Сегмент ОСАГО</strong> — по CashbookId: сумма PolicyIssued за текущий календарный квартал (до выбранного месяца включительно) ÷ 3. Логика как в отчёте «Потенциал кросса».</p>
+              <p><strong>Ячейка</strong> — доля партнёров сегмента с 3+ списаниями РБ{isMonthly ? ' за этот месяц' : ' нарастающим итогом'}. Под процентом — число партнёров в сегменте.</p>
+              <p><strong>Итого</strong> — вся база ({fmtN(N)} партнёров с начислениями РБ и выбранной ролью), без разбивки по объёму ОСАГО.</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="ren-table w-full text-sm min-w-[640px]">
+          <thead>
+            <tr className="border-b border-[var(--stroke-divider)]">
+              <th className="px-3 py-2 text-left">Месяц</th>
+              {OSAGO_SEGMENTS.map(s => (
+                <th key={s.id} className={`px-3 py-2 text-center ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)]' : ''}`}>
+                  <span className={s.id === 'total' ? 'ren-text-brand font-semibold' : ''}>{s.label}</span>
+                  <span className="block text-[10px] font-normal text-[var(--text-tertiary)]">3+ раз</span>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((m, idx) => {
+              const isLatestMonth = idx === data.length - 1
+              return (
+                <tr key={m.ym} className="border-t border-[var(--stroke-divider)]">
+                  <td className="px-3 py-2 font-medium whitespace-nowrap">{fmtYM(m.ym)}</td>
+                  {OSAGO_SEGMENTS.map(s => {
+                    const cell = m.segments[s.id]
+                    const pct = cell.N > 0 ? (cell.dist.threePlus / cell.N) * 100 : null
+                    const highlight = isLatestMonth
+                    return (
+                      <td
+                        key={s.id}
+                        className={`px-3 py-2 text-center tabular-nums ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)] font-semibold ren-text-brand' : 'text-green-700'} ${highlight ? GK_KEY_CELL : ''}`}
+                      >
+                        <span className="block">{pct != null ? `${pct.toFixed(1)}%` : '—'}</span>
+                        <span className="block text-[10px] font-normal text-[var(--text-tertiary)]">{fmtN(cell.N)}</span>
+                      </td>
+                    )
+                  })}
                 </tr>
               )
             })}
