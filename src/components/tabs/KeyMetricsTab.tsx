@@ -885,7 +885,7 @@ function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
 // ── Динамика вовлечённости по месяцам ───────────────────────────────────────
 type GK = 'zero' | 'oneTwo' | 'threePlus' | 'ten'
 const GKS: GK[] = ['zero', 'oneTwo', 'threePlus', 'ten']
-const GK_LABEL: Record<GK, string> = { zero: 'Не списывали', oneTwo: 'Списано 1–2 раза', threePlus: 'Списано 3+ раз', ten: 'Списано 10+ раз' }
+const GK_LABEL: Record<GK, string> = { zero: 'Не списывали', oneTwo: 'Списано 1–2 раза', threePlus: 'Списано 3 и более раз', ten: 'Списано 10 и более раз' }
 const GK_LABEL_SHORT: Record<GK, string> = { zero: '0 раз', oneTwo: '1–2 раза', threePlus: '3+ раз', ten: '10+ раз' }
 const GK_COLOR: Record<GK, string> = {
   zero: '#94a3b8', oneTwo: '#fbbf24', threePlus: '#4ade80', ten: '#059669',
@@ -893,14 +893,27 @@ const GK_COLOR: Record<GK, string> = {
 const GK_TEXT: Record<GK, string> = {
   zero: 'text-slate-500', oneTwo: 'text-amber-600', threePlus: 'text-green-700', ten: 'text-emerald-700',
 }
-function engagementGroup(spendCount: number): GK {
-  if (spendCount >= 10) return 'ten'
-  if (spendCount >= 3) return 'threePlus'
-  if (spendCount >= 1) return 'oneTwo'
-  return 'zero'
-}
 function emptyGkDist(): Record<GK, number> {
   return { zero: 0, oneTwo: 0, threePlus: 0, ten: 0 }
+}
+/** Пороговые счётчики: 3+ и 10+ не взаимоисключающие (10+ ⊂ 3+). */
+function addEngagementCounts(dist: Record<GK, number>, spendCount: number) {
+  if (spendCount === 0) dist.zero++
+  else if (spendCount <= 2) dist.oneTwo++
+  if (spendCount >= 3) dist.threePlus++
+  if (spendCount >= 10) dist.ten++
+}
+function addEngagementPolicy(
+  osago: Record<GK, number>,
+  kasko: Record<GK, number>,
+  spendCount: number,
+  o: number,
+  k: number,
+) {
+  if (spendCount === 0) { osago.zero += o; kasko.zero += k }
+  else if (spendCount <= 2) { osago.oneTwo += o; kasko.oneTwo += k }
+  if (spendCount >= 3) { osago.threePlus += o; kasko.threePlus += k }
+  if (spendCount >= 10) { osago.ten += o; kasko.ten += k }
 }
 
 type EngagementViewMode = 'cumulative' | 'monthly'
@@ -1008,7 +1021,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         for (const rid of base) {
           const monthlyCount = spendByMonth.get(rid)?.get(ym) ?? 0
           if (monthlyCount > 0) monthSpenders++
-          dist[engagementGroup(monthlyCount)]++
+          addEngagementCounts(dist, monthlyCount)
         }
 
         const osago = emptyGkDist()
@@ -1017,9 +1030,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         if (mm) {
           for (const [rid, e] of mm) {
             const monthlyCount = spendByMonth.get(rid)?.get(ym) ?? 0
-            const g = engagementGroup(monthlyCount)
-            osago[g] += e.o
-            kasko[g] += e.k
+            addEngagementPolicy(osago, kasko, monthlyCount, e.o, e.k)
           }
         }
 
@@ -1055,7 +1066,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
 
       // Распределение по группам на этот момент (вся база N)
       const dist = emptyGkDist()
-      for (const rid of base) dist[engagementGroup(cumCnt.get(rid) ?? 0)]++
+      for (const rid of base) addEngagementCounts(dist, cumCnt.get(rid) ?? 0)
 
       // Конверсия в этом месяце по группе (группа = накопленная на этот момент)
       const osago = emptyGkDist()
@@ -1063,9 +1074,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       const mm = mOsago.get(ym)
       if (mm) {
         for (const [rid, e] of mm) {
-          const g = engagementGroup(cumCnt.get(rid) ?? 0)
-          osago[g] += e.o
-          kasko[g] += e.k
+          addEngagementPolicy(osago, kasko, cumCnt.get(rid) ?? 0, e.o, e.k)
         }
       }
 
@@ -1158,14 +1167,14 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
               <p><strong>Фиксированная база ({fmtN(N)} партнёров)</strong> — все, у кого хоть раз было PolicyIssued с LoyaltyPointsInLK&nbsp;&gt;&nbsp;0 и есть разрешённая роль (Агент / Субагент / Директор партнёра и др.). База не меняется от месяца к месяцу.</p>
               {isMonthly ? (
                 <>
-                  <p><strong>Ежемесячный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров списывал РБ столько раз <em>именно в этом календарном месяце</em>. Суммируется в 100% по строке.</p>
-                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «3+ раз» или «10+ раз» в другом. Доли по месяцам не монотонны, в отличие от накопительного режима.</p>
+                  <p><strong>Ежемесячный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров списывал РБ столько раз <em>именно в этом календарном месяце</em>. Колонки «0 раз», «1–2 раза» и «3+ раз» в сумме дают 100%; «10+ раз» — подмножество «3+ раз».</p>
+                  <p><strong>За месяц</strong> — партнёр может быть в группе «0 раз» в одном месяце и «3+ раз» в другом. Партнёр с 10+ списаниями учитывается и в «3+ раз», и в «10+ раз».</p>
                   <p><strong>Списали в месяце</strong> — число партнёров из базы, у которых было хотя бы одно списание РБ в данном месяце.</p>
                 </>
               ) : (
                 <>
-                  <p><strong>Накопительный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Суммируется в 100% по строке (без столбца конверсии).</p>
-                  <p><strong>Накопительно</strong> — однажды перейдя в группу «Списано 3+ раз» или «10+ раз», партнёр не возвращается в более низкую группу. Поэтому доля «Не списывали» со временем только уменьшается.</p>
+                  <p><strong>Накопительный результат</strong> — в каждой ячейке показано, какой % из {fmtN(N)} партнёров к концу данного месяца накопительно списывал РБ столько раз. Колонки «0 раз», «1–2 раза» и «3+ раз» в сумме дают 100%; «10+ раз» — подмножество «3+ раз».</p>
+                  <p><strong>Накопительно</strong> — достигнув 3+ или 10+ списаний нарастающим итогом, партнёр остаётся в соответствующей колонке. Доля «0 раз» со временем только уменьшается.</p>
                 </>
               )}
               <p><strong>Конв. ОСАГО→Каско</strong> — Каско (шт.) / ОСАГО (шт.) именно в этом конкретном месяце для партнёров данной группы{isMonthly ? ' (по списаниям за этот месяц)' : ' (по накопленной группе на конец месяца)'}.</p>
@@ -1200,6 +1209,12 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
           <tbody>
             {data.map((m, idx) => {
               const pcts = GKS.map(g => N > 0 ? (m.dist[g] / N) * 100 : 0)
+              const barPcts = N > 0 ? [
+                { g: 'zero' as GK, pct: (m.dist.zero / N) * 100 },
+                { g: 'oneTwo' as GK, pct: (m.dist.oneTwo / N) * 100 },
+                { g: 'threePlus' as GK, pct: ((m.dist.threePlus - m.dist.ten) / N) * 100 },
+                { g: 'ten' as GK, pct: (m.dist.ten / N) * 100 },
+              ] : []
               const prevCumActive = idx > 0 ? data[idx - 1].cumActive : 0
               const growthPct = prevCumActive > 0 ? ((m.cumActive - prevCumActive) / prevCumActive) * 100 : null
               return (
@@ -1220,9 +1235,11 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                   ))}
                   <td className="px-3 py-2">
                     <div className="flex h-3 rounded overflow-hidden w-20">
-                      {GKS.map((g, i) => (
-                        <div key={g} style={{ width: `${pcts[i]}%`, backgroundColor: GK_COLOR[g] }}
-                          title={`${GK_LABEL[g]}: ${Math.round(pcts[i])}%`} />
+                      {barPcts.map(({ g, pct }) => (
+                        pct > 0 && (
+                          <div key={g} style={{ width: `${pct}%`, backgroundColor: GK_COLOR[g] }}
+                            title={`${GK_LABEL[g]}: ${pct.toFixed(1)}%`} />
+                        )
                       ))}
                     </div>
                   </td>
