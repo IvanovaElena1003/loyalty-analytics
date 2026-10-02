@@ -599,7 +599,7 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       </p>
 
       {/* ── Динамика по месяцам ───────────────────────────────────────── */}
-      <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4 items-start">
+      <div className="flex flex-col gap-4">
         <EngagementTrend rawRows={filteredRows} />
         <EngagementTrendBySegment rawRows={filteredRows} />
       </div>
@@ -1302,9 +1302,12 @@ function osagoQuarterThrough(
 
 type SegCell = { N: number; dist: Record<GK, number> }
 
+const SEG_BUCKETS: GK[] = ['zero', 'oneTwo', 'threePlus', 'ten']
+
 function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
   const [viewMode, setViewMode] = useState<EngagementViewMode>('cumulative')
   const isMonthly = viewMode === 'monthly'
+  const [engBucket, setEngBucket] = useState<GK>('threePlus')
   const [legendOpen, setLegendOpen] = useState(false)
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const toggleRole = (role: string) =>
@@ -1477,7 +1480,7 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
       <div className="ren-card__header space-y-3">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="min-w-0">
-            <h3 className="ren-card__title">Вовлечённость 3+ по сегментам ОСАГО</h3>
+            <h3 className="ren-card__title">Вовлечённость по сегментам ОСАГО</h3>
             <p className="ren-card__subtitle">
               Сегмент = ОСАГО за квартал ÷ 3 (среднее в месяц): 0–9 / 10–19 / 20–39 / 40+
             </p>
@@ -1507,6 +1510,22 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
         </div>
 
         <div>
+          <p className="text-xs font-semibold ren-text-brand mb-1.5">Группа списаний:</p>
+          <div className="ren-segmented inline-flex flex-wrap">
+            {SEG_BUCKETS.map(b => (
+              <button
+                key={b}
+                type="button"
+                onClick={() => setEngBucket(b)}
+                className={`ren-segmented__btn ${engBucket === b ? 'ren-segmented__btn--active' : ''}`}
+              >
+                {GK_LABEL_SHORT[b]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
           <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
           <div className="flex flex-wrap gap-x-4 gap-y-1.5">
             {ALL_ALLOWED_ROLES.map(role => (
@@ -1527,7 +1546,7 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
           {legendOpen && (
             <div className="mt-2 text-xs ren-text-brand space-y-1.5 border-t border-[var(--stroke-divider)] pt-2">
               <p><strong>Сегмент ОСАГО</strong> — по CashbookId: сумма PolicyIssued за текущий календарный квартал (до выбранного месяца включительно) ÷ 3. Логика как в отчёте «Потенциал кросса».</p>
-              <p><strong>Ячейка</strong> — доля партнёров сегмента с 3+ списаниями РБ{isMonthly ? ' за этот месяц' : ' нарастающим итогом'}. Под процентом — число партнёров в сегменте.</p>
+              <p><strong>Ячейка</strong> — доля партнёров сегмента в выбранной группе списаний ({GK_LABEL_SHORT[engBucket]}){isMonthly ? ' за этот месяц' : ' нарастающим итогом'}. Под процентом — число партнёров в сегменте. Для «3+» и «10+» группы пересекаются (10+ ⊂ 3+).</p>
               <p><strong>Итого</strong> — вся база ({fmtN(N)} партнёров с начислениями РБ и выбранной ролью), без разбивки по объёму ОСАГО.</p>
             </div>
           )}
@@ -1542,7 +1561,7 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
               {OSAGO_SEGMENTS.map(s => (
                 <th key={s.id} className={`px-3 py-2 text-center ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)]' : ''}`}>
                   <span className={s.id === 'total' ? 'ren-text-brand font-semibold' : ''}>{s.label}</span>
-                  <span className="block text-[10px] font-normal text-[var(--text-tertiary)]">3+ раз</span>
+                  <span className={`block text-[10px] font-normal ${GK_TEXT[engBucket]}`}>{GK_LABEL_SHORT[engBucket]}</span>
                 </th>
               ))}
             </tr>
@@ -1555,14 +1574,18 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
                   <td className="px-3 py-2 font-medium whitespace-nowrap">{fmtYM(m.ym)}</td>
                   {OSAGO_SEGMENTS.map(s => {
                     const cell = m.segments[s.id]
-                    const pct = cell.N > 0 ? (cell.dist.threePlus / cell.N) * 100 : null
-                    const highlight = isLatestMonth
+                    const pct = cell.N > 0 ? (cell.dist[engBucket] / cell.N) * 100 : null
+                    const highlight = isLatestMonth && engBucket === GK_KEY
                     return (
                       <td
                         key={s.id}
-                        className={`px-3 py-2 text-center tabular-nums ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)] font-semibold ren-text-brand' : 'text-green-700'} ${highlight ? GK_KEY_CELL : ''}`}
+                        className={`px-3 py-2 text-center tabular-nums ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)] font-semibold ren-text-brand' : GK_TEXT[engBucket]} ${highlight ? GK_KEY_CELL : ''}`}
                       >
-                        <span className="block">{pct != null ? `${pct.toFixed(1)}%` : '—'}</span>
+                        <span className="block">
+                          {pct != null
+                            ? engBucket === 'zero' ? `${Math.round(pct)}%` : `${pct.toFixed(1)}%`
+                            : '—'}
+                        </span>
                         <span className="block text-[10px] font-normal text-[var(--text-tertiary)]">{fmtN(cell.N)}</span>
                       </td>
                     )
