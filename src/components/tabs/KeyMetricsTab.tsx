@@ -894,7 +894,7 @@ const GK_TEXT: Record<GK, string> = {
   zero: 'text-slate-500', oneTwo: 'text-amber-600', threePlus: 'text-green-700', ten: 'text-emerald-700',
 }
 const GK_KEY: GK = 'threePlus'
-const GK_KEY_CELL = 'bg-[var(--bg-brand-primary-00)] border-x-2 border-[var(--stroke-brand-primary)] font-bold ring-1 ring-inset ring-[var(--stroke-brand-primary)]'
+const GK_KEY_CELL = 'bg-green-50 font-semibold'
 function emptyGkDist(): Record<GK, number> {
   return { zero: 0, oneTwo: 0, threePlus: 0, ten: 0 }
 }
@@ -1148,7 +1148,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         {/* Цветовая легенда */}
         <div className="flex flex-wrap gap-4">
           {GKS.map(g => (
-            <span key={g} className={`flex items-center gap-1.5 text-xs ${g === GK_KEY ? 'font-semibold ren-text-brand px-2 py-1 rounded-md border-2 border-[var(--stroke-brand-primary)] bg-[var(--bg-brand-primary-00)]' : 'ren-text-secondary'}`}>
+            <span key={g} className="flex items-center gap-1.5 text-xs ren-text-secondary">
               <span className="inline-block w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: GK_COLOR[g] }} />
               {GK_LABEL[g]}
             </span>
@@ -1200,11 +1200,11 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
             </tr>
             <tr className="border-b border-gray-200">
               {GKS.map(g => (
-                <th key={`share-${g}`} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]} ${g === GK_KEY ? GK_KEY_CELL : ''}`}>{GK_LABEL_SHORT[g]}</th>
+                <th key={`share-${g}`} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL_SHORT[g]}</th>
               ))}
               <th className="px-3 py-1.5 text-center text-gray-400">Бар</th>
               {GKS.map(g => (
-                <th key={`conv-${g}`} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]} ${g === GK_KEY ? GK_KEY_CELL : ''}`}>{GK_LABEL_SHORT[g]}</th>
+                <th key={`conv-${g}`} className={`px-3 py-1.5 text-center font-semibold ${GK_TEXT[g]}`}>{GK_LABEL_SHORT[g]}</th>
               ))}
             </tr>
           </thead>
@@ -1219,6 +1219,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
               ] : []
               const prevCumActive = idx > 0 ? data[idx - 1].cumActive : 0
               const growthPct = prevCumActive > 0 ? ((m.cumActive - prevCumActive) / prevCumActive) * 100 : null
+              const isLatestMonth = idx === data.length - 1
               return (
                 <tr key={m.ym} className="border-t border-[var(--stroke-divider)] transition-colors">
                   <td className="px-4 py-2 font-medium text-[var(--text-primary)] whitespace-nowrap">{fmtYM(m.ym)}</td>
@@ -1231,7 +1232,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                     )}
                   </td>
                   {GKS.map((g, i) => (
-                    <td key={`share-${g}`} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]} ${g === GK_KEY ? GK_KEY_CELL : ''}`}>
+                    <td key={`share-${g}`} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]} ${isLatestMonth && g === GK_KEY ? GK_KEY_CELL : ''}`}>
                       {g === 'zero' ? `${Math.round(pcts[i])}%` : `${pcts[i].toFixed(1)}%`}
                     </td>
                   ))}
@@ -1246,7 +1247,7 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                     </div>
                   </td>
                   {GKS.map(g => (
-                    <td key={`conv-${g}`} className={`px-3 py-2 text-center tabular-nums font-medium ${GK_TEXT[g]} ${g === GK_KEY ? GK_KEY_CELL : ''}`}>
+                    <td key={`conv-${g}`} className={`px-3 py-2 text-center tabular-nums font-medium ${GK_TEXT[g]}`}>
                       {fmtPctLocal(m.kasko[g], m.osago[g])}
                     </td>
                   ))}
