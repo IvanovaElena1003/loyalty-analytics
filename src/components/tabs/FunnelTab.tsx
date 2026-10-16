@@ -41,6 +41,10 @@ const ROWS: RowDef[] = [
   { kind: 'sub',   label: '— с Рен-бонусами',   getCount: m => m.issued_with_bonus, getPct: m => pct(m.issued_with_bonus, m.issued_total), hl: 'green', higherIsBetter: true },
   { kind: 'sep', label: '' },
 
+  { kind: 'section', label: 'Кросс-Каско от бесполисных' },
+  { kind: 'data', label: 'Оформлен Кросс-Каско ВСЕГО', getCount: m => m.cross_total, getPct: m => m.conv_cross, hl: 'blue', higherIsBetter: true, decimals: 1, highlight: true },
+  { kind: 'sep', label: '' },
+
   { kind: 'section', label: 'Из чего состоит Кросс-Каско' },
   { kind: 'sub', label: '% Базовый «Каско от бесполисных»', getCount: m => m.cross_base,     getPct: m => pct(m.cross_base,     m.cross_total), higherIsBetter: false },
   { kind: 'sub', label: '% Скидка (Рен-бонусы)',            getCount: m => m.cross_discount,  getPct: m => pct(m.cross_discount,  m.cross_total), hl: 'amber', higherIsBetter: true },

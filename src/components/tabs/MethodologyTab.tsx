@@ -63,15 +63,21 @@ const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Кросс-Каско от бесполисных',
+    color: 'violet',
+    metrics: [
+      {
+        label: 'Оформлен Кросс-Каско ВСЕГО',
+        field: 'cross_total',
+        formula: 'State = "PolicyIssued" И CrossIsBought = "Да"',
+        note: '% (конверсия) = cross_total / issued_total, 1 знак после запятой. Разрез «кросс со списанием РБ» — вкладка «Ключевые метрики».',
+      },
+    ],
+  },
+  {
     title: 'Из чего состоит Кросс-Каско',
     color: 'amber',
     metrics: [
-      {
-        label: 'Знаменатель (все кроссы)',
-        field: 'cross_total',
-        formula: 'State = "PolicyIssued" И CrossIsBought = "Да"',
-        note: 'Конверсия в кросс и разрез «кросс за баллы» — на вкладке «Ключевые метрики». Здесь только состав купленных кроссов.',
-      },
       {
         label: '% Повышенное КВ',
         field: 'cross_incr_kv',
