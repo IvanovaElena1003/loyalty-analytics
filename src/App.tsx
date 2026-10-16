@@ -216,7 +216,9 @@ export default function App() {
 
         {!loading && isFullMode  && tab === 'upload'       && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
         {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
-        {!loading && tab === 'distribution'  && result && <DistributionTab result={result} />}
+        {!loading && tab === 'distribution'  && result && (
+          <DistributionTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
+        )}
         {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}
         {!loading && tab === 'anomalies'     && result && <AnomaliesTab rawRows={result.rawRows} />}

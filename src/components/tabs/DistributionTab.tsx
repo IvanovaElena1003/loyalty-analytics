@@ -1,8 +1,20 @@
 import { useState, useMemo } from 'react'
 import type { AggregateResult, MonthMetrics } from '../../types'
 import type { RawRow } from '../../types'
+import { AgentFilterBar } from '../AgentFilterBar'
+import {
+  EMPTY_AGENT_FILTERS,
+  enrichRawRows,
+  filterEnrichedRows,
+  type AgentFilters,
+} from '../../utils/agentNetwork'
+import { aggregate } from '../../utils/aggregate'
 
-interface Props { result: AggregateResult }
+interface Props {
+  result: AggregateResult
+  agentRows?: RawRow[]
+  lockedCurator?: string
+}
 
 // ─── Локальные хелперы ────────────────────────────────────────────────────────
 function isNullVal(v: unknown): boolean {
@@ -658,14 +670,28 @@ function AccrualSpendingBlock({
 }
 
 // ─── Главный компонент ────────────────────────────────────────────────────────
-export default function DistributionTab({ result }: Props) {
-  const { rawRows, totals, months } = result
+export default function DistributionTab({ result, agentRows, lockedCurator }: Props) {
+  const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
+    lockedCurator ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] } : EMPTY_AGENT_FILTERS
+  )
+  const enrichedRows = useMemo(() => enrichRawRows(result.rawRows, agentRows), [result.rawRows, agentRows])
+  const filteredRows = useMemo(
+    () => filterEnrichedRows(enrichedRows, agentFilters),
+    [enrichedRows, agentFilters],
+  )
+  const filteredAgg = useMemo(() => aggregate(filteredRows), [filteredRows])
+  const { totals, months } = filteredAgg
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
+
+  const activeFilterCount = useMemo(
+    () => Object.values(agentFilters).filter(a => a.length > 0).length,
+    [agentFilters],
+  )
 
   // Per-policy данные
   const distData = useMemo(
-    () => extractDistValues(rawRows, selectedMonth),
-    [rawRows, selectedMonth]
+    () => extractDistValues(filteredRows, selectedMonth),
+    [filteredRows, selectedMonth]
   )
   const accrualDist  = useMemo(
     () => computeDist(distData.accrualValues,  distData.accrualZeroCount),
@@ -679,8 +705,8 @@ export default function DistributionTab({ result }: Props) {
 
   // Per-partner данные
   const partnerAccrualData = useMemo(
-    () => extractPartnerAccrualValues(rawRows, selectedMonth),
-    [rawRows, selectedMonth]
+    () => extractPartnerAccrualValues(filteredRows, selectedMonth),
+    [filteredRows, selectedMonth]
   )
   // п.6: всегда показываем бакет «Ниже среднего» + авто-сплит бакетов > 40%
   const partnerAccrualDist = useMemo(
@@ -689,8 +715,8 @@ export default function DistributionTab({ result }: Props) {
   )
 
   const partnerSpendingData = useMemo(
-    () => extractPartnerSpendingValues(rawRows, selectedMonth),
-    [rawRows, selectedMonth]
+    () => extractPartnerSpendingValues(filteredRows, selectedMonth),
+    [filteredRows, selectedMonth]
   )
   const partnerSpendingDist = useMemo(
     () => computeDist(partnerSpendingData.values, partnerSpendingData.zeroCount, ['Ниже среднего'], 40),
@@ -699,8 +725,8 @@ export default function DistributionTab({ result }: Props) {
 
   // Новый блок: начисляющие партнёры → их списания
   const accrualSpendData = useMemo(
-    () => extractAccrualPartnerSpending(rawRows, selectedMonth),
-    [rawRows, selectedMonth]
+    () => extractAccrualPartnerSpending(filteredRows, selectedMonth),
+    [filteredRows, selectedMonth]
   )
   const accrualSpendDist = useMemo(
     () => computeDist(accrualSpendData.values, accrualSpendData.zeroCount, ['Ниже среднего'], 40),
@@ -709,6 +735,19 @@ export default function DistributionTab({ result }: Props) {
 
   return (
     <div className="space-y-6">
+
+      <AgentFilterBar
+        enrichedRows={enrichedRows}
+        filters={agentFilters}
+        setFilters={setAgentFilters}
+        lockedCurator={lockedCurator}
+      />
+
+      {activeFilterCount > 0 && (
+        <div className="ren-card ren-card__body text-sm ren-text-secondary">
+          Средние и распределения пересчитаны по выбранным фильтрам ({filteredRows.length.toLocaleString('ru-RU')} строк).
+        </div>
+      )}
 
       {/* Средние показатели Рен-бонусов — вверху */}
       <AvgBonusBlock totals={totals} months={months} />
