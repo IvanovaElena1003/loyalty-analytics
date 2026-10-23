@@ -40,6 +40,151 @@ function monthKey(date: Date): string {
   return `${y}-${m}`
 }
 
+export type FunnelGranularity = 'month' | 'week' | 'day'
+
+/** Monday of the calendar week containing `date` (local TZ). */
+export function weekStartDate(date: Date): Date {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  const dow = d.getDay()
+  const toMon = dow === 0 ? -6 : 1 - dow
+  d.setDate(d.getDate() + toMon)
+  return d
+}
+
+function dayLabel(date: Date): string {
+  return date.toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+    .replace(/^./, c => c.toUpperCase())
+}
+
+function weekLabel(weekStart: Date): string {
+  const end = new Date(weekStart)
+  end.setDate(end.getDate() + 6)
+  const mo = weekStart.toLocaleString('ru-RU', { month: 'short' })
+  if (weekStart.getMonth() === end.getMonth()) {
+    return `${weekStart.getDate()}–${end.getDate()} ${mo}`
+  }
+  const moEnd = end.toLocaleString('ru-RU', { month: 'short' })
+  return `${weekStart.getDate()} ${mo} – ${end.getDate()} ${moEnd}`
+}
+
+function addRowToBucket(b: MonthMetrics, row: RawRow, accrualValues?: number[], spendingValues?: number[]) {
+  const state = String(row.State ?? '')
+  const bonus = hasBonus(row.LoyaltyPointsInLK)
+  const issued = state === 'PolicyIssued'
+  const crossBought = String(row.CrossIsBought ?? '') === 'Да'
+
+  b.total_quotes++
+  if (bonus) b.quotes_with_bonus++; else b.quotes_no_bonus++
+
+  if (issued) {
+    b.issued_total++
+    if (bonus) b.issued_with_bonus++; else b.issued_no_bonus++
+
+    const loyPoints = toNumber(row.LoyaltyPointsInLK)
+    if (loyPoints > 0) {
+      b.accrual_count++
+      b.bonus_accrued += loyPoints
+      accrualValues?.push(loyPoints)
+    }
+
+    if (crossBought) {
+      b.cross_total++
+      if (bonus) b.cross_with_bonus++; else b.cross_no_bonus++
+
+      const policyPrice = !isNull(row.PolicyPrice) ? toNumber(row.PolicyPrice) : BASE_PRICE
+      const incrKV = toNumber(row.ChargedToIncreasedKV)
+      const finalPrice = toNumber(row.FinalPrice)
+      const hasKV = !isNull(row.ChargedToIncreasedKV) && incrKV !== 0
+      const hasDiscount = !isNull(row.FinalPrice) && finalPrice !== policyPrice
+
+      if (hasKV) {
+        b.cross_incr_kv++
+        b.bonus_spent_kv += incrKV
+      }
+      if (hasDiscount) {
+        b.cross_discount++
+        b.bonus_spent_discount += (policyPrice - finalPrice)
+      }
+      if (!hasKV && !hasDiscount) {
+        b.cross_base++
+      }
+
+      const rowSpend = (hasKV ? incrKV : 0) + (hasDiscount ? policyPrice - finalPrice : 0)
+      if (rowSpend > 0) spendingValues?.push(rowSpend)
+    }
+  }
+}
+
+function mergeTotalsFromPeriods(periods: MonthMetrics[]): MonthMetrics {
+  const tot = emptyBucket('Итого', '9999-99')
+  for (const m of periods) {
+    tot.total_quotes += m.total_quotes
+    tot.quotes_no_bonus += m.quotes_no_bonus
+    tot.quotes_with_bonus += m.quotes_with_bonus
+    tot.issued_total += m.issued_total
+    tot.issued_no_bonus += m.issued_no_bonus
+    tot.issued_with_bonus += m.issued_with_bonus
+    tot.cross_total += m.cross_total
+    tot.cross_no_bonus += m.cross_no_bonus
+    tot.cross_with_bonus += m.cross_with_bonus
+    tot.cross_base += m.cross_base
+    tot.cross_discount += m.cross_discount
+    tot.cross_incr_kv += m.cross_incr_kv
+    tot.accrual_count += m.accrual_count
+    tot.bonus_accrued += m.bonus_accrued
+    tot.bonus_spent_discount += m.bonus_spent_discount
+    tot.bonus_spent_kv += m.bonus_spent_kv
+  }
+  return finalise(tot)
+}
+
+/** Funnel columns: by month (all data), or by day/week within `scopeMonth` (YYYY-MM). */
+export function aggregateFunnelPeriods(
+  rows: RawRow[],
+  granularity: FunnelGranularity,
+  scopeMonth?: string,
+): { periods: MonthMetrics[]; totals: MonthMetrics } {
+  const buckets = new Map<string, MonthMetrics>()
+
+  for (const row of rows) {
+    const state = String(row.State ?? '')
+    if (EXCLUDED_STATES.has(state)) continue
+
+    const date = parseDate(row.CreateDate)
+    if (!date) continue
+
+    const mk = monthKey(date)
+    if (granularity !== 'month' && scopeMonth && mk !== scopeMonth) continue
+
+    let sortKey: string
+    let label: string
+    if (granularity === 'month') {
+      sortKey = mk
+      label = monthLabel(date)
+    } else if (granularity === 'day') {
+      sortKey = toDateStr(date)
+      label = dayLabel(date)
+    } else {
+      const ws = weekStartDate(date)
+      sortKey = toDateStr(ws)
+      label = weekLabel(ws)
+    }
+
+    if (!buckets.has(sortKey)) buckets.set(sortKey, emptyBucket(label, sortKey))
+    const b = buckets.get(sortKey)!
+    const ds = toDateStr(date)
+    if (!b.min_date || ds < b.min_date) b.min_date = ds
+    if (!b.max_date || ds > b.max_date) b.max_date = ds
+    addRowToBucket(b, row)
+  }
+
+  const periods = Array.from(buckets.values())
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+    .map(finalise)
+
+  return { periods, totals: mergeTotalsFromPeriods(periods) }
+}
+
 // Use local date components (not UTC) to match the user's timezone
 function toDateStr(date: Date): string {
   const y = date.getFullYear()
@@ -168,88 +313,14 @@ export function aggregate(rows: RawRow[]): AggregateResult {
     if (!b.min_date || ds < b.min_date) b.min_date = ds
     if (!b.max_date || ds > b.max_date) b.max_date = ds
 
-    const bonus = hasBonus(row.LoyaltyPointsInLK)
-    const issued = state === 'PolicyIssued'
-    const crossBought = String(row.CrossIsBought ?? '') === 'Да'
-
-    // Block 1 — все котировки (любой статус, кроме исключённых)
-    b.total_quotes++
-    if (bonus) b.quotes_with_bonus++; else b.quotes_no_bonus++
-
-    // Block 2 — только оформленные полисы (PolicyIssued)
-    if (issued) {
-      b.issued_total++
-      if (bonus) b.issued_with_bonus++; else b.issued_no_bonus++
-
-      // Правило НАЧИСЛЕНИЯ: State = PolicyIssued И LoyaltyPointsInLK > 0
-      const loyPoints = toNumber(row.LoyaltyPointsInLK)
-      if (loyPoints > 0) {
-        b.accrual_count++
-        b.bonus_accrued += loyPoints
-        accrualValues.push(loyPoints)
-      }
-
-      // Block 3+4 — Кросс-Каско (PolicyIssued + CrossIsBought = Да)
-      if (crossBought) {
-        b.cross_total++
-        if (bonus) b.cross_with_bonus++; else b.cross_no_bonus++
-
-        // PolicyPrice: берём из данных, иначе базовая цена 2490
-        const policyPrice = !isNull(row.PolicyPrice) ? toNumber(row.PolicyPrice) : BASE_PRICE
-        const incrKV = toNumber(row.ChargedToIncreasedKV)
-        const finalPrice = toNumber(row.FinalPrice)
-
-        // Правило СПИСАНИЯ В ПОВЫШЕННОЕ КВ: ChargedToIncreasedKV ≠ null/0
-        const hasKV = !isNull(row.ChargedToIncreasedKV) && incrKV !== 0
-
-        // Правило СПИСАНИЯ В СКИДКУ КВ: FinalPrice ≠ PolicyPrice (условие независимо от КВ)
-        const hasDiscount = !isNull(row.FinalPrice) && finalPrice !== policyPrice
-
-        if (hasKV) {
-          b.cross_incr_kv++
-          b.bonus_spent_kv += incrKV
-        }
-
-        if (hasDiscount) {
-          b.cross_discount++
-          b.bonus_spent_discount += (policyPrice - finalPrice)
-        }
-
-        // Базовый: ни скидки, ни КВ
-        if (!hasKV && !hasDiscount) {
-          b.cross_base++
-        }
-
-        // Для распределения: суммарное списание по данной строке
-        const rowSpend = (hasKV ? incrKV : 0) + (hasDiscount ? policyPrice - finalPrice : 0)
-        if (rowSpend > 0) spendingValues.push(rowSpend)
-      }
-    }
+    addRowToBucket(b, row, accrualValues, spendingValues)
   }
 
   const months = Array.from(buckets.values())
     .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
     .map(finalise)
 
-  const tot = emptyBucket('Итого', '9999-99')
-  for (const m of months) {
-    tot.total_quotes += m.total_quotes
-    tot.quotes_no_bonus += m.quotes_no_bonus
-    tot.quotes_with_bonus += m.quotes_with_bonus
-    tot.issued_total += m.issued_total
-    tot.issued_no_bonus += m.issued_no_bonus
-    tot.issued_with_bonus += m.issued_with_bonus
-    tot.cross_total += m.cross_total
-    tot.cross_no_bonus += m.cross_no_bonus
-    tot.cross_with_bonus += m.cross_with_bonus
-    tot.cross_base += m.cross_base
-    tot.cross_discount += m.cross_discount
-    tot.cross_incr_kv += m.cross_incr_kv
-    tot.accrual_count += m.accrual_count
-    tot.bonus_accrued += m.bonus_accrued
-    tot.bonus_spent_discount += m.bonus_spent_discount
-    tot.bonus_spent_kv += m.bonus_spent_kv
-  }
+  const tot = mergeTotalsFromPeriods(months)
 
   let maxMs = -Infinity
   for (const row of rows) {

@@ -1,6 +1,11 @@
 import { Fragment, useState, useMemo } from 'react'
 import type { AggregateResult, MonthMetrics } from '../../types'
-import { pct, mergeMetrics } from '../../utils/aggregate'
+import {
+  pct,
+  mergeMetrics,
+  aggregateFunnelPeriods,
+  type FunnelGranularity,
+} from '../../utils/aggregate'
 import CrossCompositionChart from '../charts/CrossCompositionChart'
 
 // ─── Column spec ──────────────────────────────────────────────────────────────
@@ -85,23 +90,50 @@ function partialLabel(m: MonthMetrics): string | undefined {
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
+const GRANULARITY_LABEL: Record<FunnelGranularity, string> = {
+  month: 'Месяцы',
+  week: 'Недели',
+  day: 'Дни',
+}
+
+function monthOptionLabel(sortKey: string): string {
+  const [y, mo] = sortKey.split('-').map(Number)
+  const d = new Date(y, mo - 1, 1)
+  return d.toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
+}
+
 export default function FunnelTab({ result }: { result: AggregateResult }) {
-  const { months, totals } = result
+  const { months: monthsAll, totals: totalsAll, rawRows } = result
+
+  const [granularity, setGranularity] = useState<FunnelGranularity>('month')
+  const monthKeys = useMemo(
+    () => monthsAll.map(m => m.sortKey),
+    [monthsAll],
+  )
+  const [scopeMonth, setScopeMonth] = useState<string>(() => monthKeys[monthKeys.length - 1] ?? '')
+
+  const { periods, totals } = useMemo(() => {
+    if (granularity === 'month') {
+      return { periods: monthsAll, totals: totalsAll }
+    }
+    const scope = scopeMonth || monthKeys[monthKeys.length - 1]
+    return aggregateFunnelPeriods(rawRows, granularity, scope)
+  }, [granularity, monthsAll, totalsAll, rawRows, scopeMonth, monthKeys])
 
   const years = useMemo(() =>
-    [...new Set(months.map(m => m.sortKey.slice(0, 4)))].sort(), [months])
+    [...new Set(periods.map(m => m.sortKey.slice(0, 4)))].sort(), [periods])
 
   const byYear = useMemo(() => {
     const map = new Map<string, MonthMetrics[]>()
-    for (const m of months) {
-      const yr = m.sortKey.slice(0, 4)
+    for (const m of periods) {
+      const yr = granularity === 'month' ? m.sortKey.slice(0, 4) : 'scope'
       if (!map.has(yr)) map.set(yr, [])
       map.get(yr)!.push(m)
     }
     return map
-  }, [months])
+  }, [periods, granularity])
 
-  // 2025 starts collapsed by default
+  // 2025 starts collapsed by default (month mode only)
   const [collapsed, setCollapsed] = useState<Set<string>>(
     () => new Set(years.filter(y => y === '2025'))
   )
@@ -113,22 +145,42 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
   const cols = useMemo<ColSpec[]>(() => {
     const out: ColSpec[] = []
     let prev: MonthMetrics | undefined
-    for (const yr of years) {
-      const yMonths = byYear.get(yr) ?? []
-      if (collapsed.has(yr)) {
-        const merged = mergeMetrics(yMonths, yr, yr + '-99')
-        out.push({ key: `yr-${yr}`, header: yr, metrics: merged, prev, isTotal: false, isYearSummary: true })
-        prev = merged
-      } else {
-        for (const m of yMonths) {
-          out.push({ key: m.sortKey, header: m.label, subLabel: partialLabel(m), metrics: m, prev, isTotal: false, isYearSummary: false })
-          prev = m
+
+    if (granularity === 'month') {
+      for (const yr of years) {
+        const yMonths = byYear.get(yr) ?? []
+        if (collapsed.has(yr)) {
+          const merged = mergeMetrics(yMonths, yr, yr + '-99')
+          out.push({ key: `yr-${yr}`, header: yr, metrics: merged, prev, isTotal: false, isYearSummary: true })
+          prev = merged
+        } else {
+          for (const m of yMonths) {
+            out.push({ key: m.sortKey, header: m.label, subLabel: partialLabel(m), metrics: m, prev, isTotal: false, isYearSummary: false })
+            prev = m
+          }
         }
       }
+    } else {
+      for (const m of periods) {
+        const sub = granularity === 'week' && m.min_date && m.max_date && m.min_date !== m.max_date
+          ? `${m.min_date.slice(8)}–${m.max_date.slice(8)}.${m.max_date.slice(5, 7)}`
+          : undefined
+        out.push({
+          key: m.sortKey,
+          header: m.label,
+          subLabel: sub,
+          metrics: m,
+          prev,
+          isTotal: false,
+          isYearSummary: false,
+        })
+        prev = m
+      }
     }
+
     out.push({ key: 'total', header: 'Итого', metrics: totals, isTotal: true, isYearSummary: false })
     return out
-  }, [years, byYear, collapsed, totals])
+  }, [years, byYear, collapsed, totals, granularity, periods])
 
   // ─── cell background helpers ──────────────────────────────────────────────
   function stickyBg(col: ColSpec) {
@@ -145,23 +197,61 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
     <div className="space-y-6">
     <div className="ren-card">
 
-      {/* ── Year toggle bar ─────────────────────────────────────────────────── */}
-      <div className="ren-card__header border-b border-[var(--stroke-divider)] px-4 py-2.5 flex items-center gap-2 flex-wrap">
-        <span className="text-xs ren-text-secondary font-medium mr-1">Периоды:</span>
-        {years.map(yr => {
-          const isCollapsed = collapsed.has(yr)
-          const count = byYear.get(yr)?.length ?? 0
-          return (
-            <button key={yr} onClick={() => toggle(yr)}
-              title={isCollapsed ? `Развернуть ${yr}` : `Свернуть ${yr}`}
-              className={`ren-btn text-xs py-1 px-3 ${
-                isCollapsed ? 'ren-btn--secondary' : 'ren-btn--primary'
-              }`}>
-              <span className="text-[10px]">{isCollapsed ? '▶' : '▼'}</span>
-              {yr} <span className="font-normal opacity-70">({count} мес.)</span>
+      {/* ── Granularity + scope ───────────────────────────────────────────── */}
+      <div className="ren-card__header border-b border-[var(--stroke-divider)] px-4 py-2.5 flex items-center gap-3 flex-wrap">
+        <span className="text-xs ren-text-secondary font-medium shrink-0">Шаг:</span>
+        <div className="ren-segmented">
+          {(['month', 'week', 'day'] as FunnelGranularity[]).map(g => (
+            <button
+              key={g}
+              type="button"
+              onClick={() => setGranularity(g)}
+              className={`ren-segmented__btn text-xs ${granularity === g ? 'ren-segmented__btn--active' : ''}`}
+            >
+              {GRANULARITY_LABEL[g]}
             </button>
-          )
-        })}
+          ))}
+        </div>
+
+        {granularity !== 'month' && (
+          <>
+            <span className="text-xs ren-text-secondary font-medium shrink-0">Месяц:</span>
+            <select
+              className="ren-select text-xs py-1.5"
+              value={scopeMonth || monthKeys[monthKeys.length - 1]}
+              onChange={e => setScopeMonth(e.target.value)}
+            >
+              {[...monthKeys].reverse().map(k => (
+                <option key={k} value={k}>{monthOptionLabel(k)}</option>
+              ))}
+            </select>
+            <span className="text-[11px] ren-text-secondary">
+              {granularity === 'day'
+                ? 'Колонки = календарные дни. Стрелки — к предыдущему дню.'
+                : 'Колонки = недели (пн–вс). Стрелки — к предыдущей неделе.'}
+            </span>
+          </>
+        )}
+
+        {granularity === 'month' && (
+          <>
+            <span className="text-xs ren-text-secondary font-medium ml-1 shrink-0">Годы:</span>
+            {years.map(yr => {
+              const isCollapsed = collapsed.has(yr)
+              const count = byYear.get(yr)?.length ?? 0
+              return (
+                <button key={yr} onClick={() => toggle(yr)}
+                  title={isCollapsed ? `Развернуть ${yr}` : `Свернуть ${yr}`}
+                  className={`ren-btn text-xs py-1 px-3 ${
+                    isCollapsed ? 'ren-btn--secondary' : 'ren-btn--primary'
+                  }`}>
+                  <span className="text-[10px]">{isCollapsed ? '▶' : '▼'}</span>
+                  {yr} <span className="font-normal opacity-70">({count} мес.)</span>
+                </button>
+              )
+            })}
+          </>
+        )}
       </div>
 
       {/* ── Table ─────────────────────────────────────────────────────────── */}
@@ -293,7 +383,11 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
 
     {/* ── Состав Кросс-Каско по месяцам (уважает фильтр Периоды) ─────── */}
     <div className="ren-card ren-card__body">
-      <h3 className="ren-card__title text-sm mb-4">Состав Кросс-Каско по месяцам</h3>
+      <h3 className="ren-card__title text-sm mb-4">
+        Состав Кросс-Каско
+        {granularity === 'month' ? ' по месяцам' : granularity === 'week' ? ' по неделям' : ' по дням'}
+        {granularity !== 'month' && scopeMonth ? ` (${monthOptionLabel(scopeMonth)})` : ''}
+      </h3>
       <CrossCompositionChart months={cols.filter(c => !c.isTotal).map(c => c.metrics)} />
     </div>
     </div>
