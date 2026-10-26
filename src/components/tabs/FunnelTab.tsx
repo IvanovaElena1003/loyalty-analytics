@@ -64,6 +64,12 @@ const ROWS: RowDef[] = [
   { kind: 'sub',  label: '— в повышенное КВ Кросс-Каско',   getBig: m => m.bonus_spent_kv,       getPct: m => pct(m.bonus_spent_kv,       m.bonus_spent_total) },
 ]
 
+/** Верхняя воронка: до блока «Из чего состоит Кросс-Каско» */
+const ROWS_FUNNEL_MAIN = ROWS.slice(0, ROWS.findIndex(r => r.kind === 'section' && r.label === 'Из чего состоит Кросс-Каско'))
+
+/** Нижняя таблица: состав кросса и Рен-бонусы */
+const ROWS_CROSS_BONUS = ROWS.slice(ROWS_FUNNEL_MAIN.length)
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtN = (v: number) => v.toLocaleString('ru-RU')
 const fmtBig = (v: number) =>
@@ -71,13 +77,6 @@ const fmtBig = (v: number) =>
   : v >= 1_000   ? (v / 1_000).toLocaleString('ru-RU',     { maximumFractionDigits: 1 }) + ' тыс'
   : fmtN(v)
 
-
-function calcTrend(cur: number | null, prev: number | null, higher: boolean): 'better' | 'worse' | null {
-  if (cur == null || prev == null) return null
-  const d = cur - prev
-  if (Math.abs(d) < 0.4) return null
-  return (d > 0) === higher ? 'better' : 'worse'
-}
 
 function partialLabel(m: MonthMetrics): string | undefined {
   if (!m.min_date || !m.max_date) return undefined
@@ -103,7 +102,7 @@ function monthOptionLabel(sortKey: string): string {
 }
 
 export default function FunnelTab({ result }: { result: AggregateResult }) {
-  const { months: monthsAll, totals: totalsAll, rawRows } = result
+  const { months: monthsAll, rawRows } = result
 
   const [granularity, setGranularity] = useState<FunnelGranularity>('month')
   const monthKeys = useMemo(
@@ -112,13 +111,13 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
   )
   const [scopeMonth, setScopeMonth] = useState<string>(() => monthKeys[monthKeys.length - 1] ?? '')
 
-  const { periods, totals } = useMemo(() => {
+  const periods = useMemo(() => {
     if (granularity === 'month') {
-      return { periods: monthsAll, totals: totalsAll }
+      return monthsAll
     }
     const scope = scopeMonth || monthKeys[monthKeys.length - 1]
-    return aggregateFunnelPeriods(rawRows, granularity, scope)
-  }, [granularity, monthsAll, totalsAll, rawRows, scopeMonth, monthKeys])
+    return aggregateFunnelPeriods(rawRows, granularity, scope).periods
+  }, [granularity, monthsAll, rawRows, scopeMonth, monthKeys])
 
   const years = useMemo(() =>
     [...new Set(periods.map(m => m.sortKey.slice(0, 4)))].sort(), [periods])
@@ -178,19 +177,140 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
       }
     }
 
-    out.push({ key: 'total', header: 'Итого', metrics: totals, isTotal: true, isYearSummary: false })
     return out
-  }, [years, byYear, collapsed, totals, granularity, periods])
+  }, [years, byYear, collapsed, granularity, periods])
+
+  const chartMonths = useMemo(
+    () => cols.map(c => c.metrics),
+    [cols],
+  )
 
   // ─── cell background helpers ──────────────────────────────────────────────
   function stickyBg(col: ColSpec) {
-    return col.isTotal ? 'ren-bg-brand-soft' : col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]' : 'bg-[var(--bg-bg-secondary)]'
+    return col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]' : 'bg-[var(--bg-bg-secondary)]'
   }
   function dataBg(col: ColSpec) {
-    return col.isTotal ? 'ren-bg-brand-soft' : col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]/40' : ''
+    return col.isYearSummary ? 'bg-[var(--bg-brand-primary-00)]/40' : ''
   }
   function colBorder(col: ColSpec) {
-    return col.isTotal ? 'border-l-2 border-[var(--stroke-brand-primary)]' : col.isYearSummary ? 'border-l border-[var(--stroke-divider)]' : ''
+    return col.isYearSummary ? 'border-l border-[var(--stroke-divider)]' : ''
+  }
+
+  function renderFunnelTable(tableRows: RowDef[], maxHeight?: string) {
+    return (
+      <div className="overflow-auto" style={{ maxHeight: maxHeight ?? undefined }}>
+        <table className="w-full text-sm border-collapse">
+          <thead>
+            <tr>
+              <th className="sticky top-0 left-0 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[272px] border-b border-gray-200">
+                Метрика
+              </th>
+              {cols.map(col => (
+                <th key={col.key} colSpan={2}
+                  className={`sticky top-0 z-20 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200 whitespace-nowrap ${stickyBg(col)} ${colBorder(col)}`}>
+                  <div className={col.isYearSummary ? 'ren-text-brand' : 'ren-text-secondary'}>
+                    {col.header}
+                  </div>
+                  {col.subLabel && (
+                    <div className="text-[9px] font-normal normal-case text-orange-500 mt-0.5">
+                      {col.subLabel}
+                    </div>
+                  )}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              <th className="sticky top-[40px] left-0 z-30 bg-gray-50 border-b-2 border-gray-200" />
+              {cols.map(col => (
+                <Fragment key={col.key}>
+                  <th
+                    className={`sticky top-[40px] z-20 px-3 py-1.5 text-right text-[10px] font-medium text-gray-400 w-20 border-b-2 border-gray-200 ${stickyBg(col)}`}>
+                    кол-во
+                  </th>
+                  <th
+                    className={`sticky top-[40px] z-20 px-2 py-1.5 text-center text-[10px] font-medium text-gray-400 w-16 border-b-2 border-gray-200 ${stickyBg(col)} ${colBorder(col)}`}>
+                    %
+                  </th>
+                </Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row, ri) => {
+              if (row.kind === 'sep') return (
+                <tr key={`sp${ri}`}>
+                  <td colSpan={1 + cols.length * 2} className="h-px bg-gray-200" />
+                </tr>
+              )
+
+              if (row.kind === 'section') return (
+                <tr key={`sc${ri}`} className="border-t-2 border-yellow-200">
+                  <td className="sticky left-0 z-10 bg-yellow-50 px-4 py-2 text-xs font-bold text-yellow-800 uppercase tracking-wider">
+                    {row.label}
+                  </td>
+                  {cols.map(col => (
+                    <Fragment key={col.key}>
+                      <td className={`bg-yellow-50 ${colBorder(col)}`} />
+                      <td className={`bg-yellow-50 ${colBorder(col)}`} />
+                    </Fragment>
+                  ))}
+                </tr>
+              )
+
+              const isIndent = row.kind === 'sub'
+              const isTotalRow = row.kind === 'data'
+              const isHighlight = !!row.highlight
+              const pctCls = 'ren-text-brand font-semibold'
+
+              return (
+                <tr key={`dr${ri}`} className={`group transition-colors
+                  ${isHighlight
+                    ? 'border-t-2 border-b-2 border-amber-300 bg-amber-50/50 hover:bg-amber-50/80'
+                    : 'border-t border-gray-100 hover:bg-gray-50/80'}`}>
+                  <td
+                    className={`sticky left-0 z-10 transition-colors px-4 py-2.5
+                      ${isHighlight
+                        ? 'bg-amber-50 group-hover:bg-amber-50/90 text-amber-900 font-bold'
+                        : 'bg-white group-hover:bg-gray-50/80 text-gray-700'}
+                      ${isIndent ? 'pl-8 text-xs text-gray-500' : 'font-medium'}
+                      ${isTotalRow && !isHighlight ? 'font-medium' : ''}`}>
+                    {row.label}
+                  </td>
+
+                  {cols.map(col => {
+                    const m = col.metrics
+                    const cnt = row.getCount ? row.getCount(m) : null
+                    const big = row.getBig ? row.getBig(m) : null
+                    const pctVal = row.getPct ? row.getPct(m) : null
+
+                    const bg = isHighlight ? 'bg-amber-50/40' : isTotalRow ? stickyBg(col) : dataBg(col)
+                    const bl = colBorder(col)
+                    const fw = isHighlight ? 'font-semibold' : ''
+
+                    return (
+                      <Fragment key={col.key}>
+                        <td className={`px-3 py-2.5 text-right tabular-nums text-gray-700 ${bg} ${fw}`}>
+                          {big != null ? fmtBig(big)
+                            : cnt != null ? fmtN(cnt)
+                              : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className={`px-2 py-2.5 text-center tabular-nums ${bg} ${bl}`}>
+                          {pctVal != null ? (
+                            <span className={pctCls}>
+                              {row.decimals === 1 ? pctVal.toFixed(1) : Math.round(pctVal)}%
+                            </span>
+                          ) : <span className="text-gray-300 text-xs">—</span>}
+                        </td>
+                      </Fragment>
+                    )
+                  })}
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    )
   }
 
   return (
@@ -227,8 +347,8 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
             </select>
             <span className="text-[11px] ren-text-secondary">
               {granularity === 'day'
-                ? 'Колонки = календарные дни. Стрелки — к предыдущему дню.'
-                : 'Колонки = недели (пн–вс). Стрелки — к предыдущей неделе.'}
+                ? 'Колонки = календарные дни выбранного месяца.'
+                : 'Колонки = недели (пн–вс) выбранного месяца.'}
             </span>
           </>
         )}
@@ -254,141 +374,19 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
         )}
       </div>
 
-      {/* ── Table ─────────────────────────────────────────────────────────── */}
-      <div className="overflow-auto" style={{ maxHeight: 'calc(100vh - 200px)' }}>
-        <table className="w-full text-sm border-collapse">
-
-          <thead>
-            <tr>
-              <th className="sticky top-0 left-0 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[272px] border-b border-gray-200">
-                Метрика
-              </th>
-              {cols.map(col => (
-                <th key={col.key} colSpan={2}
-                  className={`sticky top-0 z-20 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200 whitespace-nowrap ${stickyBg(col)} ${colBorder(col)}`}>
-                  <div className={col.isTotal || col.isYearSummary ? 'ren-text-brand' : 'ren-text-secondary'}>
-                    {col.header}
-                  </div>
-                  {col.subLabel && (
-                    <div className="text-[9px] font-normal normal-case text-orange-500 mt-0.5">
-                      {col.subLabel}
-                    </div>
-                  )}
-                </th>
-              ))}
-            </tr>
-
-            <tr>
-              <th className="sticky top-[40px] left-0 z-30 bg-gray-50 border-b-2 border-gray-200" />
-              {cols.map(col => (
-                <Fragment key={col.key}>
-                  <th
-                    className={`sticky top-[40px] z-20 px-3 py-1.5 text-right text-[10px] font-medium text-gray-400 w-20 border-b-2 border-gray-200 ${stickyBg(col)}`}>
-                    кол-во
-                  </th>
-                  <th
-                    className={`sticky top-[40px] z-20 px-2 py-1.5 text-center text-[10px] font-medium text-gray-400 w-16 border-b-2 border-gray-200 ${stickyBg(col)} ${colBorder(col)}`}>
-                    %
-                  </th>
-                </Fragment>
-              ))}
-            </tr>
-          </thead>
-
-          <tbody>
-            {ROWS.map((row, ri) => {
-
-              if (row.kind === 'sep') return (
-                <tr key={`sp${ri}`}>
-                  <td colSpan={1 + cols.length * 2} className="h-px bg-gray-200" />
-                </tr>
-              )
-
-              if (row.kind === 'section') return (
-                <tr key={`sc${ri}`} className="border-t-2 border-yellow-200">
-                  <td className="sticky left-0 z-10 bg-yellow-50 px-4 py-2 text-xs font-bold text-yellow-800 uppercase tracking-wider">
-                    {row.label}
-                  </td>
-                  {cols.map(col => (
-                    <Fragment key={col.key}>
-                      <td className={`bg-yellow-50 ${colBorder(col)}`} />
-                      <td className={`bg-yellow-50 ${colBorder(col)}`} />
-                    </Fragment>
-                  ))}
-                </tr>
-              )
-
-              const isIndent   = row.kind === 'sub'
-              const isTotalRow = row.kind === 'data'
-              const isHighlight = !!row.highlight
-              const pctCls = 'ren-text-brand font-semibold'
-
-              return (
-                <tr key={`dr${ri}`} className={`group transition-colors
-                  ${isHighlight
-                    ? 'border-t-2 border-b-2 border-amber-300 bg-amber-50/50 hover:bg-amber-50/80'
-                    : 'border-t border-gray-100 hover:bg-gray-50/80'}`}>
-                  <td
-                    className={`sticky left-0 z-10 transition-colors px-4 py-2.5
-                      ${isHighlight
-                        ? 'bg-amber-50 group-hover:bg-amber-50/90 text-amber-900 font-bold'
-                        : 'bg-white group-hover:bg-gray-50/80 text-gray-700'}
-                      ${isIndent ? 'pl-8 text-xs text-gray-500' : 'font-medium'}
-                      ${isTotalRow && !isHighlight ? 'font-medium' : ''}`}>
-                    {row.label}
-                  </td>
-
-                  {cols.map(col => {
-                    const m = col.metrics
-                    const cnt = row.getCount ? row.getCount(m) : null
-                    const big = row.getBig   ? row.getBig(m)   : null
-                    const pctVal = row.getPct ? row.getPct(m)  : null
-
-                    const tr = (col.prev && row.higherIsBetter != null && pctVal != null)
-                      ? calcTrend(pctVal, row.getPct!(col.prev), row.higherIsBetter)
-                      : null
-
-                    const bg = isHighlight ? 'bg-amber-50/40' : isTotalRow ? stickyBg(col) : dataBg(col)
-                    const bl = colBorder(col)
-                    const fw = col.isTotal || isHighlight ? 'font-semibold' : ''
-
-                    return (
-                      <Fragment key={col.key}>
-                        <td className={`px-3 py-2.5 text-right tabular-nums text-gray-700 ${bg} ${fw}`}>
-                          {big  != null ? fmtBig(big)
-                           : cnt != null ? fmtN(cnt)
-                           : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className={`px-2 py-2.5 text-center tabular-nums ${bg} ${bl}`}>
-                          {pctVal != null ? (
-                            <span className="inline-flex items-center justify-center gap-0.5">
-                              <span className={pctCls}>
-                                {row.decimals === 1 ? pctVal.toFixed(1) : Math.round(pctVal)}%
-                              </span>
-                              {tr === 'better' && <span className="text-emerald-500 text-[11px] leading-none font-bold">↑</span>}
-                              {tr === 'worse'  && <span className="text-red-500    text-[11px] leading-none font-bold">↓</span>}
-                            </span>
-                          ) : <span className="text-gray-300 text-xs">—</span>}
-                        </td>
-                      </Fragment>
-                    )
-                  })}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+      {renderFunnelTable(ROWS_FUNNEL_MAIN, 'calc(100vh - 200px)')}
     </div>
 
-    {/* ── Состав Кросс-Каско по месяцам (уважает фильтр Периоды) ─────── */}
-    <div className="ren-card ren-card__body">
-      <h3 className="ren-card__title text-sm mb-4">
-        Состав Кросс-Каско
-        {granularity === 'month' ? ' по месяцам' : granularity === 'week' ? ' по неделям' : ' по дням'}
-        {granularity !== 'month' && scopeMonth ? ` (${monthOptionLabel(scopeMonth)})` : ''}
-      </h3>
-      <CrossCompositionChart months={cols.filter(c => !c.isTotal).map(c => c.metrics)} />
+    <div className="ren-card">
+      {renderFunnelTable(ROWS_CROSS_BONUS)}
+      <div className="ren-card__body border-t border-[var(--stroke-divider)]">
+        <h3 className="ren-card__title text-sm mb-4">
+          Состав Кросс-Каско
+          {granularity === 'month' ? ' по месяцам' : granularity === 'week' ? ' по неделям' : ' по дням'}
+          {granularity !== 'month' && scopeMonth ? ` (${monthOptionLabel(scopeMonth)})` : ''}
+        </h3>
+        <CrossCompositionChart months={chartMonths} />
+      </div>
     </div>
     </div>
   )
