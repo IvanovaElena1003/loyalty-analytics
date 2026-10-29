@@ -143,6 +143,53 @@ function extractPartnerSpendingValues(rows: RawRow[], monthKey: string | null) {
   return { values, zeroCount, meanAmongAccrual, meanAmongAll }
 }
 
+/** Ср. доступный остаток (AvailableForUsePoints) на партнёра RenId — снимок в выборке. */
+function extractPartnerCurrentBalanceAvgs(rows: RawRow[], monthKey: string | null) {
+  const balance = new Map<string, number>()
+  const accrualPartners = new Set<string>()
+  const allPartners = new Set<string>()
+
+  for (const row of rows) {
+    const state = String(row.State ?? '')
+    if (EXCLUDED_DIST.has(state)) continue
+    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
+
+    const renId = String(row['RenId'] ?? '').trim()
+    if (!renId) continue
+    allPartners.add(renId)
+
+    if (state === 'PolicyIssued') {
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
+    }
+
+    const av = toNum(row['AvailableForUsePoints'])
+    if (!isNullVal(row['AvailableForUsePoints'])) {
+      balance.set(renId, Math.max(balance.get(renId) ?? 0, av))
+    }
+  }
+
+  function meanAmong(ids: Set<string>, positiveOnly: boolean): number {
+    const list = positiveOnly
+      ? [...ids].filter(id => (balance.get(id) ?? 0) > 0)
+      : [...ids]
+    if (list.length === 0) return 0
+    let sum = 0
+    for (const id of list) sum += balance.get(id) ?? 0
+    return sum / list.length
+  }
+
+  const withPositiveBalance = [...allPartners].filter(id => (balance.get(id) ?? 0) > 0).length
+
+  return {
+    meanAll: meanAmong(allPartners, false),
+    meanPositiveOnly: meanAmong(allPartners, true),
+    allPartnersCount: allPartners.size,
+    positiveBalanceCount: withPositiveBalance,
+    accrualPartnersCount: accrualPartners.size,
+  }
+}
+
 /** Для партнёров, у которых есть хотя бы одно начисление — их данные по списаниям */
 function extractAccrualPartnerSpending(rows: RawRow[], monthKey: string | null) {
   // 1. Собираем партнёров с начислениями
@@ -490,12 +537,22 @@ function AvgCard({ title, value, value2, sub }: {
   )
 }
 
-function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: MonthMetrics[] }) {
+function AvgBonusBlock({
+  totals,
+  months,
+  balanceAvgs,
+}: {
+  totals: MonthMetrics
+  months: MonthMetrics[]
+  balanceAvgs: ReturnType<typeof extractPartnerCurrentBalanceAvgs>
+}) {
   const n = months.length
   if (n === 0) return null
 
-  const avgBalanceWithBonus = totals.accrual_count > 0 ? totals.bonus_accrued / totals.accrual_count : 0
-  const avgBalanceAll       = totals.issued_total  > 0 ? totals.bonus_accrued / totals.issued_total  : 0
+  const avgBalanceAllPartners = balanceAvgs.meanAll
+  const avgBalancePositiveOnly = balanceAvgs.meanPositiveOnly
+  const avgAccrualPerEvent = totals.accrual_count > 0 ? totals.bonus_accrued / totals.accrual_count : 0
+  const avgAccrualPerIssued = totals.issued_total > 0 ? totals.bonus_accrued / totals.issued_total : 0
   const avgAccrualPcs  = totals.accrual_count / n
   const avgAccrualRub  = totals.bonus_accrued / n
   const spendingEvents = totals.cross_total - totals.cross_base
@@ -508,14 +565,24 @@ function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: Month
 
   const tableRows = [
     {
-      label: 'Баланс (партнёры с Рен-бонусами > 0)',
-      total: totals.accrual_count > 0 ? `${fmtN(Math.round(avgBalanceWithBonus))} РБ` : '—',
-      avg: `${fmtAvg(avgBalanceWithBonus)} РБ`,
+      label: 'Ср. баланс в кошельке (все партнёры)',
+      total: balanceAvgs.allPartnersCount > 0 ? `${fmtAvg(avgBalanceAllPartners)} РБ` : '—',
+      avg: 'снимок',
     },
     {
-      label: 'Баланс (все партнёры, вкл. баланс = 0)',
-      total: totals.issued_total > 0 ? `${fmtN(Math.round(avgBalanceAll))} РБ` : '—',
-      avg: `${fmtAvg(avgBalanceAll)} РБ`,
+      label: 'Ср. баланс в кошельке (остаток > 0)',
+      total: balanceAvgs.positiveBalanceCount > 0 ? `${fmtAvg(avgBalancePositiveOnly)} РБ` : '—',
+      avg: 'снимок',
+    },
+    {
+      label: 'Ср. начисление на полис с РБ (справочно)',
+      total: totals.accrual_count > 0 ? `${fmtAvg(avgAccrualPerEvent)} РБ` : '—',
+      avg: `${fmtAvg(avgAccrualPerEvent)} РБ`,
+    },
+    {
+      label: 'Ср. начисление на оформленный ОСАГО, вкл. 0 (справочно)',
+      total: totals.issued_total > 0 ? `${fmtAvg(avgAccrualPerIssued)} РБ` : '—',
+      avg: `${fmtAvg(avgAccrualPerIssued)} РБ`,
     },
     { label: 'Кол-во начислений, шт.',    total: fmtN(totals.accrual_count),                            avg: fmtAvg(avgAccrualPcs) },
     { label: 'Сумма начислений, РБ',      total: `${fmtN(Math.round(totals.bonus_accrued))} РБ`,        avg: `${fmtAvg(avgAccrualRub)} РБ` },
@@ -535,14 +602,14 @@ function AvgBonusBlock({ totals, months }: { totals: MonthMetrics; months: Month
       </div>
       <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <AvgCard
-          title="Ср. баланс (с бонусами)"
-          value={`${fmtAvg(avgBalanceWithBonus)} РБ`}
-          sub="Среди партнеров с балансом Рен-бонусов > 0"
+          title="Ср. баланс в кошельке"
+          value={`${fmtAvg(avgBalanceAllPartners)} РБ`}
+          sub={`Все партнёры (RenId) · ${fmtN(balanceAvgs.allPartnersCount)} · нули включены`}
         />
         <AvgCard
-          title="Ср. баланс (все партнеры)"
-          value={`${fmtAvg(avgBalanceAll)} РБ`}
-          sub="Среди всех партнеров"
+          title="Ср. баланс в кошельке"
+          value={`${fmtAvg(avgBalancePositiveOnly)} РБ`}
+          sub={`Только остаток > 0 · ${fmtN(balanceAvgs.positiveBalanceCount)} партнёров`}
         />
         <AvgCard
           title="Ср. начислений / мес."
@@ -733,6 +800,11 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
     [accrualSpendData]
   )
 
+  const balanceAvgs = useMemo(
+    () => extractPartnerCurrentBalanceAvgs(filteredRows, selectedMonth),
+    [filteredRows, selectedMonth],
+  )
+
   return (
     <div className="space-y-6">
 
@@ -750,7 +822,7 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
       )}
 
       {/* Средние показатели Рен-бонусов — вверху */}
-      <AvgBonusBlock totals={totals} months={months} />
+      <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
 
       {/* Пояснение */}
       <div className="ren-card ren-card__body ren-bg-brand-soft ren-text-brand text-sm">

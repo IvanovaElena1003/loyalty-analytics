@@ -9,6 +9,7 @@ const MAIN_FIELDS = [
   'CreateDate', 'State', 'LoyaltyPointsInLK', 'LoyaltyPointsScoring',
   'CrossIsBought', 'FinalPrice', 'PolicyPrice', 'ChargedToIncreasedKV',
   'RenId', 'Role', 'FullName', 'AgentName', 'CashbookId', 'HeadPartnerCB',
+  'AvailableForUsePoints',
 ] as const
 
 const AGENT_FIELDS = [
