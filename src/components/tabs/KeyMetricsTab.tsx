@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { RawRow } from '../../types'
 import { downloadXlsx } from '../../utils/engagement'
 import { AgentFilterBar } from '../AgentFilterBar'
+import CrossImpactSepOctBlock from '../CrossImpactSepOctBlock'
 import {
   EMPTY_AGENT_FILTERS,
   enrichRawRows,
@@ -524,6 +525,9 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
 
       {/* ── Когортный анализ: хотя бы 1 кросс в месяц ────────────────── */}
       <CohortBlock rawRows={filteredRows} />
+
+      {/* ── Сен → окт: вклад партнёров в conv кросса ─────────────────── */}
+      <CrossImpactSepOctBlock rawRows={filteredRows} agentRows={agentRows ?? undefined} />
 
     </div>
   )
