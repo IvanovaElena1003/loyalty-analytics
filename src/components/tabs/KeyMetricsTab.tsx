@@ -1387,13 +1387,23 @@ function CohortHeader({
 
 // ── Блок: выход партнёров в активность по когортам ──────────────────────────
 type CohortType = 'accrual' | 'spend'
-type ActivitySegment = '3-9' | '10+'
+type ActivitySegment = '1+' | '3+' | '10+'
+
+const ACTIVITY_SEGMENT_OPTIONS: { id: ActivitySegment; label: string }[] = [
+  { id: '1+', label: '1+ списание' },
+  { id: '3+', label: '3+ списаний' },
+  { id: '10+', label: '10+ списаний' },
+]
+
+function activitySegmentLabel(s: ActivitySegment): string {
+  return ACTIVITY_SEGMENT_OPTIONS.find(o => o.id === s)?.label ?? s
+}
 
 function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [cohortType, setCohortType] = useState<CohortType>('accrual')
-  const [segment, setSegment] = useState<ActivitySegment>('10+')
+  const [segment, setSegment] = useState<ActivitySegment>('3+')
 
   // Сырые данные: не зависят от cohortType и threshold
   const rawData = useMemo(() => {
@@ -1469,7 +1479,8 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
     }
 
     function inSeg(n: number): boolean {
-      if (segment === '3-9') return n >= 3 && n <= 9
+      if (segment === '1+') return n >= 1
+      if (segment === '3+') return n >= 3
       return n >= 10
     }
 
@@ -1500,7 +1511,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
     return `rgba(51, 0, 102, ${0.08 + i * 0.55})`
   }
 
-  const segmentLabel = segment === '3-9' ? '3–9 списаний' : '10+ списаний'
+  const segmentLabel = activitySegmentLabel(segment)
 
   return (
     <div className="ren-card">
@@ -1514,7 +1525,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         methodologyText={<>
           <p><strong>Когорта</strong> — партнёры, у которых первое начисление РБ (или первое списание) произошло в данном месяце.</p>
           <p><strong>M0</strong> — месяц формирования когорты. <strong>M1</strong> — следующий месяц и т.д.</p>
-          <p><strong>Ячейка</strong> — сколько партнёров из когорты к этому месяцу нарастающим итогом набрали 3–9 или 10+ кросс-транзакций.</p>
+          <p><strong>Ячейка</strong> — сколько партнёров из когорты к этому месяцу нарастающим итогом набрали 1+, 3+ или 10+ кросс-транзакций (списаний РБ на кросс-Каско) — по выбранному порогу.</p>
           <p>Чем раньше появляются числа в строке — тем быстрее когорта выходит в активность.</p>
         </>}
       />
@@ -1537,10 +1548,10 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
         <div>
           <p className="text-xs font-semibold ren-text-brand mb-2">Сегмент по кол-ву кросс-транзакций:</p>
           <div className="ren-segmented">
-            {(['3-9', '10+'] as const).map(s => (
-              <button key={s} onClick={() => setSegment(s)}
-                className={`ren-segmented__btn ${segment === s ? 'ren-segmented__btn--active' : ''}`}>
-                {s === '3-9' ? '3–9 списаний' : '10+ списаний'}
+            {ACTIVITY_SEGMENT_OPTIONS.map(({ id, label }) => (
+              <button key={id} onClick={() => setSegment(id)}
+                className={`ren-segmented__btn ${segment === id ? 'ren-segmented__btn--active' : ''}`}>
+                {label}
               </button>
             ))}
           </div>
