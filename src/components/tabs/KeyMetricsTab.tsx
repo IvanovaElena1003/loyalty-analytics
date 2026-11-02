@@ -253,10 +253,18 @@ const GK_KEY_CELL = 'bg-green-50 font-semibold'
 function emptyGkDist(): Record<GK, number> {
   return { zero: 0, oneTwo: 0, threePlus: 0, ten: 0 }
 }
-/** Пороговые счётчики: 3+ и 10+ не взаимоисключающие (10+ ⊂ 3+). */
+/** Разбиение: 0 / 1–2 / 3+ (10+ — подмножество 3+). */
 function addEngagementCounts(dist: Record<GK, number>, spendCount: number) {
   if (spendCount === 0) dist.zero++
   else if (spendCount <= 2) dist.oneTwo++
+  if (spendCount >= 3) dist.threePlus++
+  if (spendCount >= 10) dist.ten++
+}
+
+/** Пороги для сегментов ОСАГО: 1+ ⊃ 3+ ⊃ 10+ (вложенные). */
+function addEngagementThresholdCounts(dist: Record<GK, number>, spendCount: number) {
+  if (spendCount === 0) dist.zero++
+  if (spendCount >= 1) dist.oneTwo++
   if (spendCount >= 3) dist.threePlus++
   if (spendCount >= 10) dist.ten++
 }
@@ -906,6 +914,9 @@ function osagoQuarterThrough(
 type SegCell = { N: number; dist: Record<GK, number> }
 
 const SEG_BUCKETS: GK[] = ['zero', 'oneTwo', 'threePlus', 'ten']
+const SEG_GK_LABEL_SHORT: Record<GK, string> = {
+  zero: '0 раз', oneTwo: '1+ раз', threePlus: '3+ раз', ten: '10+ раз',
+}
 
 function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
   const [viewMode, setViewMode] = useState<EngagementViewMode>('cumulative')
@@ -1005,10 +1016,10 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
     function addToSeg(segments: Record<OsagoSegId, SegCell>, rid: string, ym: string, spendCount: number) {
       const seg = segmentForRenAtMonth(rid, ym)
       segments.total.N++
-      addEngagementCounts(segments.total.dist, spendCount)
+      addEngagementThresholdCounts(segments.total.dist, spendCount)
       if (!seg) return
       segments[seg].N++
-      addEngagementCounts(segments[seg].dist, spendCount)
+      addEngagementThresholdCounts(segments[seg].dist, spendCount)
     }
 
     if (isMonthly) {
@@ -1122,7 +1133,7 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
                 onClick={() => setEngBucket(b)}
                 className={`ren-segmented__btn ${engBucket === b ? 'ren-segmented__btn--active' : ''}`}
               >
-                {GK_LABEL_SHORT[b]}
+                {SEG_GK_LABEL_SHORT[b]}
               </button>
             ))}
           </div>
@@ -1149,7 +1160,8 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
           {legendOpen && (
             <div className="mt-2 text-xs ren-text-brand space-y-1.5 border-t border-[var(--stroke-divider)] pt-2">
               <p><strong>Сегмент ОСАГО</strong> — по CashbookId: сумма PolicyIssued за текущий календарный квартал (до выбранного месяца включительно) ÷ 3. Логика как в отчёте «Потенциал кросса».</p>
-              <p><strong>Ячейка</strong> — доля партнёров сегмента в выбранной группе списаний ({GK_LABEL_SHORT[engBucket]}){isMonthly ? ' за этот месяц' : ' нарастающим итогом'}. Под процентом — число партнёров в сегменте. Для «3+» и «10+» группы пересекаются (10+ ⊂ 3+).</p>
+              <p><strong>Группа списаний</strong> — пороги нарастающим итогом: «1+ раз» — хотя бы одно списание; «3+» и «10+» включают более активных (10+ ⊂ 3+ ⊂ 1+). «0 раз» — ни одного.</p>
+              <p><strong>Ячейка</strong> — доля партнёров сегмента в выбранной группе ({SEG_GK_LABEL_SHORT[engBucket]}){isMonthly ? ' за этот месяц' : ' на конец месяца'}. Под процентом — размер сегмента (N), не число в группе.</p>
               <p><strong>Итого</strong> — вся база ({fmtN(N)} партнёров с начислениями РБ и выбранной ролью), без разбивки по объёму ОСАГО.</p>
             </div>
           )}
@@ -1164,7 +1176,7 @@ function EngagementTrendBySegment({ rawRows }: { rawRows: RawRow[] }) {
               {OSAGO_SEGMENTS.map(s => (
                 <th key={s.id} className={`px-3 py-2 text-center ${s.id === 'total' ? 'border-l border-[var(--stroke-divider)]' : ''}`}>
                   <span className={s.id === 'total' ? 'ren-text-brand font-semibold' : ''}>{s.label}</span>
-                  <span className={`block text-[10px] font-normal ${GK_TEXT[engBucket]}`}>{GK_LABEL_SHORT[engBucket]}</span>
+                  <span className={`block text-[10px] font-normal ${GK_TEXT[engBucket]}`}>{SEG_GK_LABEL_SHORT[engBucket]}</span>
                 </th>
               ))}
             </tr>
