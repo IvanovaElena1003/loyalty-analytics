@@ -300,6 +300,18 @@ const fmtAvg = (v: number) =>
     : '—'
 const fmtRbInt = (v: number) =>
   Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
+/** Крупные суммы на карточках: 7,3М (1 знак, миллионы РБ). */
+const fmtRbMillions = (v: number) => {
+  if (!Number.isFinite(v)) return '—'
+  if (Math.abs(v) >= 1_000_000) {
+    const s = (v / 1_000_000).toLocaleString('ru-RU', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    })
+    return `${s}М`
+  }
+  return fmtRbInt(v)
+}
 const fmtPct1 = (v: number) =>
   Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
 
@@ -533,12 +545,12 @@ function AvgBonusBlock({
         />
         <AvgCard
           title="Ср. начислений / мес."
-          value={fmtRbInt(avgAccrualRub)}
+          value={fmtRbMillions(avgAccrualRub)}
           sub="Сумма начислений за месяц"
         />
         <AvgCard
           title="Ср. списаний итого / мес."
-          value={fmtRbInt(avgSpendingRub)}
+          value={fmtRbMillions(avgSpendingRub)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
           sub="КВ или скидка"
           detail={`Скидка КВ: ${fmtAvg(avgDiscountRb)} РБ\nПовышенное КВ: ${fmtAvg(avgKvRb)} РБ`}
