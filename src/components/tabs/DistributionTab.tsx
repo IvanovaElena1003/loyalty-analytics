@@ -190,6 +190,14 @@ interface LocalDistData {
   buckets: DistBucket[]
 }
 
+/** Граница бина: нормальные σ-точки, но ближе к «красивым» целым с 0 на конце. */
+function snapCutPoint(x: number): number {
+  if (!Number.isFinite(x) || x <= 0) return 0
+  if (x < 2000) return Math.round(x / 10) * 10
+  if (x < 20_000) return Math.round(x / 100) * 100
+  return Math.round(x / 1000) * 1000
+}
+
 function bucketName(from: number, to: number, mean: number, std: number): string {
   if (to  !== Infinity && to  <= Math.max(0, mean - std)) return 'Значительно ниже среднего'
   if (to  !== Infinity && to  <= mean)                     return 'Ниже среднего'
@@ -224,10 +232,13 @@ function computeDist(
     mean,
     mean + std,
     mean + 2 * std,
-  ]
+  ].map(snapCutPoint)
+
   const pts: number[] = [0]
   for (const p of rawPts) {
-    if (p > pts[pts.length - 1] + 0.5) pts.push(p)
+    const minStep = p < 2000 ? 10 : p < 20_000 ? 100 : 1000
+    const next = Math.max(p, pts[pts.length - 1] + minStep)
+    if (next > pts[pts.length - 1]) pts.push(next)
   }
 
   // Авто-сплит: если бакет > maxBucketPct% от total, делим его на две части по медиане
@@ -293,10 +304,11 @@ const fmtPct1 = (v: number) =>
   Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
 
 function humanLabel(b: { from: number; to: number }, unit: string): string {
-  if (b.from <= 0 && b.to === Infinity) return `любые, ${unit}`
-  if (b.from <= 0) return `до ${fmtN(Math.floor(b.to))} ${unit}`
-  if (b.to === Infinity) return `от ${fmtN(Math.ceil(b.from))} ${unit}`
-  return `${fmtN(Math.ceil(b.from))} – ${fmtN(Math.floor(b.to))} ${unit}`
+  const hi = b.to === Infinity ? Infinity : Math.round(b.to)
+  if (b.from <= 0 && hi === Infinity) return `любые, ${unit}`
+  if (b.from <= 0) return `до ${fmtN(hi)} ${unit}`
+  if (hi === Infinity) return `от ${fmtN(Math.ceil(b.from))} ${unit}`
+  return `${fmtN(Math.ceil(b.from))} – ${fmtN(hi)} ${unit}`
 }
 
 const BAR_COLORS = [
@@ -307,7 +319,7 @@ const BAR_COLORS = [
 // ─── Один блок распределения ─────────────────────────────────────────────────
 function DistBlock({
   title, subtitle, dist, unit,
-  hideZeroChip, showSumColumn, showMeanAll, meanNonZeroLabel, meanAllLabel,
+  hideZeroChip, showMeanAll, meanNonZeroLabel, meanAllLabel,
   meanNonZeroOverride, meanAllOverride,
 }: {
   title: string
@@ -315,7 +327,6 @@ function DistBlock({
   dist: LocalDistData
   unit: string
   hideZeroChip?: boolean
-  showSumColumn?: boolean
   showMeanAll?: boolean
   meanNonZeroLabel?: string
   meanAllLabel?: string
@@ -336,8 +347,6 @@ function DistBlock({
   const meanAllLabelResolved = meanAllLabel ?? 'Среднее (включая нулевые)'
   const meanNonZeroValue = meanNonZeroOverride !== undefined ? meanNonZeroOverride : dist.mean
   const meanAllValue     = meanAllOverride     !== undefined ? meanAllOverride     : dist.meanAll
-  // Сумма всех значений (для ИТОГО строки)
-  const totalBucketSum = dist.buckets.reduce((s, b) => s + b.sum, 0)
 
   return (
     <div className="ren-card">
@@ -411,9 +420,7 @@ function DistBlock({
             <tr>
               <th className="px-4 py-2 text-left">Диапазон</th>
               <th className="px-4 py-2 text-left text-gray-400 font-normal">Характеристика</th>
-              <th className="px-4 py-2 text-right">Событий</th>
               <th className="px-4 py-2 text-right">Доля</th>
-              {showSumColumn && <th className="px-4 py-2 text-right">Рен-бонусов</th>}
             </tr>
           </thead>
           <tbody>
@@ -422,9 +429,7 @@ function DistBlock({
               <tr className="border-t border-gray-100 bg-amber-50/40 hover:bg-amber-50/70">
                 <td className="px-4 py-2.5 font-medium text-amber-700">0 {unit}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-400">Нет Рен-бонусов / нулевое значение</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtN(dist.zeroCount)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums text-amber-600 font-medium">{fmtF(zeroPct)}%</td>
-                {showSumColumn && <td className="px-4 py-2.5 text-right tabular-nums text-gray-400">0</td>}
               </tr>
             )}
             {/* Ненулевые диапазоны */}
@@ -432,26 +437,14 @@ function DistBlock({
               <tr key={i} className="border-t border-gray-100 hover:bg-gray-50">
                 <td className="px-4 py-2.5 font-medium text-gray-800">{humanLabel(b, unit)}</td>
                 <td className="px-4 py-2.5 text-xs text-gray-400">{b.name}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{fmtN(b.count)}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-medium">{fmtF(b.pct)}%</td>
-                {showSumColumn && (
-                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-medium">
-                    {fmtN(b.sum)}
-                  </td>
-                )}
               </tr>
             ))}
             {/* ИТОГО строка (п.4/п.7) */}
             <tr className="border-t-2 border-gray-300 bg-gray-50 font-semibold">
               <td className="px-4 py-2.5 text-gray-800">ИТОГО</td>
               <td className="px-4 py-2.5" />
-              <td className="px-4 py-2.5 text-right tabular-nums">{fmtN(dist.total)}</td>
               <td className="px-4 py-2.5 text-right tabular-nums text-gray-700">100%</td>
-              {showSumColumn && (
-                <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">
-                  {fmtN(totalBucketSum)}
-                </td>
-              )}
             </tr>
           </tbody>
         </table>
@@ -666,7 +659,7 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
   )
   // п.7: всегда показываем бакет «Выше среднего» + авто-сплит бакетов > 40%
   const spendingDist = useMemo(
-    () => computeDist(distData.spendingValues, distData.spendingZeroCount, ['Выше среднего'], 40),
+    () => computeDist(distData.spendingValues, distData.spendingZeroCount),
     [distData]
   )
 
@@ -752,7 +745,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         dist={accrualDist}
         unit="Рен-бонусов"
         hideZeroChip
-        showSumColumn
         showMeanAll
         meanNonZeroLabel="Среднее (не включая нулевые) по полису ОСАГО ФЛ"
         meanAllLabel="Среднее (включая нулевые) по полису ОСАГО ФЛ"
@@ -765,7 +757,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         dist={spendingDist}
         unit="Рен-бонусов"
         hideZeroChip
-        showSumColumn
         meanNonZeroLabel="Среднее списание на полис Каско от бесполисных"
       />
 
