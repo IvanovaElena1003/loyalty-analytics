@@ -294,16 +294,17 @@ function computeDist(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtN   = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const fmtF   = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
+const fmtRbInt = (v: number) =>
+  Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
+
 const fmtDec1 = (n: number) =>
   n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
-/** Компактно: 1,3К / 7,3М / 0,7М (≥100 тыс. — в миллионах). */
+/** Крупные суммы: 7,3М; мелкие — полные РБ. */
 const fmtRbCompact = (v: number) => {
   if (!Number.isFinite(v)) return '—'
-  const abs = Math.abs(v)
-  if (abs >= 100_000) return `${fmtDec1(v / 1_000_000)}М`
-  if (abs >= 1_000) return `${fmtDec1(v / 1_000)}К`
-  return `${fmtN(Math.round(v))} РБ`
+  if (Math.abs(v) >= 1_000_000) return `${fmtDec1(v / 1_000_000)}М`
+  return fmtRbInt(v)
 }
 const fmtPct1 = (v: number) =>
   Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
@@ -512,13 +513,13 @@ function AvgBonusBlock({
   const tableRows = [
     {
       label: 'Баланс кошелька · все',
-      total: balanceAvgs.allPartnersCount > 0 ? fmtRbCompact(avgBalanceAllPartners) : '—',
+      total: balanceAvgs.allPartnersCount > 0 ? fmtRbInt(avgBalanceAllPartners) : '—',
       avg: '—',
       snapshot: true,
     },
     {
       label: 'Баланс · остаток > 0',
-      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbCompact(avgBalancePositiveOnly) : '—',
+      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbInt(avgBalancePositiveOnly) : '—',
       avg: '—',
       snapshot: true,
     },
@@ -545,12 +546,12 @@ function AvgBonusBlock({
       <div className="p-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={fmtRbCompact(avgBalanceAllPartners)}
+          value={fmtRbInt(avgBalanceAllPartners)}
           sub={`${fmtN(balanceAvgs.allPartnersCount)} партнёров · с нулями`}
         />
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={fmtRbCompact(avgBalancePositiveOnly)}
+          value={fmtRbInt(avgBalancePositiveOnly)}
           sub={`${fmtN(balanceAvgs.positiveBalanceCount)} · остаток > 0`}
         />
         <AvgCard
@@ -563,8 +564,8 @@ function AvgBonusBlock({
           value={fmtRbCompact(avgSpendingRub)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
           detailLines={[
-            { label: 'Скидка КВ', value: fmtRbCompact(avgDiscountRb) },
-            { label: 'Повыш. КВ', value: fmtRbCompact(avgKvRb) },
+            { label: 'Скидка КВ', value: fmtRbInt(avgDiscountRb) },
+            { label: 'Повыш. КВ', value: fmtRbInt(avgKvRb) },
           ]}
         />
       </div>
