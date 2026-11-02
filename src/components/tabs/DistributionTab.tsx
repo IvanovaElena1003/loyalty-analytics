@@ -294,12 +294,6 @@ function computeDist(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtN   = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const fmtF   = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
-const fmtAvg = (v: number) =>
-  Number.isFinite(v)
-    ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-    : '—'
-const fmtRbInt = (v: number) =>
-  Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
 const fmtDec1 = (n: number) =>
   n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
