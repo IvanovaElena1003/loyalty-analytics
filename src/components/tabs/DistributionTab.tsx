@@ -637,14 +637,6 @@ function AccrualSpendingBlock({ data }: { data: AccrualSpendingData }) {
             <p className="text-xs ren-text-secondary mt-0.5">{fmtF(neverPct)}% от начисляющих</p>
           </div>
           <div>
-            <p className="text-xs ren-text-secondary">Событий списания, шт.</p>
-            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(data.totalEvents)}</p>
-          </div>
-          <div>
-            <p className="text-xs ren-text-secondary">Списали итого, РБ</p>
-            <p className="text-3xl font-bold ren-text-brand">{fmtN(Math.round(data.totalRb))}</p>
-          </div>
-          <div>
             <p className="text-xs ren-text-secondary">Ср. списание на 1 (кто списывал)</p>
             <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(Math.round(meanAmongSpent))}</p>
             <p className="text-xs ren-text-secondary mt-0.5">РБ</p>
@@ -722,13 +714,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
 
       {/* Средние показатели Рен-бонусов — вверху */}
       <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
-
-      {/* Пояснение */}
-      <div className="ren-card ren-card__body ren-bg-brand-soft ren-text-brand text-sm">
-        <strong>Как читать таблицы распределения.</strong>&nbsp;
-        Диапазоны строятся от 0 и выше вокруг среднего значения (±σ).
-        Строки с нулевым значением выделены отдельно. Пустые срезы скрыты.
-      </div>
 
       {/* Фильтр по периоду */}
       <div className="ren-card ren-card__body flex items-center gap-3">
