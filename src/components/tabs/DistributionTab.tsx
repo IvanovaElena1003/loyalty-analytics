@@ -73,76 +73,6 @@ function extractDistValues(rows: RawRow[], monthKey: string | null) {
   return { accrualValues, accrualZeroCount, spendingValues, spendingZeroCount }
 }
 
-// ─── Извлечение данных: per-partner (по партнёрам) ───────────────────────────
-/** Суммарные начисленные Рен-бонусы по каждому партнёру (RenId) */
-function extractPartnerAccrualValues(rows: RawRow[], monthKey: string | null) {
-  const partnerTotals = new Map<string, number>()
-
-  for (const row of rows) {
-    if (String(row.State ?? '') !== 'PolicyIssued') continue
-    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId) continue
-    const lp = toNum(row.LoyaltyPointsInLK)
-    partnerTotals.set(renId, (partnerTotals.get(renId) ?? 0) + (lp > 0 ? lp : 0))
-  }
-
-  const values: number[] = []
-  let zeroCount = 0
-  for (const total of partnerTotals.values()) {
-    if (total > 0) values.push(total)
-    else zeroCount++
-  }
-  return { values, zeroCount }
-}
-
-/** Суммарные списанные Рен-бонусы по каждому партнёру (RenId) + доп. знаменатели для средних */
-function extractPartnerSpendingValues(rows: RawRow[], monthKey: string | null) {
-  const partnerTotals   = new Map<string, number>() // spending per partner
-  const accrualPartners = new Set<string>()          // партнёры с ≥1 начислением
-  const allPartners     = new Set<string>()          // все уникальные партнёры в периоде
-
-  for (const row of rows) {
-    const state = String(row.State ?? '')
-    if (EXCLUDED_DIST.has(state)) continue
-    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId) continue
-
-    allPartners.add(renId)
-
-    if (state === 'PolicyIssued') {
-      const lp = toNum(row.LoyaltyPointsInLK)
-      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
-    }
-
-    if (String(row.CrossIsBought ?? '') !== 'Да') continue
-    const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE_DIST
-    const fp  = toNum(row.FinalPrice)
-    const kv  = toNum(row.ChargedToIncreasedKV)
-    const hasKV       = !isNullVal(row.ChargedToIncreasedKV) && kv !== 0
-    const hasDiscount = !isNullVal(row.FinalPrice) && fp !== policyPrice
-    const spend = (hasKV ? kv : 0) + (hasDiscount ? policyPrice - fp : 0)
-    partnerTotals.set(renId, (partnerTotals.get(renId) ?? 0) + spend)
-  }
-
-  const values: number[] = []
-  let zeroCount = 0
-  let totalSum = 0
-  for (const total of partnerTotals.values()) {
-    if (total > 0) { values.push(total); totalSum += total }
-    else zeroCount++
-  }
-
-  const accrualCount = accrualPartners.size
-  const allCount     = allPartners.size
-  // Средние: знаменатель — партнёры с начислениями / все партнёры в периоде
-  const meanAmongAccrual = accrualCount > 0 ? totalSum / accrualCount : 0
-  const meanAmongAll     = allCount     > 0 ? totalSum / allCount     : 0
-
-  return { values, zeroCount, meanAmongAccrual, meanAmongAll }
-}
-
 /** Ср. доступный остаток (AvailableForUsePoints) на партнёра RenId — снимок в выборке. */
 function extractPartnerCurrentBalanceAvgs(rows: RawRow[], monthKey: string | null) {
   const balance = new Map<string, number>()
@@ -648,9 +578,7 @@ function AvgBonusBlock({
 // ─── Блок: начисляющие партнёры → их списания ────────────────────────────────
 type AccrualSpendingData = ReturnType<typeof extractAccrualPartnerSpending>
 
-function AccrualSpendingBlock({
-  data, dist,
-}: { data: AccrualSpendingData; dist: LocalDistData }) {
+function AccrualSpendingBlock({ data }: { data: AccrualSpendingData }) {
   if (data.accrualPartnersCount === 0) return null
   const spentPct = (data.spentAtLeastOnce / data.accrualPartnersCount) * 100
   const neverPct = ((data.accrualPartnersCount - data.spentAtLeastOnce) / data.accrualPartnersCount) * 100
@@ -704,19 +632,6 @@ function AccrualSpendingBlock({
           </div>
         </div>
       </div>
-
-      {/* Распределение сумм списания среди начисляющих партнёров */}
-      <DistBlock
-        title="Суммарные списания: среди партнёров с начислениями"
-        subtitle="Только партнёры с ≥1 начислением. 0 = никогда не списывали. Значение = суммарные списанные РБ."
-        dist={dist}
-        unit="Рен-бонусов"
-        showSumColumn
-        showMeanAll
-        meanNonZeroLabel="В среднем списал 1 партнёр (из тех, кто списывал)"
-        meanAllLabel="В среднем списал 1 партнёр (из всех с начислениями)"
-        meanAllOverride={meanAmongAll}
-      />
     </div>
   )
 }
@@ -755,34 +670,9 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
     [distData]
   )
 
-  // Per-partner данные
-  const partnerAccrualData = useMemo(
-    () => extractPartnerAccrualValues(filteredRows, selectedMonth),
-    [filteredRows, selectedMonth]
-  )
-  // п.6: всегда показываем бакет «Ниже среднего» + авто-сплит бакетов > 40%
-  const partnerAccrualDist = useMemo(
-    () => computeDist(partnerAccrualData.values, partnerAccrualData.zeroCount, ['Ниже среднего'], 40),
-    [partnerAccrualData]
-  )
-
-  const partnerSpendingData = useMemo(
-    () => extractPartnerSpendingValues(filteredRows, selectedMonth),
-    [filteredRows, selectedMonth]
-  )
-  const partnerSpendingDist = useMemo(
-    () => computeDist(partnerSpendingData.values, partnerSpendingData.zeroCount, ['Ниже среднего'], 40),
-    [partnerSpendingData]
-  )
-
-  // Новый блок: начисляющие партнёры → их списания
   const accrualSpendData = useMemo(
     () => extractAccrualPartnerSpending(filteredRows, selectedMonth),
     [filteredRows, selectedMonth]
-  )
-  const accrualSpendDist = useMemo(
-    () => computeDist(accrualSpendData.values, accrualSpendData.zeroCount, ['Ниже среднего'], 40),
-    [accrualSpendData]
   )
 
   const balanceAvgs = useMemo(
@@ -846,36 +736,7 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
       </div>
 
-      {/* п.6 (был п.6 в чередовании): начисления в разрезе партнёров */}
-      <DistBlock
-        title="Накопленный баланс Рен-бонусов: в разрезе партнёров"
-        subtitle="Каждое событие = 1 партнёр (RenId). Значение = суммарные начисленные Рен-бонусы (LoyaltyPointsInLK) по всем его оформленным полисам."
-        dist={partnerAccrualDist}
-        unit="Рен-бонусов"
-        hideZeroChip
-        showSumColumn
-        showMeanAll
-        meanNonZeroLabel="Средние накопления партнера (не включая нулевые)"
-        meanAllLabel="Средние накопления партнера (включая нулевые)"
-      />
-
-      {/* Суммарные списания в разрезе партнёров */}
-      <DistBlock
-        title="Суммарные списания Рен-бонусов: в разрезе партнёров"
-        subtitle="Каждое событие = 1 партнёр (RenId). Значение = суммарные списанные Рен-бонусы по всем его полисам Кросс-Каско."
-        dist={partnerSpendingDist}
-        unit="Рен-бонусов"
-        hideZeroChip
-        showSumColumn
-        showMeanAll
-        meanNonZeroLabel="В среднем списал 1 партнёр (у которого были хоть раз начисления)"
-        meanNonZeroOverride={partnerSpendingData.meanAmongAccrual}
-        meanAllLabel="В среднем списал 1 партнёр (с и без начислений)"
-        meanAllOverride={partnerSpendingData.meanAmongAll}
-      />
-
-      {/* Новый блок: из начисляющих — кто и сколько списывал */}
-      <AccrualSpendingBlock data={accrualSpendData} dist={accrualSpendDist} />
+      <AccrualSpendingBlock data={accrualSpendData} />
 
       {/* ── В разрезе полисов ── */}
       <div className="flex items-center gap-4">
