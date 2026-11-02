@@ -300,17 +300,16 @@ const fmtAvg = (v: number) =>
     : '—'
 const fmtRbInt = (v: number) =>
   Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
-/** Крупные суммы на карточках: 7,3М (1 знак, миллионы РБ). */
-const fmtRbMillions = (v: number) => {
+const fmtDec1 = (n: number) =>
+  n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+/** Компактно: 1,3К / 7,3М / 0,7М (≥100 тыс. — в миллионах). */
+const fmtRbCompact = (v: number) => {
   if (!Number.isFinite(v)) return '—'
-  if (Math.abs(v) >= 1_000_000) {
-    const s = (v / 1_000_000).toLocaleString('ru-RU', {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    })
-    return `${s}М`
-  }
-  return fmtRbInt(v)
+  const abs = Math.abs(v)
+  if (abs >= 100_000) return `${fmtDec1(v / 1_000_000)}М`
+  if (abs >= 1_000) return `${fmtDec1(v / 1_000)}К`
+  return `${fmtN(Math.round(v))} РБ`
 }
 const fmtPct1 = (v: number) =>
   Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
@@ -466,26 +465,30 @@ function DistBlock({
 }
 
 // ─── Средние показатели Рен-бонусов ──────────────────────────────────────────
-function AvgCard({ title, value, value2, sub, detail, emphasizeDetail }: {
-  title: string; value: string; value2?: string; sub?: string; detail?: string
-  emphasizeDetail?: boolean
+function AvgCard({
+  title, value, value2, sub, detailLines,
+}: {
+  title: string
+  value: string
+  value2?: string
+  sub?: string
+  detailLines?: { label: string; value: string }[]
 }) {
   return (
     <div className="ren-card ren-card__body flex flex-col gap-0.5">
       <p className="text-xs ren-text-brand font-medium uppercase tracking-wide leading-tight">{title}</p>
-      <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5">{value}</p>
+      <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5 tabular-nums">{value}</p>
       {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
       {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
-      {detail && (
-        <p
-          className={
-            emphasizeDetail
-              ? 'text-sm font-semibold text-[var(--text-primary)] mt-2 leading-snug whitespace-pre-line tabular-nums'
-              : 'text-[11px] ren-text-secondary mt-1.5 leading-snug whitespace-pre-line'
-          }
-        >
-          {detail}
-        </p>
+      {detailLines && detailLines.length > 0 && (
+        <div className="mt-2.5 space-y-1">
+          {detailLines.map((line) => (
+            <p key={line.label} className="text-sm leading-snug">
+              <span className="ren-text-secondary">{line.label}</span>{' '}
+              <span className="font-bold ren-text-brand tabular-nums">{line.value}</span>
+            </p>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -514,24 +517,28 @@ function AvgBonusBlock({
 
   const tableRows = [
     {
-      label: 'Ср. баланс в кошельке (все партнёры)',
-      total: balanceAvgs.allPartnersCount > 0 ? fmtRbInt(avgBalanceAllPartners) : '—',
-      avg: 'снимок',
+      label: 'Баланс кошелька · все',
+      total: balanceAvgs.allPartnersCount > 0 ? fmtRbCompact(avgBalanceAllPartners) : '—',
+      avg: '—',
+      snapshot: true,
     },
     {
-      label: 'Ср. баланс в кошельке (остаток > 0)',
-      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbInt(avgBalancePositiveOnly) : '—',
-      avg: 'снимок',
+      label: 'Баланс · остаток > 0',
+      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbCompact(avgBalancePositiveOnly) : '—',
+      avg: '—',
+      snapshot: true,
     },
     {
-      label: 'Сумма начислений, РБ',
-      total: fmtRbInt(totals.bonus_accrued),
-      avg: fmtRbInt(avgAccrualRub),
+      label: 'Начисления',
+      total: fmtRbCompact(totals.bonus_accrued),
+      avg: fmtRbCompact(avgAccrualRub),
+      snapshot: false,
     },
     {
-      label: 'Сумма списаний итого, РБ',
-      total: fmtRbInt(totals.bonus_spent_total),
-      avg: fmtRbInt(avgSpendingRub),
+      label: 'Списания',
+      total: fmtRbCompact(totals.bonus_spent_total),
+      avg: fmtRbCompact(avgSpendingRub),
+      snapshot: false,
     },
   ]
 
@@ -544,25 +551,27 @@ function AvgBonusBlock({
       <div className="p-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={fmtRbInt(avgBalanceAllPartners)}
-          sub={`Все партнёры (RenId) · ${fmtN(balanceAvgs.allPartnersCount)} · нули включены`}
+          value={fmtRbCompact(avgBalanceAllPartners)}
+          sub={`${fmtN(balanceAvgs.allPartnersCount)} партнёров · с нулями`}
         />
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={fmtRbInt(avgBalancePositiveOnly)}
-          sub={`Только остаток > 0 · ${fmtN(balanceAvgs.positiveBalanceCount)} партнёров`}
+          value={fmtRbCompact(avgBalancePositiveOnly)}
+          sub={`${fmtN(balanceAvgs.positiveBalanceCount)} · остаток > 0`}
         />
         <AvgCard
           title="Ср. начислений / мес."
-          value={fmtRbMillions(avgAccrualRub)}
-          sub="Сумма начислений за месяц"
+          value={fmtRbCompact(avgAccrualRub)}
+          sub="за месяц"
         />
         <AvgCard
           title="Ср. списаний итого / мес."
-          value={fmtRbMillions(avgSpendingRub)}
+          value={fmtRbCompact(avgSpendingRub)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
-          emphasizeDetail
-          detail={`Скидка КВ: ${fmtRbInt(avgDiscountRb)}\nПовышенное КВ: ${fmtRbInt(avgKvRb)}`}
+          detailLines={[
+            { label: 'Скидка КВ', value: fmtRbCompact(avgDiscountRb) },
+            { label: 'Повыш. КВ', value: fmtRbCompact(avgKvRb) },
+          ]}
         />
       </div>
       <div className="border-t border-[var(--stroke-divider)] overflow-x-auto">
@@ -570,8 +579,8 @@ function AvgBonusBlock({
           <thead>
             <tr>
               <th className="px-4 py-2 text-left">Показатель</th>
-              <th className="px-4 py-2 text-right">Итого (за всё время)</th>
-              <th className="px-4 py-2 text-right">Среднее в месяц</th>
+              <th className="px-4 py-2 text-right">Итого</th>
+              <th className="px-4 py-2 text-right">Ср. / мес.</th>
             </tr>
           </thead>
           <tbody className="text-[var(--text-primary)]">
@@ -579,7 +588,13 @@ function AvgBonusBlock({
               <tr key={i} className="border-t border-[var(--stroke-divider)]">
                 <td className="px-4 py-2.5">{r.label}</td>
                 <td className="px-4 py-2.5 text-right tabular-nums font-medium">{r.total}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-semibold">{r.avg}</td>
+                <td
+                  className={`px-4 py-2.5 text-right tabular-nums ${
+                    r.snapshot ? 'text-[var(--text-tertiary)]' : 'ren-text-brand font-semibold'
+                  }`}
+                >
+                  {r.avg}
+                </td>
               </tr>
             ))}
           </tbody>
