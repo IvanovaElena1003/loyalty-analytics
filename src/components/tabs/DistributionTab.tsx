@@ -466,8 +466,9 @@ function DistBlock({
 }
 
 // ─── Средние показатели Рен-бонусов ──────────────────────────────────────────
-function AvgCard({ title, value, value2, sub, detail }: {
+function AvgCard({ title, value, value2, sub, detail, emphasizeDetail }: {
   title: string; value: string; value2?: string; sub?: string; detail?: string
+  emphasizeDetail?: boolean
 }) {
   return (
     <div className="ren-card ren-card__body flex flex-col gap-0.5">
@@ -476,7 +477,15 @@ function AvgCard({ title, value, value2, sub, detail }: {
       {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
       {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
       {detail && (
-        <p className="text-[11px] ren-text-secondary mt-1.5 leading-snug whitespace-pre-line">{detail}</p>
+        <p
+          className={
+            emphasizeDetail
+              ? 'text-sm font-semibold text-[var(--text-primary)] mt-2 leading-snug whitespace-pre-line tabular-nums'
+              : 'text-[11px] ren-text-secondary mt-1.5 leading-snug whitespace-pre-line'
+          }
+        >
+          {detail}
+        </p>
       )}
     </div>
   )
@@ -552,8 +561,8 @@ function AvgBonusBlock({
           title="Ср. списаний итого / мес."
           value={fmtRbMillions(avgSpendingRub)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
-          sub="КВ или скидка"
-          detail={`Скидка КВ: ${fmtAvg(avgDiscountRb)} РБ\nПовышенное КВ: ${fmtAvg(avgKvRb)} РБ`}
+          emphasizeDetail
+          detail={`Скидка КВ: ${fmtRbInt(avgDiscountRb)}\nПовышенное КВ: ${fmtRbInt(avgKvRb)}`}
         />
       </div>
       <div className="border-t border-[var(--stroke-divider)] overflow-x-auto">
