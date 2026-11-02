@@ -357,6 +357,8 @@ const fmtAvg = (v: number) =>
   Number.isFinite(v)
     ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
     : '—'
+const fmtRbInt = (v: number) =>
+  Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
 const fmtPct1 = (v: number) =>
   Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
 
@@ -569,23 +571,23 @@ function AvgBonusBlock({
   const tableRows = [
     {
       label: 'Ср. баланс в кошельке (все партнёры)',
-      total: balanceAvgs.allPartnersCount > 0 ? `${fmtAvg(avgBalanceAllPartners)} РБ` : '—',
+      total: balanceAvgs.allPartnersCount > 0 ? fmtRbInt(avgBalanceAllPartners) : '—',
       avg: 'снимок',
     },
     {
       label: 'Ср. баланс в кошельке (остаток > 0)',
-      total: balanceAvgs.positiveBalanceCount > 0 ? `${fmtAvg(avgBalancePositiveOnly)} РБ` : '—',
+      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbInt(avgBalancePositiveOnly) : '—',
       avg: 'снимок',
     },
     {
       label: 'Сумма начислений, РБ',
-      total: `${fmtAvg(totals.bonus_accrued)} РБ`,
-      avg: `${fmtAvg(avgAccrualRub)} РБ`,
+      total: fmtRbInt(totals.bonus_accrued),
+      avg: fmtRbInt(avgAccrualRub),
     },
     {
       label: 'Сумма списаний итого, РБ',
-      total: `${fmtAvg(totals.bonus_spent_total)} РБ`,
-      avg: `${fmtAvg(avgSpendingRub)} РБ`,
+      total: fmtRbInt(totals.bonus_spent_total),
+      avg: fmtRbInt(avgSpendingRub),
     },
   ]
 
@@ -598,22 +600,22 @@ function AvgBonusBlock({
       <div className="p-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={`${fmtAvg(avgBalanceAllPartners)} РБ`}
+          value={fmtRbInt(avgBalanceAllPartners)}
           sub={`Все партнёры (RenId) · ${fmtN(balanceAvgs.allPartnersCount)} · нули включены`}
         />
         <AvgCard
           title="Ср. баланс в кошельке"
-          value={`${fmtAvg(avgBalancePositiveOnly)} РБ`}
+          value={fmtRbInt(avgBalancePositiveOnly)}
           sub={`Только остаток > 0 · ${fmtN(balanceAvgs.positiveBalanceCount)} партнёров`}
         />
         <AvgCard
           title="Ср. начислений / мес."
-          value={`${fmtAvg(avgAccrualRub)} РБ`}
+          value={fmtRbInt(avgAccrualRub)}
           sub="Сумма начислений за месяц"
         />
         <AvgCard
           title="Ср. списаний итого / мес."
-          value={`${fmtAvg(avgSpendingRub)} РБ`}
+          value={fmtRbInt(avgSpendingRub)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
           sub="КВ или скидка"
           detail={`Скидка КВ: ${fmtAvg(avgDiscountRb)} РБ\nПовышенное КВ: ${fmtAvg(avgKvRb)} РБ`}

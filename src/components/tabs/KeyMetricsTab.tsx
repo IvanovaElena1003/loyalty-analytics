@@ -169,6 +169,9 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
         <EngagementTrendBySegment rawRows={filteredRows} />
       </div>
 
+      {/* ── Когортный анализ: выход в активность ──────────────────────── */}
+      <CohortCumulativeBlock rawRows={filteredRows} />
+
       {/* ── Топ: копят, но не тратят ──────────────────────────────────── */}
       <UnderutilizersBlock
         data={underutilizers}
@@ -226,9 +229,6 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
           downloadXlsx(out, 'underutilizers_all.xlsx')
         }}
       />
-
-      {/* ── Когортный анализ: выход в активность ──────────────────────── */}
-      <CohortCumulativeBlock rawRows={filteredRows} />
 
       {/* ── Сен → окт: вклад партнёров в conv кросса ─────────────────── */}
       <CrossImpactSepOctBlock rawRows={filteredRows} agentRows={agentRows ?? undefined} />
@@ -746,7 +746,12 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
                   </td>
                   {GKS.map((g, i) => (
                     <td key={`share-${g}`} className={`px-3 py-2 text-center tabular-nums ${GK_TEXT[g]} ${isLatestMonth && g === GK_KEY ? GK_KEY_CELL : ''}`}>
-                      {g === 'zero' ? `${Math.round(pcts[i])}%` : `${pcts[i].toFixed(1)}%`}
+                      <span className="block">
+                        {g === 'zero' ? `${Math.round(pcts[i])}%` : `${pcts[i].toFixed(1)}%`}
+                      </span>
+                      <span className="block text-[10px] font-normal text-[var(--text-tertiary)] leading-tight mt-0.5">
+                        {fmtN(m.dist[g])}
+                      </span>
                     </td>
                   ))}
                   <td className="px-3 py-2">
