@@ -1415,7 +1415,7 @@ function CohortCumulativeBlock({ rawRows }: { rawRows: RawRow[] }) {
   const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [cohortType, setCohortType] = useState<CohortType>('accrual')
-  const [segment, setSegment] = useState<ActivitySegment>('3+')
+  const [segment, setSegment] = useState<ActivitySegment>('1+')
 
   // Сырые данные: не зависят от cohortType и threshold
   const rawData = useMemo(() => {
