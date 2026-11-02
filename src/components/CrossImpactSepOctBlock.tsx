@@ -7,7 +7,7 @@ import {
   type CrossImpactRow,
 } from '../utils/crossImpactSepOct'
 
-const TOP_N = 10
+const TOP_N = 5
 
 function fmtConv(v: number): string {
   return v.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%'

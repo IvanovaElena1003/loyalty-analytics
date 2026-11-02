@@ -28,20 +28,6 @@ function toNum(v: unknown): number {
   const n = Number(v)
   return isNaN(n) ? 0 : n
 }
-function parseYear(v: unknown): number | null {
-  if (v == null) return null
-  let d: Date | null = null
-  if (v instanceof Date)       d = v
-  else if (typeof v === 'number' && v > 0) d = new Date((v - 25569) * 86400000)
-  else if (typeof v === 'string') {
-    const n = Number(v)
-    if (!isNaN(n) && n > 0) d = new Date((n - 25569) * 86400000)
-    else { d = new Date(v) }
-  }
-  if (!d || isNaN(d.getTime())) return null
-  return d.getUTCFullYear()
-}
-
 function isSpendingRow(row: RawRow): boolean {
   if (String(row.CrossIsBought ?? '').trim() !== 'Да') return false
   if (!isNull(row.ChargedToIncreasedKV) && toNum(row.ChargedToIncreasedKV) !== 0) return true
@@ -94,100 +80,6 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
     () => filterEnrichedRows(enrichedRows, agentFilters),
     [enrichedRows, agentFilters],
   )
-
-  const ALLOWED_ROLES = new Set(ALL_ALLOWED_ROLES)
-
-  const { tenOrMore, threeToNine, oneOrTwo, neverSpent } = useMemo(() => {
-    type PartnerData = {
-      renId: string
-      fullName: string
-      role: string
-      anyRow: RawRow
-      spendRows: RawRow[]
-      totalSpend: number
-      totalAccrual: number
-      accrualCount: number
-      lastAccrualDate: Date | null
-    }
-
-    // Шаг 0: партнёры, у которых хоть раз было начисление за ВСЮ историю
-    const everAccrued = new Set<string>()
-    for (const row of filteredRows) {
-      if (String(row.State ?? '') !== 'PolicyIssued') continue
-      const renId = String(row['RenId'] ?? '').trim()
-      if (!renId) continue
-      const lp = toNum(row.LoyaltyPointsInLK)
-      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(renId)
-    }
-
-    const partnerMap = new Map<string, PartnerData>()
-
-    // Шаг 1: партнёры с начислениями за всю историю с разрешёнными ролями
-    for (const row of filteredRows) {
-      const renId = String(row['RenId'] ?? '').trim()
-      if (!renId) continue
-      const role = String(row['Role'] ?? '').trim()
-      if (!ALLOWED_ROLES.has(role)) continue
-      if (!partnerMap.has(renId)) {
-        partnerMap.set(renId, {
-          renId,
-          fullName: String(row['FullName'] ?? row['AgentName'] ?? '').trim() || '—',
-          role:     String(row['Role'] ?? '').trim() || '—',
-          anyRow:   row,
-          spendRows: [],
-          totalSpend: 0,
-          totalAccrual: 0,
-          accrualCount: 0,
-          lastAccrualDate: null,
-        })
-      }
-      const p = partnerMap.get(renId)!
-      if ((!p.fullName || p.fullName === '—') && row['FullName']) {
-        p.fullName = String(row['FullName']).trim()
-      }
-    }
-
-    // Шаг 2: считаем события списания и начисления за всю историю
-    for (const row of filteredRows) {
-      const renId = String(row['RenId'] ?? '').trim()
-      const p = partnerMap.get(renId)
-      if (!p) continue
-      if (isSpendingRow(row)) {
-        p.spendRows.push(row)
-        p.totalSpend += calcSpend(row)
-      }
-      if (String(row.State ?? '') === 'PolicyIssued') {
-        const lp = toNum(row.LoyaltyPointsInLK)
-        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
-          p.totalAccrual += lp
-          p.accrualCount++
-          const d = parseDate(row.CreateDate)
-          if (d && (!p.lastAccrualDate || d > p.lastAccrualDate)) p.lastAccrualDate = d
-        }
-      }
-    }
-
-    const all = Array.from(partnerMap.values())
-    const tenOrMore = all
-      .filter(p => p.spendRows.length >= 10)
-      .sort((a, b) => b.spendRows.length - a.spendRows.length)
-
-    const threeToNine = all
-      .filter(p => p.spendRows.length >= 3 && p.spendRows.length <= 9)
-      .sort((a, b) => b.spendRows.length - a.spendRows.length)
-
-    const oneOrTwo = all
-      .filter(p => p.spendRows.length >= 1 && p.spendRows.length < 3)
-      .sort((a, b) => b.spendRows.length - a.spendRows.length)
-
-    // Группа C: 0 списаний за всю историю, но хоть раз начисляли
-    const neverSpent = all
-      .filter(p => p.spendRows.length === 0 && everAccrued.has(p.renId))
-      .sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
-
-    return { tenOrMore, threeToNine, oneOrTwo, neverSpent }
-  }, [filteredRows])
-
 
   // ── Топ «копят, но не тратят» ─────────────────────────────────────────────
   const underutilizers = useMemo(() => {
@@ -263,65 +155,6 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
     return Object.keys(firstRow).filter(k => CONTACT_PATTERNS.test(k))
   }, [rawRows])
 
-  function buildPartnerRow(p: typeof tenOrMore[number]): Record<string, unknown> {
-    const base = p.anyRow as Record<string, unknown>
-    const out: Record<string, unknown> = {}
-    out['HeadPartnerCB']      = String(base['HeadPartnerCB'] ?? '').trim() || '[NULL]'
-    out['CashbookId']         = String(base['CashbookId'] ?? '').trim() || '[NULL]'
-    out['RenId']              = p.renId
-    out['ФИО']                = p.fullName
-    out['Роль']               = p.role
-    for (const cf of contactFields) out[cf] = base[cf] ?? '—'
-    out['Накоплено_РБ']       = Math.round(p.totalAccrual)
-    out['Событий_начисления'] = p.accrualCount
-    out['Списано_РБ']         = Math.round(p.totalSpend)
-    out['Кол-во_списаний']    = p.spendRows.length
-    out['Утилизация_%']       = p.totalAccrual > 0 ? Math.round((p.totalSpend / p.totalAccrual) * 100) : 0
-    out['Последнее_начисление'] = fmtDate(p.lastAccrualDate)
-    return out
-  }
-
-  function handleDownload(group: typeof tenOrMore, filename: string) {
-    // Группируем: голова = HeadPartnerCB пустой, суб = HeadPartnerCB = CashbookId головы
-    type Grp = { head: typeof group[number]; subs: typeof group[number][] }
-    const groupMap = new Map<string, Grp>()
-
-    for (const p of group) {
-      const raw = p.anyRow as Record<string, unknown>
-      const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
-      const cid    = String(raw['CashbookId']    ?? '').trim()
-      if (!headCB || headCB === '[NULL]') {
-        const key = cid || p.renId
-        if (!groupMap.has(key)) groupMap.set(key, { head: p, subs: [] })
-      }
-    }
-    for (const p of group) {
-      const raw = p.anyRow as Record<string, unknown>
-      const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
-      if (headCB && headCB !== '[NULL]') {
-        if (groupMap.has(headCB)) groupMap.get(headCB)!.subs.push(p)
-        else groupMap.set(`orphan_${p.renId}`, { head: p, subs: [] })
-      }
-    }
-
-    const остаток = (p: typeof group[number]) => p.totalAccrual - p.totalSpend
-    const rows: Record<string, unknown>[] = []
-    for (const g of Array.from(groupMap.values())
-      .map(g => ({ ...g, maxОст: Math.max(остаток(g.head), ...g.subs.map(остаток)) }))
-      .sort((a, b) => b.maxОст - a.maxОст)) {
-      rows.push(buildPartnerRow(g.head))
-      for (const sub of g.subs.sort((a, b) => остаток(b) - остаток(a))) rows.push(buildPartnerRow(sub))
-    }
-    downloadXlsx(rows, filename)
-  }
-
-  const totalEventsTen   = tenOrMore.reduce((s, p) => s + p.spendRows.length, 0)
-  const totalSpendTen    = tenOrMore.reduce((s, p) => s + p.totalSpend, 0)
-  const totalEventsThree = threeToNine.reduce((s, p) => s + p.spendRows.length, 0)
-  const totalSpendThree  = threeToNine.reduce((s, p) => s + p.totalSpend, 0)
-  const totalEventsB     = oneOrTwo.reduce((s, p) => s + p.spendRows.length, 0)
-  const totalSpendB      = oneOrTwo.reduce((s, p) => s + p.totalSpend, 0)
-
   return (
     <div className="space-y-6">
 
@@ -329,132 +162,6 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       {agentRows && agentRows.length > 0 && (
         <AgentFilterBar enrichedRows={enrichedRows} filters={agentFilters} setFilters={setAgentFilters} lockedCurator={lockedCurator} />
       )}
-
-      {/* Сводный дашборд */}
-      <SummaryDashboard rawRows={filteredRows} />
-
-
-      {/* ── Четыре группы ──────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-        {/* Группа 10+: супер-активные */}
-        <div className="ren-card">
-          <div className="ren-card__header flex items-center justify-between gap-3">
-            <div>
-              <h3 className="ren-card__title">Списали 10+ раз</h3>
-              <p className="ren-card__subtitle">Супер-активные пользователи</p>
-            </div>
-            <button
-              onClick={() => handleDownload(tenOrMore, 'spent_10plus_2026.xlsx')}
-              disabled={tenOrMore.length === 0}
-              className="ren-btn ren-btn--primary shrink-0 text-xs"
-            >↓ xlsx</button>
-          </div>
-          <div className="ren-card__body flex flex-wrap gap-5">
-            <div>
-              <p className="text-xs ren-text-secondary">Партнёров</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(tenOrMore.length)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Событий</p>
-              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsTen)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Списано, РБ</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendTen)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Группа 3–9: активные */}
-        <div className="ren-card">
-          <div className="ren-card__header flex items-center justify-between gap-3">
-            <div>
-              <h3 className="ren-card__title">Списали 3–9 раз</h3>
-              <p className="ren-card__subtitle">Активные пользователи</p>
-            </div>
-            <button
-              onClick={() => handleDownload(threeToNine, 'spent_3_9_2026.xlsx')}
-              disabled={threeToNine.length === 0}
-              className="ren-btn ren-btn--primary shrink-0 text-xs"
-            >↓ xlsx</button>
-          </div>
-          <div className="ren-card__body flex flex-wrap gap-5">
-            <div>
-              <p className="text-xs ren-text-secondary">Партнёров</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(threeToNine.length)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Событий</p>
-              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsThree)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Списано, РБ</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendThree)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Группа B: 1–2 списания */}
-        <div className="ren-card">
-          <div className="ren-card__header flex items-center justify-between gap-3">
-            <div>
-              <h3 className="ren-card__title">Списали 1–2 раза</h3>
-              <p className="ren-card__subtitle">Низкая активность</p>
-            </div>
-            <button
-              onClick={() => handleDownload(oneOrTwo, 'spent_1_2_2026.xlsx')}
-              disabled={oneOrTwo.length === 0}
-              className="ren-btn ren-btn--primary shrink-0 text-xs"
-            >↓ xlsx</button>
-          </div>
-          <div className="ren-card__body flex flex-wrap gap-5">
-            <div>
-              <p className="text-xs ren-text-secondary">Партнёров</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(oneOrTwo.length)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Событий</p>
-              <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(totalEventsB)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Списано, РБ</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(totalSpendB)}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Группа C: 0 списаний, но с историей начислений */}
-        <div className="ren-card">
-          <div className="ren-card__header flex items-center justify-between gap-3">
-            <div>
-              <h3 className="ren-card__title">Списали 0 раз</h3>
-              <p className="ren-card__subtitle">Есть начисления за всю историю, но ни разу не списывали</p>
-            </div>
-            <button
-              onClick={() => handleDownload(neverSpent, 'spent_0_with_accruals_2026.xlsx')}
-              disabled={neverSpent.length === 0}
-              className="ren-btn ren-btn--primary shrink-0 text-xs"
-            >↓ xlsx</button>
-          </div>
-          <div className="ren-card__body flex flex-wrap gap-5">
-            <div>
-              <p className="text-xs ren-text-secondary">Партнёров</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(neverSpent.length)}</p>
-            </div>
-            <div>
-              <p className="text-xs ren-text-secondary">Списаний всего</p>
-              <p className="text-3xl font-bold text-[var(--text-tertiary)]">0</p>
-            </div>
-          </div>
-        </div>
-
-      </div>
-
-      <p className="text-xs ren-text-secondary px-1">
-        Excel-выгрузка: одна строка на партнёра со всеми идентификационными полями из исходника
-        + Кол-во_списаний_2026 и Сумма_РБ_2026.
-      </p>
 
       {/* ── Динамика по месяцам ───────────────────────────────────────── */}
       <div className="flex flex-col gap-4">
@@ -523,225 +230,9 @@ export default function KeyMetricsTab({ rawRows, agentRows, lockedCurator }: Pro
       {/* ── Когортный анализ: выход в активность ──────────────────────── */}
       <CohortCumulativeBlock rawRows={filteredRows} />
 
-      {/* ── Когортный анализ: хотя бы 1 кросс в месяц ────────────────── */}
-      <CohortBlock rawRows={filteredRows} />
-
       {/* ── Сен → окт: вклад партнёров в conv кросса ─────────────────── */}
       <CrossImpactSepOctBlock rawRows={filteredRows} agentRows={agentRows ?? undefined} />
 
-    </div>
-  )
-}
-
-// ── Сводный дашборд ─────────────────────────────────────────────────────────
-type SAgg = { osago25: number; kasko25: number; osago26: number; kasko26: number }
-
-function SummaryDashboard({ rawRows }: { rawRows: RawRow[] }) {
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
-  const [methodologyOpen, setMethodologyOpen] = useState(false)
-
-  const G = useMemo(() => {
-    const roleSet = new Set(selectedRoles)
-    const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
-
-    const everIssued   = new Set<string>()
-    const everAccrued  = new Set<string>()
-    const spendCntEver = new Map<string, number>()
-    for (const row of rawRows) {
-      const renId = String(row['RenId'] ?? '').trim()
-      if (!renId) continue
-      if (String(row.State ?? '') === 'PolicyIssued') {
-        everIssued.add(renId)
-        const lp = toNum(row.LoyaltyPointsInLK)
-        if (!isNull(row.LoyaltyPointsInLK) && lp > 0) everAccrued.add(renId)
-      }
-      if (isSpendingRow(row)) spendCntEver.set(renId, (spendCntEver.get(renId) ?? 0) + 1)
-    }
-
-    // Все партнёры с разрешёнными ролями за всю историю (популяция)
-    const partnersWithRole = new Set<string>()
-    for (const row of rawRows) {
-      const renId = String(row['RenId'] ?? '').trim()
-      if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
-      partnersWithRole.add(renId)
-    }
-
-    type GKey = 'noIssued' | 'noBal' | 'zero' | 'oneTwo' | 'three' | 'ten'
-    function grp(renId: string): GKey | null {
-      if (!partnersWithRole.has(renId)) return null
-      if (!everIssued.has(renId))  return 'noIssued'
-      if (!everAccrued.has(renId)) return 'noBal'
-      const c = spendCntEver.get(renId) ?? 0
-      if (c >= 10) return 'ten'
-      if (c >= 3)  return 'three'
-      if (c >= 1)  return 'oneTwo'
-      return 'zero'
-    }
-
-    const cnt: Record<GKey, number> = { noIssued: 0, noBal: 0, zero: 0, oneTwo: 0, three: 0, ten: 0 }
-    for (const renId of partnersWithRole) {
-      const g = grp(renId)
-      if (g) cnt[g]++
-    }
-
-    const mkA = (): SAgg => ({ osago25: 0, kasko25: 0, osago26: 0, kasko26: 0 })
-    const agg: Record<GKey, SAgg> = {
-      noIssued: mkA(), noBal: mkA(), zero: mkA(), oneTwo: mkA(), three: mkA(), ten: mkA(),
-    }
-    for (const row of rawRows) {
-      const renId = String(row['RenId'] ?? '').trim()
-      if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
-      const g = grp(renId)
-      if (!g) continue
-      const yr = parseYear(row.CreateDate)
-      if (yr !== 2025 && yr !== 2026) continue
-      const state = String(row.State ?? '')
-      if (EXCL.has(state)) continue
-      const isIssued = state === 'PolicyIssued'
-      const isCross  = String(row.CrossIsBought ?? '').trim() === 'Да'
-      const st = agg[g]
-      if (yr === 2026) {
-        if (isIssued)            st.osago26++
-        if (isIssued && isCross) st.kasko26++
-      } else {
-        if (isIssued)            st.osago25++
-        if (isIssued && isCross) st.kasko25++
-      }
-    }
-
-    return { cnt, agg, total: partnersWithRole.size }
-  }, [rawRows, selectedRoles])
-
-  const withBalTotal = G.cnt.zero + G.cnt.oneTwo + G.cnt.three + G.cnt.ten
-  const total = G.total
-
-  const fmtPct = (num: number, den: number) =>
-    den > 0 ? (num / den * 100).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%' : '—'
-
-  // Суммарные агрегаты для withBal строк
-  const spendKeys = ['zero', 'oneTwo', 'three', 'ten'] as const
-
-  function toggleRole(role: string) {
-    setSelectedRoles(prev =>
-      prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]
-    )
-  }
-
-  const spendRows: { key: typeof spendKeys[number]; label: string; color: string }[] = [
-    { key: 'zero',   label: '0 раз — не списывали',  color: 'text-slate-600' },
-    { key: 'oneTwo', label: '1–2 раза',               color: 'text-amber-700' },
-    { key: 'three',  label: '3–9 раз',                color: 'text-green-700' },
-    { key: 'ten',    label: '10+ раз',                color: 'text-emerald-700' },
-  ]
-
-  return (
-    <div className="ren-card">
-
-      {/* Шапка */}
-      <div className="ren-card__header space-y-3">
-        <h3 className="ren-card__title">Вовлечённость партнёров в программу лояльности</h3>
-
-        {/* Фильтр по роли */}
-        <div>
-          <p className="text-xs font-semibold ren-text-brand mb-1.5">Фильтр по роли:</p>
-          <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-            {ALL_ALLOWED_ROLES.map(role => (
-              <label key={role} className="flex items-center gap-1.5 text-xs cursor-pointer select-none">
-                <input type="checkbox" checked={selectedRoles.includes(role)}
-                  onChange={() => toggleRole(role)} className="w-3.5 h-3.5 ren-checkbox" />
-                <span className={selectedRoles.includes(role) ? 'ren-text-brand font-medium' : 'text-[var(--text-tertiary)]'}>{role}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        {/* Как читать этот отчёт — сворачиваемая */}
-        <div>
-          <button
-            onClick={() => setMethodologyOpen(o => !o)}
-            className="ren-link flex items-center gap-1"
-          >
-            <span>{methodologyOpen ? '▾' : '▸'}</span>
-            <span>Как читать этот отчёт</span>
-          </button>
-          {methodologyOpen && (
-            <div className="mt-2 text-xs ren-text-brand space-y-1 border-t border-[var(--stroke-divider)] pt-2">
-              <p>Партнёры из данных 2026 года. Вся история — данные за все годы из загруженного файла.</p>
-              <p><strong>Нет оформленных ОСАГО, только котировки</strong> — за всю историю нет ни одной строки State = PolicyIssued.</p>
-              <p><strong>Есть ОСАГО, без начислений РБ</strong> — PolicyIssued есть, но LoyaltyPointsInLK никогда не был &gt; 0.</p>
-              <p><strong>Есть ОСАГО с РБ</strong> — был хоть раз PolicyIssued с LoyaltyPointsInLK &gt; 0. Разбивка по частоте списания Рен-бонусов за всю историю.</p>
-              <p><strong>«Списание РБ»</strong> — строка с CrossIsBought = Да и (ChargedToIncreasedKV ≠ 0 или FinalPrice ≠ PolicyPrice).</p>
-              <p><strong>ОСАГО, шт.</strong> — оформленные полисы (State = PolicyIssued) партнёров группы в 2026 г.</p>
-              <p><strong>Каско от бесполисных, шт.</strong> — из них куплен Каско от бесполисных (CrossIsBought = Да).</p>
-              <p><strong>Конверсия Бесполис</strong> — Каско / ОСАГО × 100%.</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Три KPI-карточки */}
-      {(() => {
-        const hasIssued = G.cnt.noBal + withBalTotal
-        return (
-          <div className="grid grid-cols-3 divide-x divide-gray-100 border-b border-gray-100">
-            <div className="px-5 py-4 bg-gray-50">
-              <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Нет оформленных ОСАГО, только котировки</p>
-              <p className="text-3xl font-bold text-gray-500">{fmtN(G.cnt.noIssued)} <span className="text-sm font-normal text-gray-400">партнёров</span></p>
-              <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noIssued, total)} от всех</p>
-            </div>
-            <div className="px-5 py-4 bg-gray-50">
-              <p className="text-xs text-gray-500 font-medium mb-1 leading-snug">Есть ОСАГО, без начислений РБ</p>
-              <p className="text-3xl font-bold text-gray-600">{fmtN(G.cnt.noBal)} <span className="text-sm font-normal text-gray-400">партнёров</span></p>
-              <p className="text-sm text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, total)} от всех</p>
-              <p className="text-xs text-gray-400 mt-0.5">{fmtPct(G.cnt.noBal, hasIssued)} из имеющих ОСАГО</p>
-            </div>
-            <div className="px-5 py-4 ren-bg-brand-soft">
-              <p className="text-xs ren-text-brand font-medium mb-1 leading-snug">Есть ОСАГО с начислением РБ</p>
-              <p className="text-3xl font-bold ren-text-brand">{fmtN(withBalTotal)} <span className="text-sm font-normal ren-text-secondary">партнёров</span></p>
-              <p className="text-sm ren-text-secondary mt-0.5">{fmtPct(withBalTotal, total)} от всех</p>
-              <p className="text-xs text-gray-400 mt-0.5">{fmtPct(withBalTotal, hasIssued)} из имеющих ОСАГО</p>
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* Разбивка по частоте списания */}
-      <div className="px-5 py-3 ren-bg-brand-soft border-b border-[var(--stroke-divider)]">
-        <p className="text-xs font-semibold ren-text-brand">
-          Из {fmtN(withBalTotal)} партнёров с начислениями РБ — частота списания за всю историю:
-        </p>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="ren-table w-full text-sm">
-          <thead className="border-b border-[var(--stroke-divider)]">
-            <tr>
-              <th className="px-4 py-2.5 text-left whitespace-nowrap">Частота списания РБ</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Партнёров</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">% от группы с РБ</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">ОСАГО</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Каско, шт.</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конв. '25</th>
-              <th className="px-4 py-2.5 text-right whitespace-nowrap">Конв. '26</th>
-            </tr>
-          </thead>
-          <tbody>
-            {spendRows.map(({ key, label, color }) => {
-              const a = G.agg[key]
-              return (
-                <tr key={key} className="border-t border-[var(--stroke-divider)] transition-colors">
-                  <td className={`px-4 py-2.5 font-medium ${color}`}>{label}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums font-semibold text-[var(--text-primary)]">{fmtN(G.cnt[key])}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">{fmtPct(G.cnt[key], withBalTotal)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-[var(--text-primary)]">{fmtN(a.osago26)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand">{fmtN(a.kasko26)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-secondary">{fmtPct(a.kasko25, a.osago25)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums ren-text-brand font-semibold">{fmtPct(a.kasko26, a.osago26)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }
@@ -782,6 +273,143 @@ function addEngagementPolicy(
   if (spendCount >= 10) { osago.ten += o; kasko.ten += k }
 }
 
+type SegmentPartner = {
+  renId: string
+  fullName: string
+  role: string
+  anyRow: RawRow
+  totalSpend: number
+  totalAccrual: number
+  accrualCount: number
+  lastAccrualDate: Date | null
+  bucketSpendCount: number
+}
+
+type SegmentBuckets = {
+  ten: SegmentPartner[]
+  threeToNine: SegmentPartner[]
+  oneTwo: SegmentPartner[]
+  zero: SegmentPartner[]
+}
+
+const EMPTY_SEGMENT_BUCKETS: SegmentBuckets = { ten: [], threeToNine: [], oneTwo: [], zero: [] }
+
+function buildPartnerProfiles(rawRows: RawRow[], base: Set<string>): Map<string, SegmentPartner> {
+  const map = new Map<string, SegmentPartner>()
+  for (const row of rawRows) {
+    const rid = String(row['RenId'] ?? '').trim()
+    if (!rid || !base.has(rid)) continue
+    if (!map.has(rid)) {
+      map.set(rid, {
+        renId: rid,
+        fullName: String(row['FullName'] ?? row['AgentName'] ?? '').trim() || '—',
+        role: String(row['Role'] ?? '').trim() || '—',
+        anyRow: row,
+        totalSpend: 0,
+        totalAccrual: 0,
+        accrualCount: 0,
+        lastAccrualDate: null,
+        bucketSpendCount: 0,
+      })
+    }
+    const p = map.get(rid)!
+    if ((!p.fullName || p.fullName === '—') && row['FullName']) {
+      p.fullName = String(row['FullName']).trim()
+    }
+    if (isSpendingRow(row)) p.totalSpend += calcSpend(row)
+    if (String(row.State ?? '') === 'PolicyIssued') {
+      const lp = toNum(row.LoyaltyPointsInLK)
+      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+        p.totalAccrual += lp
+        p.accrualCount++
+        const d = parseDate(row.CreateDate)
+        if (d && (!p.lastAccrualDate || d > p.lastAccrualDate)) p.lastAccrualDate = d
+      }
+    }
+  }
+  return map
+}
+
+function assignSegmentBuckets(
+  base: Set<string>,
+  profiles: Map<string, SegmentPartner>,
+  getCount: (rid: string) => number,
+): SegmentBuckets {
+  const buckets: SegmentBuckets = { ten: [], threeToNine: [], oneTwo: [], zero: [] }
+  for (const rid of base) {
+    const p = profiles.get(rid)
+    if (!p) continue
+    const c = getCount(rid)
+    p.bucketSpendCount = c
+    const item = { ...p, bucketSpendCount: c }
+    if (c >= 10) buckets.ten.push(item)
+    else if (c >= 3) buckets.threeToNine.push(item)
+    else if (c >= 1) buckets.oneTwo.push(item)
+    else buckets.zero.push(item)
+  }
+  buckets.ten.sort((a, b) => b.bucketSpendCount - a.bucketSpendCount)
+  buckets.threeToNine.sort((a, b) => b.bucketSpendCount - a.bucketSpendCount)
+  buckets.oneTwo.sort((a, b) => b.bucketSpendCount - a.bucketSpendCount)
+  buckets.zero.sort((a, b) => a.fullName.localeCompare(b.fullName, 'ru'))
+  return buckets
+}
+
+function buildSegmentXlsxRow(p: SegmentPartner, contactFields: string[], spendCountLabel: string): Record<string, unknown> {
+  const base = p.anyRow as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  out['HeadPartnerCB'] = String(base['HeadPartnerCB'] ?? '').trim() || '[NULL]'
+  out['CashbookId'] = String(base['CashbookId'] ?? '').trim() || '[NULL]'
+  out['RenId'] = p.renId
+  out['ФИО'] = p.fullName
+  out['Роль'] = p.role
+  for (const cf of contactFields) out[cf] = base[cf] ?? '—'
+  out['Накоплено_РБ'] = Math.round(p.totalAccrual)
+  out['Событий_начисления'] = p.accrualCount
+  out['Списано_РБ'] = Math.round(p.totalSpend)
+  out[spendCountLabel] = p.bucketSpendCount
+  out['Утилизация_%'] = p.totalAccrual > 0 ? Math.round((p.totalSpend / p.totalAccrual) * 100) : 0
+  out['Последнее_начисление'] = fmtDate(p.lastAccrualDate)
+  return out
+}
+
+function downloadSegmentGroup(
+  group: SegmentPartner[],
+  filename: string,
+  contactFields: string[],
+  spendCountLabel: string,
+) {
+  type Grp = { head: SegmentPartner; subs: SegmentPartner[] }
+  const groupMap = new Map<string, Grp>()
+  for (const p of group) {
+    const raw = p.anyRow as Record<string, unknown>
+    const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+    const cid = String(raw['CashbookId'] ?? '').trim()
+    if (!headCB || headCB === '[NULL]') {
+      const key = cid || p.renId
+      if (!groupMap.has(key)) groupMap.set(key, { head: p, subs: [] })
+    }
+  }
+  for (const p of group) {
+    const raw = p.anyRow as Record<string, unknown>
+    const headCB = String(raw['HeadPartnerCB'] ?? '').trim()
+    if (headCB && headCB !== '[NULL]') {
+      if (groupMap.has(headCB)) groupMap.get(headCB)!.subs.push(p)
+      else groupMap.set(`orphan_${p.renId}`, { head: p, subs: [] })
+    }
+  }
+  const остаток = (p: SegmentPartner) => p.totalAccrual - p.totalSpend
+  const rows: Record<string, unknown>[] = []
+  for (const g of Array.from(groupMap.values())
+    .map(g => ({ ...g, maxОст: Math.max(остаток(g.head), ...g.subs.map(остаток)) }))
+    .sort((a, b) => b.maxОст - a.maxОст)) {
+    rows.push(buildSegmentXlsxRow(g.head, contactFields, spendCountLabel))
+    for (const sub of g.subs.sort((a, b) => остаток(b) - остаток(a))) {
+      rows.push(buildSegmentXlsxRow(sub, contactFields, spendCountLabel))
+    }
+  }
+  downloadXlsx(rows, filename)
+}
+
 type EngagementViewMode = 'cumulative' | 'monthly'
 
 function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
@@ -792,7 +420,14 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
   const toggleRole = (role: string) =>
     setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role])
 
-  const { rows: data, N } = useMemo(() => {
+  const contactFields = useMemo(() => {
+    if (rawRows.length === 0) return []
+    const firstRow = rawRows[0] as Record<string, unknown>
+    const CONTACT_PATTERNS = /phone|email|телефон|мобил|почт|контакт|contact/i
+    return Object.keys(firstRow).filter(k => CONTACT_PATTERNS.test(k))
+  }, [rawRows])
+
+  const { rows: data, N, latestYm, segments } = useMemo(() => {
     // 1. Фиксированная база: everAccrued ∩ партнёры с выбранными ролями (вся история, без года)
     const ROLES = new Set(selectedRoles)
     const everAccrued = new Set<string>()
@@ -903,7 +538,17 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
         return { ym, dist, osago, kasko, cumActive: monthSpenders }
       })
 
-      return { rows, N }
+      const latestYm = rows.length ? rows[rows.length - 1].ym : null
+      const profiles = buildPartnerProfiles(rawRows, base)
+      const segments = latestYm
+        ? assignSegmentBuckets(
+            base,
+            profiles,
+            rid => spendByMonth.get(rid)?.get(latestYm) ?? 0,
+          )
+        : EMPTY_SEGMENT_BUCKETS
+
+      return { rows, N, latestYm, segments }
     }
 
     // 4. Накопительный обход: для каждого месяца — группа партнёра на конец месяца
@@ -947,7 +592,11 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
       return { ym, dist, osago, kasko, cumActive }
     })
 
-    return { rows, N }
+    const latestYm = months.length ? months[months.length - 1] : null
+    const profiles = buildPartnerProfiles(rawRows, base)
+    const segments = assignSegmentBuckets(base, profiles, rid => cumCnt.get(rid) ?? 0)
+
+    return { rows, N, latestYm, segments }
   }, [rawRows, selectedRoles, isMonthly])
 
   const fmtYM = (ym: string) => {
@@ -1121,6 +770,94 @@ function EngagementTrend({ rawRows }: { rawRows: RawRow[] }) {
           </tbody>
         </table>
       </div>
+
+      {latestYm && data.length > 0 && (() => {
+        const last = data[data.length - 1]
+        const spendCountLabel = isMonthly ? 'Кол-во_списаний_в_месяце' : 'Кол-во_списаний_накопит'
+        const modeLabel = isMonthly ? 'ежемесячный' : 'накопительный'
+        const ymTag = latestYm.replace('-', '')
+        const cards: {
+          key: keyof SegmentBuckets
+          title: string
+          subtitle: string
+          count: number
+          file: string
+        }[] = [
+          {
+            key: 'ten',
+            title: 'Списали 10+ раз',
+            subtitle: 'Супер-активные пользователи',
+            count: last.dist.ten,
+            file: `spent_10plus_${ymTag}.xlsx`,
+          },
+          {
+            key: 'threeToNine',
+            title: 'Списали 3–9 раз',
+            subtitle: 'Активные пользователи',
+            count: last.dist.threePlus - last.dist.ten,
+            file: `spent_3_9_${ymTag}.xlsx`,
+          },
+          {
+            key: 'oneTwo',
+            title: 'Списали 1–2 раза',
+            subtitle: 'Низкая активность',
+            count: last.dist.oneTwo,
+            file: `spent_1_2_${ymTag}.xlsx`,
+          },
+          {
+            key: 'zero',
+            title: 'Списали 0 раз',
+            subtitle: isMonthly
+              ? 'В этом месяце не было списаний РБ'
+              : 'К концу месяца ни разу не списывали (накопительно)',
+            count: last.dist.zero,
+            file: `spent_0_${ymTag}.xlsx`,
+          },
+        ]
+
+        return (
+          <div className="border-t border-[var(--stroke-divider)] p-4 space-y-3">
+            <div>
+              <h4 className="text-sm font-semibold text-[var(--text-primary)]">
+                Крайний месяц в таблице · {fmtYM(latestYm)} · {modeLabel} результат
+              </h4>
+              <p className="text-xs ren-text-secondary mt-0.5">
+                Сегменты и xlsx совпадают с фильтром ролей выше и с учётом фильтров агентской сети на вкладке.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {cards.map(card => {
+                const group = segments[card.key]
+                return (
+                  <div key={card.key} className="ren-card ren-card__body">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div>
+                        <h5 className="font-semibold text-[var(--text-primary)]">{card.title}</h5>
+                        <p className="text-xs ren-text-secondary">{card.subtitle}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => downloadSegmentGroup(group, card.file, contactFields, spendCountLabel)}
+                        disabled={group.length === 0}
+                        className="ren-btn ren-btn--primary shrink-0 text-xs"
+                      >
+                        ↓ xlsx
+                      </button>
+                    </div>
+                    <div>
+                      <p className="text-xs ren-text-secondary">Партнёров</p>
+                      <p className="text-3xl font-bold ren-text-brand tabular-nums">{fmtN(card.count)}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-xs ren-text-secondary">
+              Excel: одна строка на партнёра · {spendCountLabel} — по правилам {modeLabel} среза для {fmtYM(latestYm)}.
+            </p>
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -1476,7 +1213,7 @@ function UnderutilizersBlock({
   contactFields: string[]
   onDownload: (rows: UEntry[]) => void
 }) {
-  const TOP = 15
+  const TOP = 5
   const top = data.slice(0, TOP)
   if (top.length === 0) return null
 
@@ -1601,53 +1338,6 @@ function labelYM(ym: string): string {
 
 const MAX_COHORT_OFFSET = 12
 
-// Общая функция вычисления когорт (используется в двух блоках)
-function buildCohortData(rawRows: RawRow[], selectedRoles: string[]) {
-  const roleSet = new Set(selectedRoles)
-  const EXCL = new Set(['PolicyAnnulled', 'PolicyTerminated'])
-  const firstAccrualYM = new Map<string, string>()
-  const crossMonthsMap = new Map<string, Set<string>>()
-  let maxDataYM = ''
-
-  for (const row of rawRows) {
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId || !roleSet.has(String(row['Role'] ?? '').trim())) continue
-    if (EXCL.has(String(row.State ?? ''))) continue
-    const d = parseDate(row.CreateDate)
-    if (!d) continue
-    const ym = ymStr(d)
-    if (ym > maxDataYM) maxDataYM = ym
-    if (String(row.State ?? '') === 'PolicyIssued') {
-      const lp = toNum(row.LoyaltyPointsInLK)
-      if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
-        const ex = firstAccrualYM.get(renId)
-        if (!ex || ym < ex) firstAccrualYM.set(renId, ym)
-      }
-    }
-    if (isSpendingRow(row)) {
-      if (!crossMonthsMap.has(renId)) crossMonthsMap.set(renId, new Set())
-      crossMonthsMap.get(renId)!.add(ym)
-    }
-  }
-
-  const cohortMap = new Map<string, string[]>()
-  for (const [pid, ym] of firstAccrualYM) {
-    if (!cohortMap.has(ym)) cohortMap.set(ym, [])
-    cohortMap.get(ym)!.push(pid)
-  }
-
-  const cohortMonths = Array.from(cohortMap.keys()).sort()
-  if (!cohortMonths.length) return null
-
-  const earliestYM = cohortMonths[0]
-  let dynMax = 0
-  for (let k = 0; k <= MAX_COHORT_OFFSET; k++) {
-    if (addMonthsToYM(earliestYM, k) <= maxDataYM) dynMax = k
-  }
-
-  return { cohortMap, cohortMonths, crossMonthsMap, maxDataYM, dynMax }
-}
-
 // Общий хедер с фильтрами и методологией
 function CohortHeader({
   title, subtitle, selectedRoles, onToggle, methodologyOpen, onToggleMethodology, methodologyText,
@@ -1690,119 +1380,7 @@ function CohortHeader({
   )
 }
 
-// Общая таблица когорт
-function CohortTable({
-  cohortRows, maxOffset, cellBg,
-}: {
-  cohortRows: Array<{ cohortYM: string; N: number; cells: Array<{ count: number; pct: number } | null> }>
-  maxOffset: number
-  cellBg: (pct: number) => string
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="text-xs border-collapse">
-        <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
-            <th className="px-3 py-2 text-left font-semibold text-gray-600 whitespace-nowrap sticky left-0 bg-gray-50 z-10 border-r border-gray-200">
-              Когорта
-            </th>
-            <th className="px-3 py-2 text-center font-semibold text-gray-600 whitespace-nowrap border-r border-gray-100">
-              Партнёров
-            </th>
-            {Array.from({ length: maxOffset + 1 }, (_, k) => (
-              <th key={k} className="px-2 py-2 text-center font-semibold text-gray-500 whitespace-nowrap min-w-[52px]">
-                M{k}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {cohortRows.map(row => (
-            <tr key={row.cohortYM} className="border-b border-gray-100 hover:brightness-95 transition-all">
-              <td className="px-3 py-1.5 font-medium text-gray-700 whitespace-nowrap sticky left-0 bg-white z-10 border-r border-gray-200">
-                {labelYM(row.cohortYM)}
-              </td>
-              <td className="px-3 py-1.5 text-center tabular-nums text-gray-500 border-r border-gray-100">
-                {row.N.toLocaleString('ru-RU')}
-              </td>
-              {Array.from({ length: maxOffset + 1 }, (_, k) => {
-                const cell = row.cells[k]
-                if (!cell) return <td key={k} className="px-2 py-1.5 text-center text-gray-200">—</td>
-                return (
-                  <td key={k}
-                    title={`${cell.count} из ${row.N} партнёров`}
-                    className="px-2 py-1.5 text-center tabular-nums font-medium"
-                    style={{ backgroundColor: cell.pct > 0 ? cellBg(cell.pct) : undefined }}>
-                    {cell.pct > 0 ? `${cell.pct < 1 ? cell.pct.toFixed(1) : Math.round(cell.pct)}%` : <span className="text-gray-300">0%</span>}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Блок 1: конверсия в месяце (не накопительно) ─────────────────────────────
-function CohortBlock({ rawRows }: { rawRows: RawRow[] }) {
-  const [selectedRoles, setSelectedRoles] = useState<string[]>(ALL_ALLOWED_ROLES)
-  const [methodologyOpen, setMethodologyOpen] = useState(false)
-
-  const result = useMemo(() => {
-    const d = buildCohortData(rawRows, selectedRoles)
-    if (!d) return null
-    const { cohortMap, cohortMonths, crossMonthsMap, maxDataYM, dynMax } = d
-    const cohortRows = cohortMonths.map(cohortYM => {
-      const partners = cohortMap.get(cohortYM)!
-      const N = partners.length
-      const cells: Array<{ count: number; pct: number } | null> = []
-      for (let k = 0; k <= dynMax; k++) {
-        const tYM = addMonthsToYM(cohortYM, k)
-        if (tYM > maxDataYM) { cells.push(null); continue }
-        const count = partners.filter(pid => crossMonthsMap.get(pid)?.has(tYM) ?? false).length
-        cells.push({ count, pct: N > 0 ? (count / N) * 100 : 0 })
-      }
-      return { cohortYM, N, cells }
-    })
-    const maxPct = Math.max(1, ...cohortRows.flatMap(r => r.cells.map(c => c?.pct ?? 0)))
-    return { cohortRows, maxOffset: dynMax, maxPct }
-  }, [rawRows, selectedRoles])
-
-  if (!result) return null
-
-  function cellBg(pct: number) {
-    const i = Math.min(pct / result!.maxPct, 1)
-    return `rgba(51, 0, 102, ${0.08 + i * 0.55})`
-  }
-
-  return (
-    <div className="ren-card">
-      <CohortHeader
-        title="Когортный анализ: Хотя бы 1 кросс-продажа в указанный месяц"
-        subtitle="Партнёры с первым начислением РБ в указанном месяце. Ячейка — % когорты, купивших Каско именно в этом относительном месяце (M0, M1 и т.д.)."
-        selectedRoles={selectedRoles}
-        onToggle={r => setSelectedRoles(p => p.includes(r) ? p.filter(x => x !== r) : [...p, r])}
-        methodologyOpen={methodologyOpen}
-        onToggleMethodology={() => setMethodologyOpen(o => !o)}
-        methodologyText={<>
-          <p><strong>Когорта</strong> — все партнёры, у которых первое начисление РБ (State=PolicyIssued, LoyaltyPointsInLK&gt;0) произошло в данном месяце.</p>
-          <p><strong>M0</strong> — тот же месяц, что и первое начисление. <strong>M1</strong> — следующий месяц и т.д.</p>
-          <p><strong>Ячейка</strong> — % партнёров когорты, у которых в этом конкретном месяце была хоть одна кросс-продажа (CrossIsBought=Да + списание РБ).</p>
-          <p>Один партнёр может попасть в несколько столбцов — если делал кросс в разные месяцы.</p>
-          <p>Чем темнее ячейка — тем выше доля партнёров с кросс-продажами в этом месяце.</p>
-        </>}
-      />
-      <CohortTable cohortRows={result.cohortRows} maxOffset={result.maxOffset} cellBg={cellBg} />
-      <div className="ren-card__body border-t border-[var(--stroke-divider)] text-xs ren-text-secondary py-3">
-        Показывает активность когорты в каждом конкретном месяце. Не накопительно — один и тот же партнёр учитывается заново в каждом месяце, когда делает кросс.
-      </div>
-    </div>
-  )
-}
-
-// ── Блок 2: выход партнёров в активность по когортам ──────────────────────────
+// ── Блок: выход партнёров в активность по когортам ──────────────────────────
 type CohortType = 'accrual' | 'spend'
 type ActivitySegment = '3-9' | '10+'
 

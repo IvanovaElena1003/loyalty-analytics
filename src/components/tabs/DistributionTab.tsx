@@ -353,7 +353,12 @@ function computeDist(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtN   = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const fmtF   = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
-const fmtAvg = (v: number) => Number.isFinite(v) ? v.toLocaleString('ru-RU', { maximumFractionDigits: 1 }) : '—'
+const fmtAvg = (v: number) =>
+  Number.isFinite(v)
+    ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    : '—'
+const fmtPct1 = (v: number) =>
+  Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
 
 function humanLabel(b: { from: number; to: number }, unit: string): string {
   if (b.from <= 0 && b.to === Infinity) return `любые, ${unit}`
@@ -524,15 +529,18 @@ function DistBlock({
 }
 
 // ─── Средние показатели Рен-бонусов ──────────────────────────────────────────
-function AvgCard({ title, value, value2, sub }: {
-  title: string; value: string; value2?: string; sub?: string
+function AvgCard({ title, value, value2, sub, detail }: {
+  title: string; value: string; value2?: string; sub?: string; detail?: string
 }) {
   return (
     <div className="ren-card ren-card__body flex flex-col gap-0.5">
       <p className="text-xs ren-text-brand font-medium uppercase tracking-wide leading-tight">{title}</p>
       <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5">{value}</p>
-      {value2 && <p className="text-base font-semibold ren-text-secondary">{value2}</p>}
+      {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
       {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
+      {detail && (
+        <p className="text-[11px] ren-text-secondary mt-1.5 leading-snug whitespace-pre-line">{detail}</p>
+      )}
     </div>
   )
 }
@@ -551,17 +559,12 @@ function AvgBonusBlock({
 
   const avgBalanceAllPartners = balanceAvgs.meanAll
   const avgBalancePositiveOnly = balanceAvgs.meanPositiveOnly
-  const avgAccrualPerEvent = totals.accrual_count > 0 ? totals.bonus_accrued / totals.accrual_count : 0
-  const avgAccrualPerIssued = totals.issued_total > 0 ? totals.bonus_accrued / totals.issued_total : 0
-  const avgAccrualPcs  = totals.accrual_count / n
   const avgAccrualRub  = totals.bonus_accrued / n
-  const spendingEvents = totals.cross_total - totals.cross_base
-  const avgSpendingPcs = spendingEvents / n
   const avgSpendingRub = totals.bonus_spent_total / n
-  const avgDiscountPcs = totals.cross_discount / n
   const avgDiscountRb  = totals.bonus_spent_discount / n
-  const avgKvPcs       = totals.cross_incr_kv   / n
   const avgKvRb        = totals.bonus_spent_kv  / n
+  const spendShareOfAccrual =
+    avgAccrualRub > 0 ? (avgSpendingRub / avgAccrualRub) * 100 : 0
 
   const tableRows = [
     {
@@ -575,23 +578,15 @@ function AvgBonusBlock({
       avg: 'снимок',
     },
     {
-      label: 'Ср. начисление на полис с РБ (справочно)',
-      total: totals.accrual_count > 0 ? `${fmtAvg(avgAccrualPerEvent)} РБ` : '—',
-      avg: `${fmtAvg(avgAccrualPerEvent)} РБ`,
+      label: 'Сумма начислений, РБ',
+      total: `${fmtAvg(totals.bonus_accrued)} РБ`,
+      avg: `${fmtAvg(avgAccrualRub)} РБ`,
     },
     {
-      label: 'Ср. начисление на оформленный ОСАГО, вкл. 0 (справочно)',
-      total: totals.issued_total > 0 ? `${fmtAvg(avgAccrualPerIssued)} РБ` : '—',
-      avg: `${fmtAvg(avgAccrualPerIssued)} РБ`,
+      label: 'Сумма списаний итого, РБ',
+      total: `${fmtAvg(totals.bonus_spent_total)} РБ`,
+      avg: `${fmtAvg(avgSpendingRub)} РБ`,
     },
-    { label: 'Кол-во начислений, шт.',    total: fmtN(totals.accrual_count),                            avg: fmtAvg(avgAccrualPcs) },
-    { label: 'Сумма начислений, РБ',      total: `${fmtN(Math.round(totals.bonus_accrued))} РБ`,        avg: `${fmtAvg(avgAccrualRub)} РБ` },
-    { label: 'Кол-во списаний итого, шт.', total: fmtN(spendingEvents),                                  avg: fmtAvg(avgSpendingPcs) },
-    { label: 'Сумма списаний итого, РБ',  total: `${fmtN(Math.round(totals.bonus_spent_total))} РБ`,    avg: `${fmtAvg(avgSpendingRub)} РБ` },
-    { label: 'Кол-во списаний → скидка КВ',         total: fmtN(totals.cross_discount),                                  avg: fmtAvg(avgDiscountPcs) },
-    { label: 'Сумма списаний → скидка КВ, РБ',      total: `${fmtN(Math.round(totals.bonus_spent_discount))} РБ`,       avg: `${fmtAvg(avgDiscountRb)} РБ` },
-    { label: 'Кол-во списаний → повышенное КВ',      total: fmtN(totals.cross_incr_kv),                                  avg: fmtAvg(avgKvPcs) },
-    { label: 'Сумма списаний → повышенное КВ, РБ',   total: `${fmtN(Math.round(totals.bonus_spent_kv))} РБ`,             avg: `${fmtAvg(avgKvRb)} РБ` },
   ]
 
   return (
@@ -600,7 +595,7 @@ function AvgBonusBlock({
         <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
         <p className="ren-card__subtitle">Среднее арифметическое по {n} месяцам наблюдений</p>
       </div>
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="p-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <AvgCard
           title="Ср. баланс в кошельке"
           value={`${fmtAvg(avgBalanceAllPartners)} РБ`}
@@ -614,26 +609,14 @@ function AvgBonusBlock({
         <AvgCard
           title="Ср. начислений / мес."
           value={`${fmtAvg(avgAccrualRub)} РБ`}
-          value2={`${fmtAvg(avgAccrualPcs)} шт.`}
-          sub="Событий начисления"
+          sub="Сумма начислений за месяц"
         />
         <AvgCard
           title="Ср. списаний итого / мес."
           value={`${fmtAvg(avgSpendingRub)} РБ`}
-          value2={`${fmtAvg(avgSpendingPcs)} шт.`}
+          value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
           sub="КВ или скидка"
-        />
-        <AvgCard
-          title="Ср. списаний в скидку / мес."
-          value={`${fmtAvg(avgDiscountRb)} РБ`}
-          value2={`${fmtAvg(avgDiscountPcs)} шт.`}
-          sub="Событий скидки КВ за месяц"
-        />
-        <AvgCard
-          title="Ср. списаний в КВ / мес."
-          value={`${fmtAvg(avgKvRb)} РБ`}
-          value2={`${fmtAvg(avgKvPcs)} шт.`}
-          sub="Событий повышенного КВ"
+          detail={`Скидка КВ: ${fmtAvg(avgDiscountRb)} РБ\nПовышенное КВ: ${fmtAvg(avgKvRb)} РБ`}
         />
       </div>
       <div className="border-t border-[var(--stroke-divider)] overflow-x-auto">
