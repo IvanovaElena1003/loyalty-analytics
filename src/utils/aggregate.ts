@@ -185,6 +185,30 @@ export function aggregateFunnelPeriods(
   return { periods, totals: mergeTotalsFromPeriods(periods) }
 }
 
+const NO_FILIAL_LABEL = 'Без филиала'
+
+/** Метрики воронки в разрезе филиала (регион) после enrich агентской сети. */
+export function aggregateByFilial(rows: RawRow[]): MonthMetrics[] {
+  const buckets = new Map<string, MonthMetrics>()
+
+  for (const row of rows) {
+    const state = String(row.State ?? '')
+    if (EXCLUDED_STATES.has(state)) continue
+
+    const date = parseDate(row.CreateDate)
+    if (!date) continue
+
+    const filial = String(row['ФИЛИАЛ'] ?? '').trim() || NO_FILIAL_LABEL
+    if (!buckets.has(filial)) buckets.set(filial, emptyBucket(filial, filial))
+    addRowToBucket(buckets.get(filial)!, row)
+  }
+
+  return Array.from(buckets.values())
+    .filter(b => b.cross_total > 0)
+    .sort((a, b) => b.cross_total - a.cross_total)
+    .map(finalise)
+}
+
 // Use local date components (not UTC) to match the user's timezone
 function toDateStr(date: Date): string {
   const y = date.getFullYear()

@@ -1,10 +1,19 @@
 import { Fragment, useState, useMemo } from 'react'
-import type { AggregateResult, MonthMetrics } from '../../types'
+import type { AggregateResult, MonthMetrics, RawRow } from '../../types'
 import {
   pct,
+  aggregate,
   aggregateFunnelPeriods,
+  aggregateByFilial,
   type FunnelGranularity,
 } from '../../utils/aggregate'
+import {
+  EMPTY_AGENT_FILTERS,
+  enrichRawRows,
+  filterEnrichedRows,
+  type AgentFilters,
+} from '../../utils/agentNetwork'
+import { AgentFilterBar } from '../AgentFilterBar'
 import CrossCompositionChart from '../charts/CrossCompositionChart'
 
 // ─── Column spec ──────────────────────────────────────────────────────────────
@@ -72,6 +81,21 @@ const idxBonuses = ROWS.findIndex(r => r.kind === 'section' && r.label === 'Ре
 /** Состав кросса (таблица + график) */
 const ROWS_CROSS_COMPOSITION = ROWS.slice(idxCrossComposition, idxBonuses)
 
+/** Состав кросса по регионам (филиал): итого кроссов + доли */
+const ROWS_CROSS_BY_REGION: RowDef[] = [
+  { kind: 'section', label: 'Из чего состоит Кросс-Каско' },
+  {
+    kind: 'data',
+    label: 'Оформлен Кросс-Каско',
+    getCount: m => m.cross_total,
+    hl: 'blue',
+    highlight: true,
+  },
+  { kind: 'sub', label: '% Базовый «Каско от бесполисных»', getCount: m => m.cross_base, getPct: m => pct(m.cross_base, m.cross_total), higherIsBetter: false },
+  { kind: 'sub', label: '% Скидка (Рен-бонусы)', getCount: m => m.cross_discount, getPct: m => pct(m.cross_discount, m.cross_total), hl: 'amber', higherIsBetter: true },
+  { kind: 'sub', label: '% Повышенное КВ', getCount: m => m.cross_incr_kv, getPct: m => pct(m.cross_incr_kv, m.cross_total), hl: 'green', higherIsBetter: true },
+]
+
 /** Рен-бонусы — отдельный блок ниже */
 const ROWS_BONUSES = ROWS.slice(idxBonuses)
 
@@ -106,8 +130,52 @@ function monthOptionLabel(sortKey: string): string {
   return d.toLocaleString('ru-RU', { month: 'long', year: 'numeric' })
 }
 
-export default function FunnelTab({ result }: { result: AggregateResult }) {
-  const { months: monthsAll, rawRows } = result
+function parseCreateDate(value: unknown): Date | null {
+  if (value == null) return null
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value
+  if (typeof value === 'number') return new Date((value - 25569) * 86400000)
+  if (typeof value === 'string') {
+    const d = new Date(value)
+    return isNaN(d.getTime()) ? null : d
+  }
+  return null
+}
+
+function monthKeyFromRow(row: RawRow): string | null {
+  const d = parseCreateDate(row.CreateDate)
+  if (!d) return null
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  return `${y}-${m}`
+}
+
+interface FunnelTabProps {
+  result: AggregateResult
+  agentRows?: RawRow[]
+  lockedCurator?: string
+}
+
+export default function FunnelTab({ result, agentRows, lockedCurator }: FunnelTabProps) {
+  const { rawRows } = result
+
+  const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
+    lockedCurator
+      ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] }
+      : EMPTY_AGENT_FILTERS,
+  )
+
+  const enrichedRows = useMemo(() => enrichRawRows(rawRows, agentRows), [rawRows, agentRows])
+  const filteredRows = useMemo(
+    () => filterEnrichedRows(enrichedRows, agentFilters),
+    [enrichedRows, agentFilters],
+  )
+  const filteredAgg = useMemo(() => aggregate(filteredRows), [filteredRows])
+  const monthsAll = filteredAgg.months
+
+  const activeFilterCount = useMemo(
+    () => Object.values(agentFilters).filter(a => a.length > 0).length,
+    [agentFilters],
+  )
 
   const [granularity, setGranularity] = useState<FunnelGranularity>('month')
   const monthKeys = useMemo(
@@ -116,13 +184,31 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
   )
   const [scopeMonth, setScopeMonth] = useState<string>(() => monthKeys[monthKeys.length - 1] ?? '')
 
+  const regionalScopeRows = useMemo(() => {
+    if (granularity === 'month') return filteredRows
+    const scope = scopeMonth || monthKeys[monthKeys.length - 1]
+    if (!scope) return filteredRows
+    return filteredRows.filter(r => monthKeyFromRow(r) === scope)
+  }, [filteredRows, granularity, scopeMonth, monthKeys])
+
+  const regionCols = useMemo<ColSpec[]>(
+    () => aggregateByFilial(regionalScopeRows).map(m => ({
+      key: m.sortKey,
+      header: m.label,
+      metrics: m,
+      isTotal: false,
+      isYearSummary: false,
+    })),
+    [regionalScopeRows],
+  )
+
   const periods = useMemo(() => {
     if (granularity === 'month') {
       return monthsAll
     }
     const scope = scopeMonth || monthKeys[monthKeys.length - 1]
-    return aggregateFunnelPeriods(rawRows, granularity, scope).periods
-  }, [granularity, monthsAll, rawRows, scopeMonth, monthKeys])
+    return aggregateFunnelPeriods(filteredRows, granularity, scope).periods
+  }, [granularity, monthsAll, filteredRows, scopeMonth, monthKeys])
 
   // Build visible column list (месяцы всегда по отдельности, без свёртки «год»)
   const cols = useMemo<ColSpec[]>(() => {
@@ -179,7 +265,8 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
     return col.isYearSummary ? 'border-l border-[var(--stroke-divider)]' : ''
   }
 
-  function renderFunnelTable(tableRows: RowDef[], maxHeight?: string) {
+  function renderFunnelTable(tableRows: RowDef[], maxHeight?: string, colsOverride?: ColSpec[]) {
+    const tableCols = colsOverride ?? cols
     return (
       <div className="overflow-auto" style={{ maxHeight: maxHeight ?? undefined }}>
         <table className="w-full text-sm border-collapse">
@@ -188,7 +275,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
               <th className="sticky top-0 left-0 z-30 bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide min-w-[272px] border-b border-gray-200">
                 Метрика
               </th>
-              {cols.map(col => (
+              {tableCols.map(col => (
                 <th key={col.key} colSpan={2}
                   className={`sticky top-0 z-20 px-2 py-3 text-center text-xs font-semibold uppercase tracking-wide border-b border-gray-200 whitespace-nowrap ${stickyBg(col)} ${colBorder(col)}`}>
                   <div className={col.isYearSummary ? 'ren-text-brand' : 'ren-text-secondary'}>
@@ -204,7 +291,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
             </tr>
             <tr>
               <th className="sticky top-[40px] left-0 z-30 bg-gray-50 border-b-2 border-gray-200" />
-              {cols.map(col => (
+              {tableCols.map(col => (
                 <Fragment key={col.key}>
                   <th
                     className={`sticky top-[40px] z-20 px-3 py-1.5 text-right text-[10px] font-medium text-gray-400 w-20 border-b-2 border-gray-200 ${stickyBg(col)}`}>
@@ -222,7 +309,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
             {tableRows.map((row, ri) => {
               if (row.kind === 'sep') return (
                 <tr key={`sp${ri}`}>
-                  <td colSpan={1 + cols.length * 2} className="h-px bg-gray-200" />
+                  <td colSpan={1 + tableCols.length * 2} className="h-px bg-gray-200" />
                 </tr>
               )
 
@@ -231,7 +318,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
                   <td className="sticky left-0 z-10 bg-yellow-50 px-4 py-2 text-xs font-bold text-yellow-800 uppercase tracking-wider">
                     {row.label}
                   </td>
-                  {cols.map(col => (
+                  {tableCols.map(col => (
                     <Fragment key={col.key}>
                       <td className={`bg-yellow-50 ${colBorder(col)}`} />
                       <td className={`bg-yellow-50 ${colBorder(col)}`} />
@@ -260,7 +347,7 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
                     {row.label}
                   </td>
 
-                  {cols.map(col => {
+                  {tableCols.map(col => {
                     const m = col.metrics
                     const cnt = row.getCount ? row.getCount(m) : null
                     const big = row.getBig ? row.getBig(m) : null
@@ -296,8 +383,31 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
     )
   }
 
+  const regionalPeriodHint =
+    granularity === 'month'
+      ? 'за весь период по выбранным фильтрам'
+      : scopeMonth
+        ? `за ${monthOptionLabel(scopeMonth)}`
+        : 'за выбранный период'
+
   return (
     <div className="space-y-6">
+
+      {agentRows && agentRows.length > 0 && (
+        <AgentFilterBar
+          enrichedRows={enrichedRows}
+          filters={agentFilters}
+          setFilters={setAgentFilters}
+          lockedCurator={lockedCurator}
+        />
+      )}
+
+      {activeFilterCount > 0 && (
+        <div className="ren-card ren-card__body text-sm ren-text-secondary">
+          Воронка пересчитана по выбранным фильтрам ({filteredRows.length.toLocaleString('ru-RU')} строк).
+        </div>
+      )}
+
     <div className="ren-card">
 
       {/* ── Granularity + scope ───────────────────────────────────────────── */}
@@ -357,6 +467,25 @@ export default function FunnelTab({ result }: { result: AggregateResult }) {
         </h3>
         <CrossCompositionChart months={chartMonths} />
       </div>
+    </div>
+
+    <div className="ren-card">
+      <div className="ren-card__header border-b border-[var(--stroke-divider)]">
+        <h3 className="ren-card__title text-sm">
+          Из чего состоит Кросс-Каско в разрезе регионов (филиал)
+        </h3>
+        <p className="text-[11px] ren-text-secondary mt-1 font-normal">
+          {regionalPeriodHint}
+          {!agentRows?.length && ' · Загрузите файл агентской сети, чтобы разнести строки по филиалам.'}
+        </p>
+      </div>
+      {regionCols.length === 0 ? (
+        <div className="ren-card__body text-sm ren-text-secondary">
+          Нет оформленных Кросс-Каско в выбранном срезе.
+        </div>
+      ) : (
+        renderFunnelTable(ROWS_CROSS_BY_REGION, 'min(60vh, 480px)', regionCols)
+      )}
     </div>
 
     <div className="ren-card">

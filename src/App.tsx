@@ -215,7 +215,9 @@ export default function App() {
         {loading && <Spinner filename={loadingName} />}
 
         {!loading && isFullMode  && tab === 'upload'       && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
-        {!loading && tab === 'funnel'        && result && <FunnelTab result={result} />}
+        {!loading && tab === 'funnel'        && result && (
+          <FunnelTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
+        )}
         {!loading && tab === 'distribution'  && result && (
           <DistributionTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
         )}
