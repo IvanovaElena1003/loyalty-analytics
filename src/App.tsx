@@ -9,7 +9,15 @@ import AnomaliesTab from './components/tabs/AnomaliesTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
 import LoginScreen, { type AuthSession } from './components/LoginScreen'
 import { isFullMode } from './config/mode'
-import { loadMainRowsFromDB, loadAgentRowsFromDB, saveMainRowsToDB, saveAgentRowsToDB } from './lib/db'
+import {
+  loadMainRowsFromDB,
+  loadAgentRowsFromDB,
+  loadKaskoRowsFromDB,
+  loadSliderQuotesFromDB,
+  saveMainRowsToDB,
+  saveAgentRowsToDB,
+} from './lib/db'
+import type { SliderQuoteRow } from './lib/db'
 
 const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
@@ -70,6 +78,8 @@ export default function App() {
   const [loadingName, setLoadingName] = useState('')
   const [error, setError]   = useState<string | null>(null)
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
+  const [kaskoRows, setKaskoRows]     = useState<RawRow[] | null>(null)
+  const [sliderQuotes, setSliderQuotes] = useState<SliderQuoteRow[] | null>(null)
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
   const [dbSaving, setDbSaving] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
@@ -81,9 +91,11 @@ export default function App() {
     setLoadingName('Загружаем данные из базы…')
     ;(async () => {
       try {
-        const [mainRows, agRows] = await Promise.all([
+        const [mainRows, agRows, kRows, sQuotes] = await Promise.all([
           loadMainRowsFromDB(),
           loadAgentRowsFromDB(),
+          loadKaskoRowsFromDB(),
+          loadSliderQuotesFromDB(),
         ])
         if (cancelled) return
         if (mainRows && mainRows.length > 0) {
@@ -94,6 +106,8 @@ export default function App() {
         if (agRows && agRows.length > 0) {
           setAgentRows(agRows)
         }
+        if (kRows && kRows.length > 0) setKaskoRows(kRows)
+        if (sQuotes && sQuotes.length > 0) setSliderQuotes(sQuotes)
       } catch {
         // DB unavailable — fall through to upload screen
       } finally {
@@ -219,7 +233,13 @@ export default function App() {
           <FunnelTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
         )}
         {!loading && tab === 'distribution'  && result && (
-          <DistributionTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
+          <DistributionTab
+            result={result}
+            agentRows={agentRows ?? undefined}
+            kaskoRows={kaskoRows ?? undefined}
+            sliderQuotes={sliderQuotes ?? undefined}
+            lockedCurator={lockedCurator}
+          />
         )}
         {!loading && tab === 'keymetrics'    && result && <KeyMetricsTab rawRows={result.rawRows} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />}
         {!loading && tab === 'methodology'   && <MethodologyTab />}

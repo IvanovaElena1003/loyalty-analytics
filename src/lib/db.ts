@@ -1,9 +1,14 @@
 import { supabase } from './supabase'
 import type { RawRow } from '../types'
+import type { SliderQuoteRow } from '../utils/loyaltyBalances'
+
+export type { SliderQuoteRow }
 
 const BUCKET = 'loyalty-data'
 const MAIN_FILE = 'main_rows.json.gz'
 const AGENT_FILE = 'agent_rows.json.gz'
+const KASKO_FILE = 'kasko_rows.json.gz'
+const SLIDER_FILE = 'slider_quotes.json.gz'
 
 const MAIN_FIELDS = [
   'CreateDate', 'State', 'LoyaltyPointsInLK', 'LoyaltyPointsScoring',
@@ -14,6 +19,11 @@ const MAIN_FIELDS = [
 
 const AGENT_FIELDS = [
   'subj_id', 'ДИВИЗИОН', 'ФИЛИАЛ', 'УПРАВЛЕНИЕ', 'КОД_КП', 'КУРАТОР', 'ПОСРЕДНИК',
+] as const
+
+const KASKO_FIELDS = [
+  'CreateDate', 'State', 'Role', 'CashbookId', 'HeadPartnerCB',
+  'LoyaltyPointsOut', 'OriginalValue', 'WalletBonuses', 'ScoringBonuses',
 ] as const
 
 function parseYear(value: unknown): number | null {
@@ -68,6 +78,24 @@ export async function loadMainRowsFromDB(): Promise<RawRow[] | null> {
 export async function loadAgentRowsFromDB(): Promise<RawRow[] | null> {
   const rows = await downloadJson(AGENT_FILE)
   return rows ? (rows as RawRow[]) : null
+}
+
+export async function loadKaskoRowsFromDB(): Promise<RawRow[] | null> {
+  const rows = await downloadJson(KASKO_FILE)
+  return rows ? (rows as RawRow[]) : null
+}
+
+export async function loadSliderQuotesFromDB(): Promise<SliderQuoteRow[] | null> {
+  const rows = await downloadJson(SLIDER_FILE)
+  return rows ? (rows as SliderQuoteRow[]) : null
+}
+
+export async function saveKaskoRowsToDB(rows: RawRow[]): Promise<void> {
+  await uploadJson(KASKO_FILE, slim(rows, KASKO_FIELDS))
+}
+
+export async function saveSliderQuotesToDB(rows: SliderQuoteRow[]): Promise<void> {
+  await uploadJson(SLIDER_FILE, rows)
 }
 
 export async function saveMainRowsToDB(rows: RawRow[]): Promise<void> {

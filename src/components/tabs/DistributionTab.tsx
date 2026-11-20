@@ -9,10 +9,14 @@ import {
   type AgentFilters,
 } from '../../utils/agentNetwork'
 import { aggregate } from '../../utils/aggregate'
+import type { SliderQuoteRow } from '../../lib/db'
+import LoyaltyBalancesBlock from '../LoyaltyBalancesBlock'
 
 interface Props {
   result: AggregateResult
   agentRows?: RawRow[]
+  kaskoRows?: RawRow[]
+  sliderQuotes?: SliderQuoteRow[]
   lockedCurator?: string
 }
 
@@ -653,7 +657,7 @@ function AccrualSpendingBlock({ data }: { data: AccrualSpendingData }) {
 }
 
 // ─── Главный компонент ────────────────────────────────────────────────────────
-export default function DistributionTab({ result, agentRows, lockedCurator }: Props) {
+export default function DistributionTab({ result, agentRows, kaskoRows, sliderQuotes, lockedCurator }: Props) {
   const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
     lockedCurator ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] } : EMPTY_AGENT_FILTERS
   )
@@ -661,6 +665,14 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
   const filteredRows = useMemo(
     () => filterEnrichedRows(enrichedRows, agentFilters),
     [enrichedRows, agentFilters],
+  )
+  const enrichedKasko = useMemo(
+    () => enrichRawRows(kaskoRows ?? [], agentRows),
+    [kaskoRows, agentRows],
+  )
+  const filteredKasko = useMemo(
+    () => filterEnrichedRows(enrichedKasko, agentFilters),
+    [enrichedKasko, agentFilters],
   )
   const filteredAgg = useMemo(() => aggregate(filteredRows), [filteredRows])
   const { totals, months } = filteredAgg
@@ -712,9 +724,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         </div>
       )}
 
-      {/* Средние показатели Рен-бонусов — вверху */}
-      <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
-
       {/* Фильтр по периоду */}
       <div className="ren-card ren-card__body flex items-center gap-3">
         <span className="text-sm ren-text-brand font-medium shrink-0">Период:</span>
@@ -737,6 +746,20 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
           </button>
         )}
       </div>
+
+      <LoyaltyBalancesBlock
+        osagoRows={filteredRows}
+        kaskoRows={filteredKasko}
+        sliderQuotes={sliderQuotes ?? []}
+        filters={agentFilters}
+        monthKey={selectedMonth}
+        hasKasko={(kaskoRows?.length ?? 0) > 0}
+        hasSlider={(sliderQuotes?.length ?? 0) > 0}
+        agentRows={agentRows}
+      />
+
+      {/* Средние показатели Рен-бонусов */}
+      <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
 
       {/* ── В разрезе партнёров ── */}
       <div className="flex items-center gap-4">
