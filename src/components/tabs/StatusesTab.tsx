@@ -7,17 +7,10 @@ import {
   type MechanicKey,
 } from '../../utils/loyaltyBalances'
 
-const COL_KEYS: { key: MechanicKey; short: string }[] = [
-  { key: 'accOsago', short: 'Начисл. ОСАГО ФЛ' },
-  { key: 'accKasko', short: 'Начисл. КАСКО ФЛ' },
-  { key: 'spendCrossDiscount', short: 'Скидка СП (бесполис.)' },
-  { key: 'spendCrossKv', short: 'Повыш. КВ (кросс)' },
-  { key: 'spendKasko', short: 'Списание КАСКО ФЛ' },
-  { key: 'spendOsagoSlider', short: 'ОСАГО пролонгация' },
-]
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RowTotals = any
+
+const fmtN = (n: number) => n.toLocaleString('ru-RU')
 
 function fmtDateRu(iso: string | null | undefined): string {
   if (!iso) return '—'
@@ -25,8 +18,39 @@ function fmtDateRu(iso: string | null | undefined): string {
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-function valForKey(row: RowTotals, key: MechanicKey): number {
-  return Number(row[key] ?? 0)
+/** Строки метрик: подпись + ключи в объекте среза */
+type MetricRowDef = {
+  id: string
+  label: string
+  amountKey: string
+  countKey?: string
+  countSuffix?: string
+  emphasis?: boolean
+  isPct?: boolean
+}
+
+const METRIC_ROWS: MetricRowDef[] = [
+  { id: 'accOsago', label: 'Начисление ОСАГО ФЛ', amountKey: 'accOsago' },
+  { id: 'accKasko', label: 'Начисление КАСКО ФЛ', amountKey: 'accKasko' },
+  { id: 'accTotal', label: 'Начислено всего', amountKey: 'accTotal', emphasis: true },
+  { id: 'sd', label: 'Списание · кросс скидка (бесполис.)', amountKey: 'spendCrossDiscount', countKey: 'crossDiscountCnt', countSuffix: 'полисов' },
+  { id: 'skv', label: 'Списание · кросс повыш. КВ', amountKey: 'spendCrossKv', countKey: 'crossKvCnt', countSuffix: 'полисов' },
+  { id: 'ska', label: 'Списание КАСКО ФЛ', amountKey: 'spendKasko', countKey: 'kaskoSpendCnt', countSuffix: 'полисов' },
+  { id: 'sos', label: 'Списание ОСАГО пролонгация', amountKey: 'spendOsagoSlider', countKey: 'osagoSliderCnt', countSuffix: 'в окне дат' },
+  { id: 'st', label: 'Списано всего', amountKey: 'spendTotal', emphasis: true },
+  { id: 'util', label: 'Утилизация', amountKey: 'utilPct', isPct: true },
+]
+
+function cellAmount(row: RowTotals, key: string, isPct?: boolean): string {
+  if (isPct) return fmtPct(row[key] as number | null)
+  return fmtRub(Number(row[key] ?? 0))
+}
+
+function noteForRow(row: RowTotals, countKey?: string, suffix?: string): string {
+  if (!countKey) return ''
+  const n = Number(row[countKey] ?? 0)
+  if (!n) return ''
+  return `${fmtN(n)} ${suffix ?? ''}`
 }
 
 export default function StatusesTab() {
@@ -34,79 +58,76 @@ export default function StatusesTab() {
   const [regionsOpen, setRegionsOpen] = useState(false)
 
   const startByKey = useMemo(() => snap.mechanicStarts, [])
+  const totalRow = { region: 'Вся сеть', ...snap.totals }
+  const sliceRows = snap.top3 as unknown as RowTotals[]
+
+  const regionChildren = useMemo(
+    () =>
+      sliceRows
+        .filter(r => r.rollup === 'regions' && r.children?.length)
+        .flatMap(r => r.children as RowTotals[]),
+    [sliceRows],
+  )
 
   return (
-    <div className="space-y-6">
-      <div className="ren-card ren-card__body text-sm ren-text-secondary">
-        Предрасчёт локально из ваших xlsx ({snap.generatedAt}). В git только итоговые числа, без сырых выгрузок.
-        Филиалы: {snap.agentFilialMapSize > 0
-          ? `B2Partners (${snap.agentFilialMapSize} кешбуков)`
-          : 'без разреза — карта филиалов не загружена'}
-        .
-      </div>
+    <div className="space-y-5 max-w-full">
+      <p className="text-sm ren-text-secondary">
+        Предрасчёт из xlsx ({snap.generatedAt}). Филиалы: B2Partners — {snap.agentFilialMapSize.toLocaleString('ru-RU')} кешбуков.
+      </p>
 
-      {/* Итого как на HTML-отчёте */}
+      {/* 1. Итого за период — одна таблица вместо плиток */}
       <div className="ren-card">
-        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
           <h3 className="ren-card__title text-sm">Итого за период · {snap.periodLabel}</h3>
         </div>
-        <div className="ren-card__body">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            <Kpi
-              label="Начислено всего"
-              value={fmtRub(snap.totals.accTotal)}
-              sub={`ОСАГО ${fmtRub(snap.totals.accOsago)} · КАСКО ${fmtRub(snap.totals.accKasko)}`}
-            />
-            <Kpi label="Списано всего" value={fmtRub(snap.totals.spendTotal)} highlight />
-            <Kpi label="Утилизация" value={fmtPct(snap.totals.utilPct)} sub="списано ÷ начислено" />
-            <Kpi
-              label="Кросс скидка"
-              value={fmtRub(snap.totals.spendCrossDiscount)}
-              sub={`${snap.totals.crossDiscountCnt.toLocaleString('ru-RU')} полисов`}
-            />
-            <Kpi
-              label="Кросс повыш. КВ"
-              value={fmtRub(snap.totals.spendCrossKv)}
-              sub={`${snap.totals.crossKvCnt.toLocaleString('ru-RU')} полисов`}
-            />
-            <Kpi
-              label="КАСКО (кошелёк + скоринг)"
-              value={fmtRub(snap.totals.spendKasko)}
-              sub={`${snap.totals.kaskoSpendCnt} полисов`}
-            />
-            <Kpi
-              label="ОСАГО пролонгация (ползунок)"
-              value={fmtRub(snap.totals.spendOsagoSlider)}
-              sub={`${snap.totals.osagoSliderCnt.toLocaleString('ru-RU')} в окне дат`}
-            />
-          </div>
-          <p className="text-xs ren-text-secondary mt-4">
-            Строк в срезе (все статусы): ОСАГО {snap.meta.rowsOsagoAllStatuses.toLocaleString('ru-RU')},
-            КАСКО {snap.meta.rowsKaskoAllStatuses.toLocaleString('ru-RU')}.
-            Ползунок в файле: {snap.meta.sliderDataRange}. {snap.meta.osago2025Note}.
+        <div className="ren-card__body p-0">
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Показатель</th>
+                <th className="text-right w-32">Сумма / %</th>
+                <th className="text-right w-28">Кол-во</th>
+              </tr>
+            </thead>
+            <tbody>
+              {METRIC_ROWS.map(m => (
+                <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
+                  <td className="text-left">{m.label}</td>
+                  <td className="text-right tabular-nums font-medium">
+                    {cellAmount(totalRow, m.amountKey, m.isPct)}
+                  </td>
+                  <td className="text-right text-[var(--text-secondary)] text-[11px]">
+                    {noteForRow(totalRow, m.countKey, m.countSuffix)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
+            Строки в выгрузке: ОСАГО {fmtN(snap.meta.rowsOsagoAllStatuses)}, КАСКО {fmtN(snap.meta.rowsKaskoAllStatuses)}.
+            Ползунок: {snap.meta.sliderDataRange}. {snap.meta.osago2025Note}
           </p>
         </div>
       </div>
 
+      {/* 2. Даты запуска */}
       <div className="ren-card">
-        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
-          <h3 className="ren-card__title text-sm">Механики начисления и списания и даты запуска</h3>
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">Механики и даты запуска</h3>
         </div>
-        <div className="ren-card__body">
-          <table className="w-full text-xs border-collapse">
+        <div className="ren-card__body p-0">
+          <table className="statuses-table w-full">
             <thead>
-              <tr className="border-b border-[var(--stroke-divider)]">
-                <th className="text-left py-1.5 font-medium ren-text-secondary">Механика</th>
-                <th className="text-right py-1.5 font-medium ren-text-secondary w-36">Дата запуска</th>
+              <tr>
+                <th className="text-left">Механика</th>
+                <th className="text-right w-28">Дата</th>
               </tr>
             </thead>
             <tbody>
               {(Object.keys(MECHANIC_LABELS) as MechanicKey[]).map(key => (
-                <tr key={key} className="border-b border-[var(--stroke-divider)] last:border-0">
-                  <td className="py-1.5 pr-2">{MECHANIC_LABELS[key]}</td>
-                  <td className="py-1.5 text-right tabular-nums font-medium">
-                    {fmtDateRu(startByKey[key as keyof typeof startByKey])}
-                  </td>
+                <tr key={key}>
+                  <td className="text-left">{MECHANIC_LABELS[key]}</td>
+                  <td className="text-right tabular-nums">{fmtDateRu(startByKey[key as keyof typeof startByKey])}</td>
                 </tr>
               ))}
             </tbody>
@@ -114,113 +135,81 @@ export default function StatusesTab() {
         </div>
       </div>
 
-      <MetricsTable title="Итого без разбивки по регионам" rows={[{ region: 'Вся сеть', ...snap.totals }]} />
-
-      <MetricsTable
-        title="Топ-3: Москва, Санкт-Петербург, Регионы"
-        rows={snap.top3 as unknown as RowTotals[]}
-        onToggleRegions={snap.top3.some(r => r.rollup === 'regions') ? () => setRegionsOpen(o => !o) : undefined}
-        regionsOpen={regionsOpen}
-      />
-
-      {regionsOpen &&
-        (snap.top3 as unknown as RowTotals[])
-          .filter(r => r.rollup === 'regions' && r.children?.length)
-          .flatMap(r => r.children as RowTotals[])
-          .map(r => <MetricsTable key={String(r.region)} title="" rows={[r]} compact />)}
-
+      {/* 3. Москва / СПб / Регионы — метрики строками, без горизонтального скролла */}
       <div className="ren-card">
-        <div className="ren-card__header">
-          <h3 className="ren-card__title text-sm">Методология</h3>
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">Сравнение: вся сеть и топ-3</h3>
         </div>
-        <div className="ren-card__body text-xs ren-text-secondary space-y-2">
-          <p>Единица — рублёвый эквивалент рен-бонусов. Исключены PolicyAnnulled, PolicyTerminated; Seller / Продавец (не субучётки).</p>
-          <p>Субагенты схлопнуты в HeadPartnerCB. Окно отчёта: {snap.periodLabel}.</p>
+        <div className="ren-card__body p-0">
+          <table className="statuses-table statuses-table--slice w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Показатель</th>
+                <th className="text-right">Вся сеть</th>
+                {sliceRows.map(s => (
+                  <th key={String(s.region)} className="text-right">
+                    {s.rollup === 'regions' ? (
+                      <button type="button" className="ren-link font-medium" onClick={() => setRegionsOpen(o => !o)}>
+                        {regionsOpen ? '▾' : '▸'} {String(s.region)}
+                      </button>
+                    ) : (
+                      String(s.region)
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {METRIC_ROWS.map(m => (
+                <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
+                  <td className="text-left">{m.label}</td>
+                  <td className="text-right tabular-nums">{cellAmount(totalRow, m.amountKey, m.isPct)}</td>
+                  {sliceRows.map(s => (
+                    <td key={String(s.region)} className="text-right tabular-nums">
+                      {cellAmount(s, m.amountKey, m.isPct)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
-    </div>
-  )
-}
 
-function Kpi({
-  label,
-  value,
-  sub,
-  highlight,
-}: {
-  label: string
-  value: string
-  sub?: string
-  highlight?: boolean
-}) {
-  return (
-    <div className="ren-kpi border border-[var(--stroke-divider)] rounded-lg p-3">
-      <p className="ren-kpi__label text-[10px] uppercase tracking-wide">{label}</p>
-      <p className={`ren-kpi__value text-lg ${highlight ? 'ren-text-brand' : ''}`}>{value}</p>
-      {sub && <p className="text-[10px] ren-text-secondary mt-0.5">{sub}</p>}
-    </div>
-  )
-}
-
-function MetricsTable({
-  title,
-  rows,
-  compact,
-  onToggleRegions,
-  regionsOpen,
-}: {
-  title: string
-  rows: RowTotals[]
-  compact?: boolean
-  onToggleRegions?: () => void
-  regionsOpen?: boolean
-}) {
-  return (
-    <div className={`ren-card ${compact ? 'ml-4 border-l-2 border-[var(--stroke-divider)]' : ''}`}>
-      {title ? (
-        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
-          <h3 className="ren-card__title text-sm">{title}</h3>
-        </div>
-      ) : null}
-      <div className="ren-card__body overflow-auto">
-        <table className="ren-table w-full text-xs">
-          <thead>
-            <tr>
-              <th className="text-left">Срез</th>
-              {COL_KEYS.map(c => (
-                <th key={c.key} className="text-right whitespace-nowrap">{c.short}</th>
-              ))}
-              <th className="text-right">Начисл. всего</th>
-              <th className="text-right">Списано</th>
-              <th className="text-right">Утилизация</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(row => (
-              <tr key={String(row.region)}>
-                <td className="font-medium">
-                  {row.rollup === 'regions' && onToggleRegions ? (
-                    <button type="button" onClick={onToggleRegions} className="ren-link text-left">
-                      {regionsOpen ? '▾' : '▸'} {String(row.region)}
-                    </button>
-                  ) : (
-                    String(row.region)
-                  )}
-                </td>
-                {COL_KEYS.map(c => (
-                  <td key={c.key} className="text-right tabular-nums">
-                    {fmtRub(valForKey(row, c.key))}
-                  </td>
+      {/* 4. Детализация регионов — только начисл / списано / утилизация */}
+      {regionsOpen && regionChildren.length > 0 && (
+        <div className="ren-card">
+          <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+            <h3 className="ren-card__title text-sm">Регионы · детализация по филиалам</h3>
+          </div>
+          <div className="ren-card__body p-0 max-h-[min(50vh,420px)] overflow-y-auto overflow-x-hidden">
+            <table className="statuses-table w-full">
+              <thead className="sticky top-0 bg-[var(--bg-bg-secondary)] z-10">
+                <tr>
+                  <th className="text-left">Филиал</th>
+                  <th className="text-right">Начислено</th>
+                  <th className="text-right">Списано</th>
+                  <th className="text-right w-20">Утилиз.</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regionChildren.map(r => (
+                  <tr key={String(r.region)}>
+                    <td className="text-left font-medium">{String(r.region)}</td>
+                    <td className="text-right tabular-nums">{fmtRub(Number(r.accTotal))}</td>
+                    <td className="text-right tabular-nums ren-text-brand">{fmtRub(Number(r.spendTotal))}</td>
+                    <td className="text-right tabular-nums">{fmtPct(r.utilPct as number | null)}</td>
+                  </tr>
                 ))}
-                <td className="text-right tabular-nums font-semibold">{fmtRub(Number(row.accTotal))}</td>
-                <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtRub(Number(row.spendTotal))}
-                </td>
-                <td className="text-right tabular-nums">{fmtPct(row.utilPct as number | null)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <div className="ren-card ren-card__body text-xs ren-text-secondary">
+        <p className="font-semibold ren-text-brand mb-1">Методология</p>
+        <p>Рублёвый эквивалент РБ. Seller / Продавец исключены; субучётки → HeadPartnerCB. Окно: {snap.periodLabel}.</p>
       </div>
     </div>
   )

@@ -462,3 +462,48 @@ body {
 .ren-bar-chart--strong {
   background: var(--bg-brand-primary-03);
 }
+
+/* Вкладка «Для статусов» — компактные таблицы без горизонтального скролла */
+.statuses-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.35;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.statuses-table th,
+.statuses-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--stroke-divider);
+  vertical-align: top;
+  word-wrap: break-word;
+}
+
+.statuses-table thead th {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-bg-secondary);
+}
+
+.statuses-table__row--emphasis td {
+  font-weight: 600;
+  color: var(--text-brand-primary);
+  background: color-mix(in srgb, var(--bg-brand-primary-00) 50%, transparent);
+}
+
+.statuses-table .tabular-nums {
+  white-space: nowrap;
+}
+
+.statuses-table--slice th:not(:first-child),
+.statuses-table--slice td:not(:first-child) {
+  width: 17%;
+  font-size: 11px;
+}
+
+.statuses-table--slice th:first-child,
+.statuses-table--slice td:first-child {
+  width: 32%;
+}
