@@ -20,6 +20,7 @@ interface Props {
   hasKasko: boolean
   hasSlider: boolean
   agentRows?: RawRow[]
+  titleSuffix?: string
 }
 
 export default function LoyaltyBalancesBlock({
@@ -31,6 +32,7 @@ export default function LoyaltyBalancesBlock({
   hasKasko,
   hasSlider,
   agentRows,
+  titleSuffix,
 }: Props) {
   const { totals, byRegion } = useMemo(
     () => computeLoyaltyBalances(osagoRows, kaskoRows, sliderQuotes, filters, monthKey, agentRows),
@@ -53,11 +55,13 @@ export default function LoyaltyBalancesBlock({
   return (
     <div className="ren-card">
       <div className="ren-card__header border-b border-[var(--stroke-divider)]">
-        <h3 className="ren-card__title text-sm">Начисления и списания РБ (история)</h3>
+        <h3 className="ren-card__title text-sm">
+          Начисления и списания РБ (история){titleSuffix ?? ''}
+        </h3>
         <p className="text-[11px] ren-text-secondary mt-1 font-normal">
-          ОСАГО + КАСКО ФЛ: начисления, кросс (скидка / КВ), КАСКО, пролонгация ОСАГО (ползунок).
+          ОСАГО (2025 в статике + 2026 из БД) + КАСКО + ползунок. Субучётки → HeadPartnerCB; Seller/Продавец не в суммах.
           {monthKey ? ` · месяц ${monthKey}` : ' · все месяцы в выборке'}
-          {' · КАСКО и ползунок: встроенный снимок '}
+          {' · снимок '}
           {BUNDLED_LOYALTY_META.embeddedAt}
         </p>
       </div>

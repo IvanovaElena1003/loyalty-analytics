@@ -1,6 +1,7 @@
 import type { RawRow } from '../types'
 import type { AgentFilters } from './agentNetwork'
 import { enrichRawRows, filterEnrichedRows } from './agentNetwork'
+import { isExcludedLoyaltyRole } from './partnerWallet'
 
 const EXCLUDED = new Set(['PolicyAnnulled', 'PolicyTerminated'])
 const BASE_PRICE = 2490
@@ -155,6 +156,7 @@ export function computeLoyaltyBalances(
   }
 
   for (const row of osagoRows) {
+    if (isExcludedLoyaltyRole(row.Role)) continue
     const state = String(row.State ?? '')
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue
@@ -182,7 +184,7 @@ export function computeLoyaltyBalances(
   }
 
   for (const row of kaskoRows) {
-    if (String(row.Role ?? '') === 'Seller') continue
+    if (isExcludedLoyaltyRole(row.Role)) continue
     const state = String(row.State ?? '')
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue
@@ -260,6 +262,7 @@ export function computeMechanicStarts(
   const starts = emptyStarts()
 
   for (const row of osagoRows) {
+    if (isExcludedLoyaltyRole(row.Role)) continue
     const state = String(row.State ?? '')
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue
@@ -286,7 +289,7 @@ export function computeMechanicStarts(
   }
 
   for (const row of kaskoRows) {
-    if (String(row.Role ?? '') === 'Seller') continue
+    if (isExcludedLoyaltyRole(row.Role)) continue
     const state = String(row.State ?? '')
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue

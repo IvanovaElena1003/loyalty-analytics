@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { parseWorkbook, aggregate } from './utils/aggregate'
 import type { AggregateResult, RawRow } from './types'
 import UploadTab from './components/tabs/UploadTab'
@@ -77,17 +77,31 @@ export default function App() {
   const [loadingName, setLoadingName] = useState('')
   const [error, setError]   = useState<string | null>(null)
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
+  const [osago2025Rows, setOsago2025Rows] = useState<RawRow[]>([])
   const [kaskoRows, setKaskoRows] = useState<RawRow[]>([])
   const [sliderQuotes, setSliderQuotes] = useState<SliderQuoteRow[]>([])
+  const mainOsagoRef = useRef<RawRow[] | null>(null)
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
   const [dbSaving, setDbSaving] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
 
+  const publishMergedAggregate = useCallback((mainRows: RawRow[]) => {
+    mainOsagoRef.current = mainRows
+    setResult(aggregate([...osago2025Rows, ...mainRows]))
+  }, [osago2025Rows])
+
+  useEffect(() => {
+    if (mainOsagoRef.current) {
+      setResult(aggregate([...osago2025Rows, ...mainOsagoRef.current]))
+    }
+  }, [osago2025Rows])
+
   useEffect(() => {
     let cancelled = false
     loadBundledLoyaltyExtras()
-      .then(({ kasko, slider }) => {
+      .then(({ osago2025, kasko, slider }) => {
         if (cancelled) return
+        setOsago2025Rows(osago2025)
         setKaskoRows(kasko)
         setSliderQuotes(slider)
       })
@@ -108,8 +122,7 @@ export default function App() {
         ])
         if (cancelled) return
         if (mainRows && mainRows.length > 0) {
-          const agg = aggregate(mainRows)
-          setResult(agg)
+          publishMergedAggregate(mainRows)
           setTab(isFullMode ? 'funnel' : 'keymetrics')
         }
         if (agRows && agRows.length > 0) {
@@ -131,8 +144,7 @@ export default function App() {
     setTimeout(() => {
       try {
         const rows = parseWorkbook(data)
-        const agg  = aggregate(rows)
-        setResult(agg)
+        publishMergedAggregate(rows)
         setTab(isFullMode ? 'funnel' : 'keymetrics')
         if (DB_ENABLED) {
           setDbSaving(true)
@@ -146,7 +158,7 @@ export default function App() {
         setLoading(false)
       }
     }, 50)
-  }, [])
+  }, [publishMergedAggregate])
 
   const handleAgentFile = useCallback((data: ArrayBuffer, filename: string) => {
     try {

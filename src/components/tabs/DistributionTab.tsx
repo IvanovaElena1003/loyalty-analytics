@@ -11,6 +11,8 @@ import {
 import { aggregate } from '../../utils/aggregate'
 import type { SliderQuoteRow } from '../../lib/db'
 import LoyaltyBalancesBlock from '../LoyaltyBalancesBlock'
+import LoyaltyPartnerMetricsBlock from '../LoyaltyPartnerMetricsBlock'
+import { partnerWalletKey } from '../../utils/partnerWallet'
 
 interface Props {
   result: AggregateResult
@@ -88,18 +90,18 @@ function extractPartnerCurrentBalanceAvgs(rows: RawRow[], monthKey: string | nul
     if (EXCLUDED_DIST.has(state)) continue
     if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
 
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId) continue
-    allPartners.add(renId)
+    const wallet = partnerWalletKey(row)
+    if (!wallet) continue
+    allPartners.add(wallet)
 
     if (state === 'PolicyIssued') {
       const lp = toNum(row.LoyaltyPointsInLK)
-      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
+      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(wallet)
     }
 
     const av = toNum(row['AvailableForUsePoints'])
     if (!isNullVal(row['AvailableForUsePoints'])) {
-      balance.set(renId, Math.max(balance.get(renId) ?? 0, av))
+      balance.set(wallet, Math.max(balance.get(wallet) ?? 0, av))
     }
   }
 
@@ -131,24 +133,24 @@ function extractAccrualPartnerSpending(rows: RawRow[], monthKey: string | null) 
   for (const row of rows) {
     if (String(row.State ?? '') !== 'PolicyIssued') continue
     if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId) continue
+    const wallet = partnerWalletKey(row)
+    if (!wallet) continue
     const lp = toNum(row.LoyaltyPointsInLK)
-    if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(renId)
+    if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(wallet)
   }
 
   // 2. Считаем списания только для этих партнёров
   const partnerAmount = new Map<string, number>()
   const partnerEvents = new Map<string, number>()
-  for (const renId of accrualPartners) { partnerAmount.set(renId, 0); partnerEvents.set(renId, 0) }
+  for (const w of accrualPartners) { partnerAmount.set(w, 0); partnerEvents.set(w, 0) }
 
   for (const row of rows) {
     const state = String(row.State ?? '')
     if (EXCLUDED_DIST.has(state)) continue
     if (String(row.CrossIsBought ?? '') !== 'Да') continue
     if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const renId = String(row['RenId'] ?? '').trim()
-    if (!renId || !accrualPartners.has(renId)) continue
+    const wallet = partnerWalletKey(row)
+    if (!wallet || !accrualPartners.has(wallet)) continue
     const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE_DIST
     const fp  = toNum(row.FinalPrice)
     const kv  = toNum(row.ChargedToIncreasedKV)
@@ -156,18 +158,18 @@ function extractAccrualPartnerSpending(rows: RawRow[], monthKey: string | null) 
     const hasDiscount = !isNullVal(row.FinalPrice) && fp !== policyPrice
     const spend = (hasKV ? kv : 0) + (hasDiscount ? policyPrice - fp : 0)
     if (spend > 0) {
-      partnerAmount.set(renId, (partnerAmount.get(renId) ?? 0) + spend)
-      partnerEvents.set(renId, (partnerEvents.get(renId) ?? 0) + 1)
+      partnerAmount.set(wallet, (partnerAmount.get(wallet) ?? 0) + spend)
+      partnerEvents.set(wallet, (partnerEvents.get(wallet) ?? 0) + 1)
     }
   }
 
   const values: number[] = []
   let zeroCount = 0
   let totalEvents = 0
-  for (const [renId, amount] of partnerAmount.entries()) {
+  for (const [w, amount] of partnerAmount.entries()) {
     if (amount > 0) values.push(amount)
     else zeroCount++
-    totalEvents += partnerEvents.get(renId) ?? 0
+    totalEvents += partnerEvents.get(w) ?? 0
   }
   const totalRb = values.reduce((s, v) => s + v, 0)
   const spentAtLeastOnce = values.length
@@ -756,6 +758,27 @@ export default function DistributionTab({ result, agentRows, kaskoRows, sliderQu
         hasKasko={(kaskoRows?.length ?? 0) > 0}
         hasSlider={(sliderQuotes?.length ?? 0) > 0}
         agentRows={agentRows}
+      />
+
+      {selectedMonth && (
+        <LoyaltyBalancesBlock
+          osagoRows={filteredRows}
+          kaskoRows={filteredKasko}
+          sliderQuotes={sliderQuotes ?? []}
+          filters={agentFilters}
+          monthKey={null}
+          hasKasko={(kaskoRows?.length ?? 0) > 0}
+          hasSlider={(sliderQuotes?.length ?? 0) > 0}
+          agentRows={agentRows}
+          titleSuffix=" · весь период (авг 2025 — по данным)"
+        />
+      )}
+
+      <LoyaltyPartnerMetricsBlock
+        osagoRows={filteredRows}
+        filters={agentFilters}
+        agentRows={agentRows}
+        maxCreateDate={result.maxCreateDate}
       />
 
       {/* Средние показатели Рен-бонусов */}
