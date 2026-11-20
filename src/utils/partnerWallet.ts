@@ -1,13 +1,13 @@
 import type { RawRow } from '../types'
 
-/** Учётки Seller / Продавец* не входят в «1 партнёр = 1 кешбук». */
+/**
+ * Исключаем только «внешних» Seller / Продавец (не субучётки партнёра).
+ * Участвуют: PartnerDir, PartnerLead, Partnerseller,
+ * «Директор партнера», «Куратор внутри партнера», «Продавец внутри партнера» и т.п.
+ */
 export function isExcludedLoyaltyRole(role: unknown): boolean {
   const r = String(role ?? '').trim()
-  return (
-    r === 'Seller' ||
-    r === 'Продавец' ||
-    r === 'Продавец внутри партнера'
-  )
+  return r === 'Seller' || r === 'Продавец'
 }
 
 function normCb(v: unknown): string {

@@ -5,6 +5,7 @@ import UploadTab from './components/tabs/UploadTab'
 import FunnelTab from './components/tabs/FunnelTab'
 import MethodologyTab from './components/tabs/MethodologyTab'
 import DistributionTab from './components/tabs/DistributionTab'
+import StatusesTab from './components/tabs/StatusesTab'
 import AnomaliesTab from './components/tabs/AnomaliesTab'
 import KeyMetricsTab from './components/tabs/KeyMetricsTab'
 import LoginScreen, { type AuthSession } from './components/LoginScreen'
@@ -20,12 +21,13 @@ import type { SliderQuoteRow } from './utils/loyaltyBalances'
 
 const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
-type Tab = 'upload' | 'funnel' | 'distribution' | 'keymetrics' | 'methodology' | 'anomalies'
+type Tab = 'upload' | 'funnel' | 'distribution' | 'statuses' | 'keymetrics' | 'methodology' | 'anomalies'
 
 const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: 'Загрузка' },
   { id: 'funnel',       label: 'Воронка',        needsData: true },
   { id: 'distribution', label: 'Распределение',  needsData: true },
+  { id: 'statuses',     label: 'Для статусов',   needsData: true },
   { id: 'keymetrics',   label: 'Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: 'Тех. вкладка',    needsData: true },
@@ -253,6 +255,13 @@ export default function App() {
         )}
         {!loading && tab === 'distribution'  && result && (
           <DistributionTab
+            result={result}
+            agentRows={agentRows ?? undefined}
+            lockedCurator={lockedCurator}
+          />
+        )}
+        {!loading && tab === 'statuses'      && result && (
+          <StatusesTab
             result={result}
             agentRows={agentRows ?? undefined}
             kaskoRows={kaskoRows}

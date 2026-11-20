@@ -41,6 +41,50 @@ export interface MechanicStartDates {
   spendOsagoSlider: Date | null
 }
 
+/** Дата запуска ползунка ОСАГО пролонгация (продуктовая). */
+export const OSAGO_SLIDER_LAUNCH = new Date('2026-06-08T12:00:00')
+
+export type MechanicKey =
+  | 'accOsago'
+  | 'accKasko'
+  | 'spendCrossDiscount'
+  | 'spendCrossKv'
+  | 'spendKasko'
+  | 'spendOsagoSlider'
+
+export const MECHANIC_LABELS: Record<MechanicKey, string> = {
+  accOsago: 'Начисление ОСАГО ФЛ',
+  accKasko: 'Начисление КАСКО ФЛ',
+  spendCrossDiscount: 'Списание в Скидку СП по Кросс Каско от бесполисных',
+  spendCrossKv: 'Списание в повышенное КВ по Кросс Каско от бесполисных',
+  spendKasko: 'Списание в КАСКО ФЛ',
+  spendOsagoSlider: 'Списание в ОСАГО Пролонгация',
+}
+
+export const ACCRUAL_MECHANICS: MechanicKey[] = ['accOsago', 'accKasko']
+export const SPEND_MECHANICS: MechanicKey[] = [
+  'spendCrossDiscount',
+  'spendCrossKv',
+  'spendKasko',
+  'spendOsagoSlider',
+]
+
+export type MechanicToggle = Record<MechanicKey, boolean>
+
+export const ALL_MECHANICS_ON: MechanicToggle = {
+  accOsago: true,
+  accKasko: true,
+  spendCrossDiscount: true,
+  spendCrossKv: true,
+  spendKasko: true,
+  spendOsagoSlider: true,
+}
+
+export interface Top3RegionRow extends LoyaltyBalanceByRegion {
+  rollup?: 'moscow' | 'spb' | 'regions'
+  children?: LoyaltyBalanceByRegion[]
+}
+
 function isNull(v: unknown): boolean {
   return v == null || v === '[NULL]' || v === ''
 }
@@ -126,6 +170,79 @@ function passMonth(row: RawRow, monthKey: string | null): boolean {
   return monthKeyFrom(row.CreateDate) === monthKey
 }
 
+function passYear(row: RawRow, yearKey: number | null): boolean {
+  if (yearKey == null) return true
+  const d = parseDate(row.CreateDate)
+  return d != null && d.getFullYear() === yearKey
+}
+
+function passYearQuote(q: SliderQuoteRow, yearKey: number | null): boolean {
+  if (yearKey == null) return true
+  const d = parseDate(q.CreateDate)
+  return d != null && d.getFullYear() === yearKey
+}
+
+function applyMechanicMask(b: LoyaltyBalanceTotals, mechanics: MechanicToggle): LoyaltyBalanceTotals {
+  const out = { ...b }
+  if (!mechanics.accOsago) out.accOsago = 0
+  if (!mechanics.accKasko) out.accKasko = 0
+  if (!mechanics.spendCrossDiscount) out.spendCrossDiscount = 0
+  if (!mechanics.spendCrossKv) out.spendCrossKv = 0
+  if (!mechanics.spendKasko) out.spendKasko = 0
+  if (!mechanics.spendOsagoSlider) out.spendOsagoSlider = 0
+  return finalize(out)
+}
+
+function isMoscow(region: string): boolean {
+  const n = region.toLowerCase()
+  return n === 'москва' || n.includes('москв')
+}
+
+function isSpb(region: string): boolean {
+  const n = region.toLowerCase()
+  return n.includes('петербург') || n.includes('санкт-петербург')
+}
+
+/** Москва, Санкт-Петербург, Регионы (остальные филиалы — в children). */
+export function rollupRegionsTop3(byRegion: LoyaltyBalanceByRegion[]): Top3RegionRow[] {
+  const moscow = emptyBucket()
+  const spb = emptyBucket()
+  const reg = emptyBucket()
+  const children: LoyaltyBalanceByRegion[] = []
+
+  for (const r of byRegion) {
+    if (isMoscow(r.region)) {
+      addTo(moscow, r)
+    } else if (isSpb(r.region)) {
+      addTo(spb, r)
+    } else {
+      children.push(r)
+      addTo(reg, r)
+    }
+  }
+
+  const mF = finalize(moscow)
+  const sF = finalize(spb)
+  const rF = finalize(reg)
+
+  const rows: Top3RegionRow[] = []
+  if (mF.accTotal > 0 || mF.spendTotal > 0) {
+    rows.push({ region: 'Москва', rollup: 'moscow', ...mF })
+  }
+  if (sF.accTotal > 0 || sF.spendTotal > 0) {
+    rows.push({ region: 'Санкт-Петербург', rollup: 'spb', ...sF })
+  }
+  if (children.length > 0) {
+    rows.push({
+      region: 'Регионы',
+      rollup: 'regions',
+      children: children.sort((a, b) => b.spendTotal - a.spendTotal),
+      ...rF,
+    })
+  }
+  return rows
+}
+
 function rowPassesAgentFilters(row: RawRow, filters: AgentFilters): boolean {
   const active = Object.values(filters).some(v => v.length > 0)
   if (!active) return true
@@ -145,6 +262,8 @@ export function computeLoyaltyBalances(
   filters: AgentFilters,
   monthKey: string | null,
   agentRows?: RawRow[],
+  yearKey: number | null = null,
+  mechanics: MechanicToggle = ALL_MECHANICS_ON,
 ): { totals: LoyaltyBalanceTotals; byRegion: LoyaltyBalanceByRegion[] } {
   const byRegion = new Map<string, LoyaltyBalanceTotals>()
   const total = emptyBucket()
@@ -161,11 +280,12 @@ export function computeLoyaltyBalances(
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue
     if (!passMonth(row, monthKey)) continue
+    if (!passYear(row, yearKey)) continue
     if (state !== ISSUED) continue
 
     const region = normRegion(row)
     const lp = toNum(row.LoyaltyPointsInLK)
-    if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+    if (mechanics.accOsago && !isNull(row.LoyaltyPointsInLK) && lp > 0) {
       bump(region, { accOsago: lp })
     }
 
@@ -175,10 +295,10 @@ export function computeLoyaltyBalances(
       const kv = toNum(row.ChargedToIncreasedKV)
       if (!isNull(row.FinalPrice) && fp !== pp) {
         const disc = pp - fp
-        if (disc > 0) bump(region, { spendCrossDiscount: disc })
+        if (disc > 0 && mechanics.spendCrossDiscount) bump(region, { spendCrossDiscount: disc })
       }
       if (!isNull(row.ChargedToIncreasedKV) && kv !== 0) {
-        bump(region, { spendCrossKv: Math.abs(kv) })
+        if (mechanics.spendCrossKv) bump(region, { spendCrossKv: Math.abs(kv) })
       }
     }
   }
@@ -189,15 +309,16 @@ export function computeLoyaltyBalances(
     if (EXCLUDED.has(state)) continue
     if (!rowPassesAgentFilters(row, filters)) continue
     if (!passMonth(row, monthKey)) continue
+    if (!passYear(row, yearKey)) continue
     if (state !== ISSUED) continue
 
     const region = normRegion(row)
     const lpo = toNum(row.LoyaltyPointsOut)
     const ov = toNum(row.OriginalValue)
-    if (lpo > 0 && ov > 0) bump(region, { accKasko: ov * lpo })
+    if (mechanics.accKasko && lpo > 0 && ov > 0) bump(region, { accKasko: ov * lpo })
 
     const spend = toNum(row.WalletBonuses) + toNum(row.ScoringBonuses)
-    if (spend > 0) bump(region, { spendKasko: spend })
+    if (mechanics.spendKasko && spend > 0) bump(region, { spendKasko: spend })
   }
 
   const cbTemplate = new Map<string, RawRow>()
@@ -215,8 +336,9 @@ export function computeLoyaltyBalances(
       const mk = monthKeyFrom(q.CreateDate)
       if (mk !== monthKey) continue
     }
+    if (!passYearQuote(q, yearKey)) continue
     const spend = toNum(q.spend)
-    if (spend <= 0) continue
+    if (spend <= 0 || !mechanics.spendOsagoSlider) continue
 
     const cb = String(q.CashbookId ?? '').trim()
     const template = cb ? cbTemplate.get(cb) : undefined
@@ -230,14 +352,14 @@ export function computeLoyaltyBalances(
     bump(region, { spendOsagoSlider: spend })
   }
 
-  finalize(total)
+  const maskedTotal = applyMechanicMask(total, mechanics)
 
   const regions: LoyaltyBalanceByRegion[] = Array.from(byRegion.entries())
-    .map(([region, b]) => ({ region, ...finalize({ ...b }) }))
+    .map(([region, b]) => ({ region, ...applyMechanicMask(b, mechanics) }))
     .filter(r => r.accTotal > 0 || r.spendTotal > 0)
     .sort((a, b) => b.spendTotal - a.spendTotal || b.accTotal - a.accTotal)
 
-  return { totals: total, byRegion: regions }
+  return { totals: maskedTotal, byRegion: regions }
 }
 
 export const fmtRub = (v: number) =>
@@ -255,9 +377,9 @@ export const fmtDateRu = (d: Date | null) =>
 export function computeMechanicStarts(
   osagoRows: RawRow[],
   kaskoRows: RawRow[],
-  sliderQuotes: SliderQuoteRow[],
+  _sliderQuotes: SliderQuoteRow[],
   filters: AgentFilters,
-  agentRows?: RawRow[],
+  _agentRows?: RawRow[],
 ): MechanicStartDates {
   const starts = emptyStarts()
 
@@ -304,16 +426,7 @@ export function computeMechanicStarts(
     if (spend > 0) starts.spendKasko = touchMin(starts.spendKasko, dt)
   }
 
-  for (const q of sliderQuotes) {
-    const spend = toNum(q.spend)
-    if (spend <= 0) continue
-    const cb = String(q.CashbookId ?? '').trim()
-    const agentRow = cb && agentRows
-      ? enrichRawRows([{ CashbookId: cb, HeadPartnerCB: cb } as unknown as RawRow], agentRows)[0]
-      : synthAgentRow(cb)
-    if (!rowPassesAgentFilters(agentRow, filters)) continue
-    starts.spendOsagoSlider = touchMin(starts.spendOsagoSlider, parseDate(q.CreateDate))
-  }
+  starts.spendOsagoSlider = OSAGO_SLIDER_LAUNCH
 
   return starts
 }

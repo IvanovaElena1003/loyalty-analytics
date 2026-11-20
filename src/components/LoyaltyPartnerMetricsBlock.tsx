@@ -33,7 +33,8 @@ export default function LoyaltyPartnerMetricsBlock({
       <div className="ren-card__header border-b border-[var(--stroke-divider)]">
         <h3 className="ren-card__title text-sm">Партнёры и РБ · как на слайде</h3>
         <p className="text-[11px] ren-text-secondary mt-1 font-normal">
-          1 партнёр = 1 кешбук (субучётки схлопнуты в HeadPartnerCB). Seller / Продавец не считаем.
+          1 партнёр = 1 кешбук: PartnerDir, PartnerLead, Partnerseller и русские аналоги схлопнуты в HeadPartnerCB.
+          Не считаем только Seller / Продавец (не «внутри партнёра»).
           Активные:{' '}
           {m.activeSource === 'agent_network'
             ? 'агентская сеть (борд)'

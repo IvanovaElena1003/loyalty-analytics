@@ -237,7 +237,7 @@ export function computeLoyaltyPartnerBoardMetrics(
       spendSharePct:
         accrualYear.size > 0 ? (spendYear.size / accrualYear.size) * 100 : null,
       totalsNote:
-        'Партнёр = кешбук (HeadPartnerCB или CashbookId). Роли Seller / Продавец исключены.',
+        'Партнёр = кешбук (HeadPartnerCB или CashbookId). Исключены только Seller / Продавец; субучётки партнёра внутри головы.',
     },
     last3Months: monthMetrics,
     activeSource:

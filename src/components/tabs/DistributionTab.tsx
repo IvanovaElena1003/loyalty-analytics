@@ -9,16 +9,11 @@ import {
   type AgentFilters,
 } from '../../utils/agentNetwork'
 import { aggregate } from '../../utils/aggregate'
-import type { SliderQuoteRow } from '../../lib/db'
-import LoyaltyBalancesBlock from '../LoyaltyBalancesBlock'
-import LoyaltyPartnerMetricsBlock from '../LoyaltyPartnerMetricsBlock'
 import { partnerWalletKey } from '../../utils/partnerWallet'
 
 interface Props {
   result: AggregateResult
   agentRows?: RawRow[]
-  kaskoRows?: RawRow[]
-  sliderQuotes?: SliderQuoteRow[]
   lockedCurator?: string
 }
 
@@ -659,7 +654,7 @@ function AccrualSpendingBlock({ data }: { data: AccrualSpendingData }) {
 }
 
 // ─── Главный компонент ────────────────────────────────────────────────────────
-export default function DistributionTab({ result, agentRows, kaskoRows, sliderQuotes, lockedCurator }: Props) {
+export default function DistributionTab({ result, agentRows, lockedCurator }: Props) {
   const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
     lockedCurator ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] } : EMPTY_AGENT_FILTERS
   )
@@ -667,14 +662,6 @@ export default function DistributionTab({ result, agentRows, kaskoRows, sliderQu
   const filteredRows = useMemo(
     () => filterEnrichedRows(enrichedRows, agentFilters),
     [enrichedRows, agentFilters],
-  )
-  const enrichedKasko = useMemo(
-    () => enrichRawRows(kaskoRows ?? [], agentRows),
-    [kaskoRows, agentRows],
-  )
-  const filteredKasko = useMemo(
-    () => filterEnrichedRows(enrichedKasko, agentFilters),
-    [enrichedKasko, agentFilters],
   )
   const filteredAgg = useMemo(() => aggregate(filteredRows), [filteredRows])
   const { totals, months } = filteredAgg
@@ -748,38 +735,6 @@ export default function DistributionTab({ result, agentRows, kaskoRows, sliderQu
           </button>
         )}
       </div>
-
-      <LoyaltyBalancesBlock
-        osagoRows={filteredRows}
-        kaskoRows={filteredKasko}
-        sliderQuotes={sliderQuotes ?? []}
-        filters={agentFilters}
-        monthKey={selectedMonth}
-        hasKasko={(kaskoRows?.length ?? 0) > 0}
-        hasSlider={(sliderQuotes?.length ?? 0) > 0}
-        agentRows={agentRows}
-      />
-
-      {selectedMonth && (
-        <LoyaltyBalancesBlock
-          osagoRows={filteredRows}
-          kaskoRows={filteredKasko}
-          sliderQuotes={sliderQuotes ?? []}
-          filters={agentFilters}
-          monthKey={null}
-          hasKasko={(kaskoRows?.length ?? 0) > 0}
-          hasSlider={(sliderQuotes?.length ?? 0) > 0}
-          agentRows={agentRows}
-          titleSuffix=" · весь период (авг 2025 — по данным)"
-        />
-      )}
-
-      <LoyaltyPartnerMetricsBlock
-        osagoRows={filteredRows}
-        filters={agentFilters}
-        agentRows={agentRows}
-        maxCreateDate={result.maxCreateDate}
-      />
 
       {/* Средние показатели Рен-бонусов */}
       <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
