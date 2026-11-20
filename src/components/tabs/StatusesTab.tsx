@@ -91,7 +91,7 @@ export default function StatusesTab() {
   )
 
   const engagementSlices = useMemo((): EngagementSlice[] => {
-    const top3 = (snap.partnerEngagementByTop3 ?? []) as EngagementSlice[]
+    const top3 = (snap.partnerEngagementByTop3 ?? []) as unknown as EngagementSlice[]
     const network: EngagementSlice = {
       region: 'Вся сеть',
       ...snap.partnerEngagement,
