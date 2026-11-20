@@ -1,191 +1,227 @@
 import { useMemo, useState } from 'react'
-import type { AggregateResult } from '../../types'
-import type { RawRow } from '../../types'
-import { AgentFilterBar } from '../AgentFilterBar'
+import { STATUSES_SNAPSHOT } from '../../data/statusesSnapshot'
 import {
-  EMPTY_AGENT_FILTERS,
-  enrichRawRows,
-  filterEnrichedRows,
-  type AgentFilters,
-} from '../../utils/agentNetwork'
-import type { SliderQuoteRow } from '../../utils/loyaltyBalances'
-import LoyaltyBalancesBlock, { MechanicFilterPanel } from '../LoyaltyBalancesBlock'
-import { ALL_MECHANICS_ON, type MechanicToggle } from '../../utils/loyaltyBalances'
-import LoyaltyPartnerMetricsBlock from '../LoyaltyPartnerMetricsBlock'
+  MECHANIC_LABELS,
+  fmtPct,
+  fmtRub,
+  type MechanicKey,
+} from '../../utils/loyaltyBalances'
 
-interface Props {
-  result: AggregateResult
-  agentRows?: RawRow[]
-  kaskoRows?: RawRow[]
-  sliderQuotes?: SliderQuoteRow[]
-  osago2025Count?: number
-  lockedCurator?: string
+const COL_KEYS: { key: MechanicKey; short: string }[] = [
+  { key: 'accOsago', short: 'Начисл. ОСАГО ФЛ' },
+  { key: 'accKasko', short: 'Начисл. КАСКО ФЛ' },
+  { key: 'spendCrossDiscount', short: 'Скидка СП (бесполис.)' },
+  { key: 'spendCrossKv', short: 'Повыш. КВ (кросс)' },
+  { key: 'spendKasko', short: 'Списание КАСКО ФЛ' },
+  { key: 'spendOsagoSlider', short: 'ОСАГО пролонгация' },
+]
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type RowTotals = any
+
+function fmtDateRu(iso: string | null | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(iso + 'T12:00:00')
+  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function StatusesTab({
-  result,
-  agentRows,
-  kaskoRows,
-  sliderQuotes,
-  osago2025Count = 0,
-  lockedCurator,
-}: Props) {
-  const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
-    lockedCurator
-      ? { ...EMPTY_AGENT_FILTERS, КУРАТОР: [lockedCurator] }
-      : EMPTY_AGENT_FILTERS,
-  )
-  const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [mechanics, setMechanics] = useState<MechanicToggle>(() => ({ ...ALL_MECHANICS_ON }))
+function valForKey(row: RowTotals, key: MechanicKey): number {
+  return Number(row[key] ?? 0)
+}
 
-  const enrichedRows = useMemo(
-    () => enrichRawRows(result.rawRows, agentRows),
-    [result.rawRows, agentRows],
-  )
-  const filteredRows = useMemo(
-    () => filterEnrichedRows(enrichedRows, agentFilters),
-    [enrichedRows, agentFilters],
-  )
-  const enrichedKasko = useMemo(
-    () => enrichRawRows(kaskoRows ?? [], agentRows),
-    [kaskoRows, agentRows],
-  )
-  const filteredKasko = useMemo(
-    () => filterEnrichedRows(enrichedKasko, agentFilters),
-    [enrichedKasko, agentFilters],
-  )
+export default function StatusesTab() {
+  const snap = STATUSES_SNAPSHOT
+  const [regionsOpen, setRegionsOpen] = useState(false)
 
-  const months = useMemo(() => {
-    const keys = new Set<string>()
-    for (const row of filteredRows) {
-      const v = row.CreateDate
-      let d: Date | null = null
-      if (v instanceof Date) d = v
-      else if (typeof v === 'string') d = new Date(v)
-      else if (typeof v === 'number') d = new Date((v - 25569) * 86400000)
-      if (!d || isNaN(d.getTime())) continue
-      keys.add(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
-    }
-    const names = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек']
-    return Array.from(keys)
-      .sort()
-      .map(sortKey => {
-        const [y, mo] = sortKey.split('-').map(Number)
-        return { sortKey, label: `${names[mo - 1]} ${y}` }
-      })
-  }, [filteredRows])
-
-  const years = useMemo(() => {
-    const ys = new Set<number>()
-    for (const row of filteredRows) {
-      const v = row.CreateDate
-      let d: Date | null = null
-      if (v instanceof Date) d = v
-      else if (typeof v === 'string') d = new Date(v)
-      else if (typeof v === 'number') d = new Date((v - 25569) * 86400000)
-      if (d && !isNaN(d.getTime())) ys.add(d.getFullYear())
-    }
-    return Array.from(ys).sort((a, b) => b - a)
-  }, [filteredRows])
-
-  const activeFilterCount = useMemo(
-    () => Object.values(agentFilters).filter(a => a.length > 0).length,
-    [agentFilters],
-  )
+  const startByKey = useMemo(() => snap.mechanicStarts, [])
 
   return (
     <div className="space-y-6">
       <div className="ren-card ren-card__body text-sm ren-text-secondary">
-        Загружено из статики: ОСАГО 2025 — {osago2025Count.toLocaleString('ru-RU')} строк, КАСКО — {(kaskoRows?.length ?? 0).toLocaleString('ru-RU')}, ползунок — {(sliderQuotes?.length ?? 0).toLocaleString('ru-RU')}.
-        {osago2025Count === 0 && (
-          <span className="block mt-1 text-[var(--text-warning)] font-medium">
-            Снимок ОСАГО 2025 не подгрузился (обновите страницу или проверьте /data/bundled-osago-2025.json).
-          </span>
-        )}
-        <span className="block mt-2">
-        Сводка для отчёта по статусам лояльности: начисления/списания РБ, метрики партнёров по кешбуку.
-        Субучётки (Partnerseller, PartnerLead и др.) схлопываются в{' '}
-        <code className="ren-bg-brand-soft px-1 rounded">HeadPartnerCB</code>.
-        Исключены только роли <strong>Seller</strong> / <strong>Продавец</strong> (не «внутри партнёра»).
-        В исходном xlsx 2025 лист <strong>октябрь пустой</strong> — его нет в снимке, это не потеря при деплое.
-        </span>
+        Предрасчёт локально из ваших xlsx ({snap.generatedAt}). В git только итоговые числа, без сырых выгрузок.
+        Филиалы: {snap.agentFilialMapSize > 0
+          ? `B2Partners (${snap.agentFilialMapSize} кешбуков)`
+          : 'без разреза — карта филиалов не загружена'}
+        .
       </div>
 
-      <AgentFilterBar
-        enrichedRows={enrichedRows}
-        filters={agentFilters}
-        setFilters={setAgentFilters}
-        lockedCurator={lockedCurator}
-      />
-
-      {activeFilterCount > 0 && (
-        <div className="ren-card ren-card__body text-sm ren-text-secondary">
-          Фильтры агентской сети: {filteredRows.length.toLocaleString('ru-RU')} строк ОСАГО в выборке.
-          {!agentRows?.length && (
-            <span className="block mt-1 text-xs">
-              Без файла агентской сети работают только срезы по кешбуку; дивизион/филиал/куратор — после загрузки
-              базы B2Partners (subj_id = CashbookId).
-            </span>
-          )}
+      {/* Итого как на HTML-отчёте */}
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
+          <h3 className="ren-card__title text-sm">Итого за период · {snap.periodLabel}</h3>
         </div>
-      )}
-
-      <div className="ren-card ren-card__body flex flex-wrap items-center gap-3">
-        <span className="text-sm ren-text-brand font-medium shrink-0">Год:</span>
-        <select
-          value={selectedYear ?? ''}
-          onChange={e => setSelectedYear(e.target.value ? Number(e.target.value) : null)}
-          className="ren-select text-sm"
-        >
-          <option value="">Все годы</option>
-          {years.map(y => (
-            <option key={y} value={y}>{y}</option>
-          ))}
-        </select>
-        <span className="text-sm ren-text-brand font-medium shrink-0 ml-2">Месяц:</span>
-        <select
-          value={selectedMonth ?? ''}
-          onChange={e => setSelectedMonth(e.target.value || null)}
-          className="ren-select text-sm"
-        >
-          <option value="">Все месяцы</option>
-          {months.map(m => (
-            <option key={m.sortKey} value={m.sortKey}>{m.label}</option>
-          ))}
-        </select>
-        {(selectedMonth || selectedYear != null) && (
-          <button
-            type="button"
-            onClick={() => { setSelectedMonth(null); setSelectedYear(null) }}
-            className="ren-link text-xs"
-          >
-            ✕ сбросить период
-          </button>
-        )}
+        <div className="ren-card__body">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <Kpi
+              label="Начислено всего"
+              value={fmtRub(snap.totals.accTotal)}
+              sub={`ОСАГО ${fmtRub(snap.totals.accOsago)} · КАСКО ${fmtRub(snap.totals.accKasko)}`}
+            />
+            <Kpi label="Списано всего" value={fmtRub(snap.totals.spendTotal)} highlight />
+            <Kpi label="Утилизация" value={fmtPct(snap.totals.utilPct)} sub="списано ÷ начислено" />
+            <Kpi
+              label="Кросс скидка"
+              value={fmtRub(snap.totals.spendCrossDiscount)}
+              sub={`${snap.totals.crossDiscountCnt.toLocaleString('ru-RU')} полисов`}
+            />
+            <Kpi
+              label="Кросс повыш. КВ"
+              value={fmtRub(snap.totals.spendCrossKv)}
+              sub={`${snap.totals.crossKvCnt.toLocaleString('ru-RU')} полисов`}
+            />
+            <Kpi
+              label="КАСКО (кошелёк + скоринг)"
+              value={fmtRub(snap.totals.spendKasko)}
+              sub={`${snap.totals.kaskoSpendCnt} полисов`}
+            />
+            <Kpi
+              label="ОСАГО пролонгация (ползунок)"
+              value={fmtRub(snap.totals.spendOsagoSlider)}
+              sub={`${snap.totals.osagoSliderCnt.toLocaleString('ru-RU')} в окне дат`}
+            />
+          </div>
+          <p className="text-xs ren-text-secondary mt-4">
+            Строк в срезе (все статусы): ОСАГО {snap.meta.rowsOsagoAllStatuses.toLocaleString('ru-RU')},
+            КАСКО {snap.meta.rowsKaskoAllStatuses.toLocaleString('ru-RU')}.
+            Ползунок в файле: {snap.meta.sliderDataRange}. {snap.meta.osago2025Note}.
+          </p>
+        </div>
       </div>
 
-      <MechanicFilterPanel mechanics={mechanics} setMechanics={setMechanics} />
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
+          <h3 className="ren-card__title text-sm">Механики начисления и списания и даты запуска</h3>
+        </div>
+        <div className="ren-card__body">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--stroke-divider)]">
+                <th className="text-left py-1.5 font-medium ren-text-secondary">Механика</th>
+                <th className="text-right py-1.5 font-medium ren-text-secondary w-36">Дата запуска</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(Object.keys(MECHANIC_LABELS) as MechanicKey[]).map(key => (
+                <tr key={key} className="border-b border-[var(--stroke-divider)] last:border-0">
+                  <td className="py-1.5 pr-2">{MECHANIC_LABELS[key]}</td>
+                  <td className="py-1.5 text-right tabular-nums font-medium">
+                    {fmtDateRu(startByKey[key as keyof typeof startByKey])}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      <LoyaltyBalancesBlock
-        osagoRows={filteredRows}
-        kaskoRows={filteredKasko}
-        sliderQuotes={sliderQuotes ?? []}
-        filters={agentFilters}
-        monthKey={selectedMonth}
-        yearKey={selectedYear}
-        mechanics={mechanics}
-        hasKasko={(kaskoRows?.length ?? 0) > 0}
-        hasSlider={(sliderQuotes?.length ?? 0) > 0}
-        agentRows={agentRows}
+      <MetricsTable title="Итого без разбивки по регионам" rows={[{ region: 'Вся сеть', ...snap.totals }]} />
+
+      <MetricsTable
+        title="Топ-3: Москва, Санкт-Петербург, Регионы"
+        rows={snap.top3 as unknown as RowTotals[]}
+        onToggleRegions={snap.top3.some(r => r.rollup === 'regions') ? () => setRegionsOpen(o => !o) : undefined}
+        regionsOpen={regionsOpen}
       />
 
-      <LoyaltyPartnerMetricsBlock
-        osagoRows={filteredRows}
-        filters={agentFilters}
-        agentRows={agentRows}
-        maxCreateDate={result.maxCreateDate}
-      />
+      {regionsOpen &&
+        (snap.top3 as unknown as RowTotals[])
+          .filter(r => r.rollup === 'regions' && r.children?.length)
+          .flatMap(r => r.children as RowTotals[])
+          .map(r => <MetricsTable key={String(r.region)} title="" rows={[r]} compact />)}
+
+      <div className="ren-card">
+        <div className="ren-card__header">
+          <h3 className="ren-card__title text-sm">Методология</h3>
+        </div>
+        <div className="ren-card__body text-xs ren-text-secondary space-y-2">
+          <p>Единица — рублёвый эквивалент рен-бонусов. Исключены PolicyAnnulled, PolicyTerminated; Seller / Продавец (не субучётки).</p>
+          <p>Субагенты схлопнуты в HeadPartnerCB. Окно отчёта: {snap.periodLabel}.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Kpi({
+  label,
+  value,
+  sub,
+  highlight,
+}: {
+  label: string
+  value: string
+  sub?: string
+  highlight?: boolean
+}) {
+  return (
+    <div className="ren-kpi border border-[var(--stroke-divider)] rounded-lg p-3">
+      <p className="ren-kpi__label text-[10px] uppercase tracking-wide">{label}</p>
+      <p className={`ren-kpi__value text-lg ${highlight ? 'ren-text-brand' : ''}`}>{value}</p>
+      {sub && <p className="text-[10px] ren-text-secondary mt-0.5">{sub}</p>}
+    </div>
+  )
+}
+
+function MetricsTable({
+  title,
+  rows,
+  compact,
+  onToggleRegions,
+  regionsOpen,
+}: {
+  title: string
+  rows: RowTotals[]
+  compact?: boolean
+  onToggleRegions?: () => void
+  regionsOpen?: boolean
+}) {
+  return (
+    <div className={`ren-card ${compact ? 'ml-4 border-l-2 border-[var(--stroke-divider)]' : ''}`}>
+      {title ? (
+        <div className="ren-card__header border-b border-[var(--stroke-divider)]">
+          <h3 className="ren-card__title text-sm">{title}</h3>
+        </div>
+      ) : null}
+      <div className="ren-card__body overflow-auto">
+        <table className="ren-table w-full text-xs">
+          <thead>
+            <tr>
+              <th className="text-left">Срез</th>
+              {COL_KEYS.map(c => (
+                <th key={c.key} className="text-right whitespace-nowrap">{c.short}</th>
+              ))}
+              <th className="text-right">Начисл. всего</th>
+              <th className="text-right">Списано</th>
+              <th className="text-right">Утилизация</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={String(row.region)}>
+                <td className="font-medium">
+                  {row.rollup === 'regions' && onToggleRegions ? (
+                    <button type="button" onClick={onToggleRegions} className="ren-link text-left">
+                      {regionsOpen ? '▾' : '▸'} {String(row.region)}
+                    </button>
+                  ) : (
+                    String(row.region)
+                  )}
+                </td>
+                {COL_KEYS.map(c => (
+                  <td key={c.key} className="text-right tabular-nums">
+                    {fmtRub(valForKey(row, c.key))}
+                  </td>
+                ))}
+                <td className="text-right tabular-nums font-semibold">{fmtRub(Number(row.accTotal))}</td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">
+                  {fmtRub(Number(row.spendTotal))}
+                </td>
+                <td className="text-right tabular-nums">{fmtPct(row.utilPct as number | null)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }

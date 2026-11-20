@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { parseWorkbook, aggregate } from './utils/aggregate'
 import type { AggregateResult, RawRow } from './types'
 import UploadTab from './components/tabs/UploadTab'
@@ -16,8 +16,6 @@ import {
   saveMainRowsToDB,
   saveAgentRowsToDB,
 } from './lib/db'
-import { loadBundledLoyaltyExtras } from './data/bundledExtras'
-import type { SliderQuoteRow } from './utils/loyaltyBalances'
 
 const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
@@ -25,9 +23,9 @@ type Tab = 'upload' | 'funnel' | 'distribution' | 'statuses' | 'keymetrics' | 'm
 
 const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: 'Загрузка' },
+  { id: 'statuses',     label: 'Для статусов' },
   { id: 'funnel',       label: 'Воронка',        needsData: true },
   { id: 'distribution', label: 'Распределение',  needsData: true },
-  { id: 'statuses',     label: 'Для статусов',   needsData: true },
   { id: 'keymetrics',   label: 'Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
   { id: 'anomalies',    label: 'Тех. вкладка',    needsData: true },
@@ -79,46 +77,9 @@ export default function App() {
   const [loadingName, setLoadingName] = useState('')
   const [error, setError]   = useState<string | null>(null)
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
-  const [osago2025Rows, setOsago2025Rows] = useState<RawRow[]>([])
-  const [kaskoRows, setKaskoRows] = useState<RawRow[]>([])
-  const [sliderQuotes, setSliderQuotes] = useState<SliderQuoteRow[]>([])
-  const mainOsagoRef = useRef<RawRow[] | null>(null)
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
   const [dbSaving, setDbSaving] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
-
-  const publishMergedAggregate = useCallback((mainRows: RawRow[]) => {
-    mainOsagoRef.current = mainRows
-    setResult(aggregate([...osago2025Rows, ...mainRows]))
-  }, [osago2025Rows])
-
-  useEffect(() => {
-    if (mainOsagoRef.current) {
-      setResult(aggregate([...osago2025Rows, ...mainOsagoRef.current]))
-    }
-  }, [osago2025Rows])
-
-  useEffect(() => {
-    let cancelled = false
-    loadBundledLoyaltyExtras()
-      .then(({ osago2025, kasko, slider, errors }) => {
-        if (cancelled) return
-        setOsago2025Rows(osago2025)
-        setKaskoRows(kasko)
-        setSliderQuotes(slider)
-        if (errors.length > 0) {
-          setError(prev =>
-            [prev, `Встроенные данные: ${errors.join('; ')}`].filter(Boolean).join(' · '),
-          )
-        }
-      })
-      .catch(e => {
-        if (!cancelled) {
-          setError(`Не удалось загрузить data/*.json: ${e instanceof Error ? e.message : String(e)}`)
-        }
-      })
-    return () => { cancelled = true }
-  }, [])
 
   useEffect(() => {
     if (!DB_ENABLED) return
@@ -133,7 +94,7 @@ export default function App() {
         ])
         if (cancelled) return
         if (mainRows && mainRows.length > 0) {
-          publishMergedAggregate(mainRows)
+          setResult(aggregate(mainRows))
           setTab(isFullMode ? 'funnel' : 'keymetrics')
         }
         if (agRows && agRows.length > 0) {
@@ -155,7 +116,7 @@ export default function App() {
     setTimeout(() => {
       try {
         const rows = parseWorkbook(data)
-        publishMergedAggregate(rows)
+        setResult(aggregate(rows))
         setTab(isFullMode ? 'funnel' : 'keymetrics')
         if (DB_ENABLED) {
           setDbSaving(true)
@@ -169,7 +130,7 @@ export default function App() {
         setLoading(false)
       }
     }, 50)
-  }, [publishMergedAggregate])
+  }, [])
 
   const handleAgentFile = useCallback((data: ArrayBuffer, filename: string) => {
     try {
@@ -259,6 +220,7 @@ export default function App() {
         {loading && <Spinner filename={loadingName} />}
 
         {!loading && isFullMode  && tab === 'upload'       && <UploadTab onFile={handleFile} onAgentFile={handleAgentFile} agentFilename={agentFilename} />}
+        {!loading && tab === 'statuses'      && <StatusesTab />}
         {!loading && tab === 'funnel'        && result && (
           <FunnelTab result={result} agentRows={agentRows ?? undefined} lockedCurator={lockedCurator} />
         )}
@@ -266,16 +228,6 @@ export default function App() {
           <DistributionTab
             result={result}
             agentRows={agentRows ?? undefined}
-            lockedCurator={lockedCurator}
-          />
-        )}
-        {!loading && tab === 'statuses'      && result && (
-          <StatusesTab
-            result={result}
-            agentRows={agentRows ?? undefined}
-            kaskoRows={kaskoRows}
-            sliderQuotes={sliderQuotes}
-            osago2025Count={osago2025Rows.length}
             lockedCurator={lockedCurator}
           />
         )}

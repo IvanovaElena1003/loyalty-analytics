@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { RawRow } from '../types'
 import type { SliderQuoteRow } from '../utils/loyaltyBalances'
-import { BUNDLED_LOYALTY_META } from '../data/bundledExtras'
+const SNAPSHOT_META = { embeddedAt: 'из statusesSnapshot.ts' }
 import {
   ACCRUAL_MECHANICS,
   ALL_MECHANICS_ON,
@@ -97,7 +97,7 @@ export default function LoyaltyBalancesBlock({
           {monthKey ? ` · месяц ${monthKey}` : ''}
           {yearKey != null ? ` · год ${yearKey}` : ' · все годы'}
           {' · снимок '}
-          {BUNDLED_LOYALTY_META.embeddedAt}
+          {SNAPSHOT_META.embeddedAt}
         </p>
       </div>
 
