@@ -3,6 +3,8 @@ import type { RawRow } from '../types'
 import type { SliderQuoteRow } from '../utils/loyaltyBalances'
 import {
   computeLoyaltyBalances,
+  computeMechanicStarts,
+  fmtDateRu,
   fmtPct,
   fmtRub,
 } from '../utils/loyaltyBalances'
@@ -33,6 +35,19 @@ export default function LoyaltyBalancesBlock({
     () => computeLoyaltyBalances(osagoRows, kaskoRows, sliderQuotes, filters, monthKey, agentRows),
     [osagoRows, kaskoRows, sliderQuotes, filters, monthKey, agentRows],
   )
+  const starts = useMemo(
+    () => computeMechanicStarts(osagoRows, kaskoRows, sliderQuotes, filters, agentRows),
+    [osagoRows, kaskoRows, sliderQuotes, filters, agentRows],
+  )
+
+  const mechanicRows: { label: string; start: string; note?: string }[] = [
+    { label: 'Начисление ОСАГО (LoyaltyPointsInLK)', start: fmtDateRu(starts.accOsago) },
+    { label: 'Начисление КАСКО (LoyaltyPointsOut × СП)', start: fmtDateRu(starts.accKasko), note: !hasKasko ? 'нет в БД' : undefined },
+    { label: 'Списание · кросс скидка (бесполисные)', start: fmtDateRu(starts.spendCrossDiscount) },
+    { label: 'Списание · кросс повыш. КВ', start: fmtDateRu(starts.spendCrossKv) },
+    { label: 'Списание · КАСКО (кошелёк + скоринг)', start: fmtDateRu(starts.spendKasko), note: !hasKasko ? 'нет в БД' : undefined },
+    { label: 'Списание · ОСАГО пролонгация (ползунок)', start: fmtDateRu(starts.spendOsagoSlider), note: !hasSlider ? 'нет в БД' : undefined },
+  ]
 
   return (
     <div className="ren-card">
@@ -47,6 +62,33 @@ export default function LoyaltyBalancesBlock({
       </div>
 
       <div className="ren-card__body space-y-4">
+
+        <div className="text-xs ren-text-secondary bg-[var(--bg-brand-primary-00)] border border-[var(--stroke-divider)] rounded-lg px-3 py-2.5">
+          <strong className="ren-text-brand">Про 60 млн и 81 млн начислений:</strong> в раннем HTML-отчёте сумма была занижена (~21 млн ₽)
+          — в итог не попадали оформленные ОСАГО <em>без CashbookId</em> в выгрузке. В дашборде считаем все строки <code>PolicyIssued</code>;
+          КАСКО и ползунок на начисление почти не влияют (КАСКО ~1,6 млн ₽).
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold ren-text-brand mb-2">С какого дня есть события (по загруженным данным)</p>
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-[var(--stroke-divider)]">
+                <th className="text-left py-1.5 font-medium ren-text-secondary">Механика</th>
+                <th className="text-right py-1.5 font-medium ren-text-secondary w-36">Первое событие</th>
+              </tr>
+            </thead>
+            <tbody>
+              {mechanicRows.map(r => (
+                <tr key={r.label} className="border-b border-[var(--stroke-divider)] last:border-0">
+                  <td className="py-1.5 pr-2">{r.label}{r.note ? ` · ${r.note}` : ''}</td>
+                  <td className="py-1.5 text-right tabular-nums font-medium">{r.start}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <Kpi label="Начислено" value={fmtRub(totals.accTotal)} sub={`ОС ${fmtRub(totals.accOsago)} · КА ${fmtRub(totals.accKasko)}`} />
           <Kpi label="Списано" value={fmtRub(totals.spendTotal)} highlight />

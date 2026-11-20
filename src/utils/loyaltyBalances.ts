@@ -30,6 +30,16 @@ export interface LoyaltyBalanceByRegion extends LoyaltyBalanceTotals {
   region: string
 }
 
+/** Дата первого события по механике в текущей выборке (после фильтров агентов, без фильтра месяца). */
+export interface MechanicStartDates {
+  accOsago: Date | null
+  accKasko: Date | null
+  spendCrossDiscount: Date | null
+  spendCrossKv: Date | null
+  spendKasko: Date | null
+  spendOsagoSlider: Date | null
+}
+
 function isNull(v: unknown): boolean {
   return v == null || v === '[NULL]' || v === ''
 }
@@ -40,16 +50,38 @@ function toNum(v: unknown): number {
   return isNaN(n) ? 0 : n
 }
 
-function monthKeyFrom(value: unknown): string | null {
-  let d: Date | null = null
-  if (value instanceof Date) d = isNaN(value.getTime()) ? null : value
-  else if (typeof value === 'number' && value > 0) d = new Date((value - 25569) * 86400000)
-  else if (typeof value === 'string') {
-    const x = new Date(value)
-    d = isNaN(x.getTime()) ? null : x
+function parseDate(value: unknown): Date | null {
+  if (value == null) return null
+  if (value instanceof Date) return isNaN(value.getTime()) ? null : value
+  if (typeof value === 'number' && value > 0) return new Date((value - 25569) * 86400000)
+  if (typeof value === 'string') {
+    const d = new Date(value)
+    return isNaN(d.getTime()) ? null : d
   }
+  return null
+}
+
+function monthKeyFrom(value: unknown): string | null {
+  const d = parseDate(value)
   if (!d) return null
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function touchMin(current: Date | null, dt: Date | null): Date | null {
+  if (!dt) return current
+  if (!current || dt < current) return dt
+  return current
+}
+
+function emptyStarts(): MechanicStartDates {
+  return {
+    accOsago: null,
+    accKasko: null,
+    spendCrossDiscount: null,
+    spendCrossKv: null,
+    spendKasko: null,
+    spendOsagoSlider: null,
+  }
 }
 
 function normRegion(row: RawRow): string {
@@ -211,3 +243,74 @@ export const fmtRub = (v: number) =>
 
 export const fmtPct = (v: number | null) =>
   v == null ? '—' : `${v.toFixed(1).replace('.', ',')}%`
+
+export const fmtDateRu = (d: Date | null) =>
+  d == null
+    ? '—'
+    : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/** Первые даты по механикам (фильтр агентов да, месяц — нет). */
+export function computeMechanicStarts(
+  osagoRows: RawRow[],
+  kaskoRows: RawRow[],
+  sliderQuotes: SliderQuoteRow[],
+  filters: AgentFilters,
+  agentRows?: RawRow[],
+): MechanicStartDates {
+  const starts = emptyStarts()
+
+  for (const row of osagoRows) {
+    const state = String(row.State ?? '')
+    if (EXCLUDED.has(state)) continue
+    if (!rowPassesAgentFilters(row, filters)) continue
+    if (state !== ISSUED) continue
+    const dt = parseDate(row.CreateDate)
+
+    const lp = toNum(row.LoyaltyPointsInLK)
+    if (!isNull(row.LoyaltyPointsInLK) && lp > 0) {
+      starts.accOsago = touchMin(starts.accOsago, dt)
+    }
+
+    if (String(row.CrossIsBought ?? '') === 'Да') {
+      const pp = !isNull(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE
+      const fp = toNum(row.FinalPrice)
+      const kv = toNum(row.ChargedToIncreasedKV)
+      if (!isNull(row.FinalPrice) && fp !== pp) {
+        const disc = pp - fp
+        if (disc > 0) starts.spendCrossDiscount = touchMin(starts.spendCrossDiscount, dt)
+      }
+      if (!isNull(row.ChargedToIncreasedKV) && kv !== 0) {
+        starts.spendCrossKv = touchMin(starts.spendCrossKv, dt)
+      }
+    }
+  }
+
+  for (const row of kaskoRows) {
+    if (String(row.Role ?? '') === 'Seller') continue
+    const state = String(row.State ?? '')
+    if (EXCLUDED.has(state)) continue
+    if (!rowPassesAgentFilters(row, filters)) continue
+    if (state !== ISSUED) continue
+    const dt = parseDate(row.CreateDate)
+
+    const lpo = toNum(row.LoyaltyPointsOut)
+    const ov = toNum(row.OriginalValue)
+    if (lpo > 0 && ov > 0) starts.accKasko = touchMin(starts.accKasko, dt)
+
+    const spend = toNum(row.WalletBonuses) + toNum(row.ScoringBonuses)
+    if (spend > 0) starts.spendKasko = touchMin(starts.spendKasko, dt)
+  }
+
+  for (const q of sliderQuotes) {
+    const spend = toNum(q.spend)
+    if (spend <= 0) continue
+    const cb = String(q.CashbookId ?? '').trim()
+    const agentRow = cb && agentRows
+      ? enrichRawRows([{ CashbookId: cb, HeadPartnerCB: cb } as unknown as RawRow], agentRows)[0]
+      : synthAgentRow(cb)
+    if (!rowPassesAgentFilters(agentRow, filters)) continue
+    starts.spendOsagoSlider = touchMin(starts.spendOsagoSlider, parseDate(q.CreateDate))
+  }
+
+  return starts
+}
