@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { RawRow } from '../types'
 import type { SliderQuoteRow } from '../utils/loyaltyBalances'
+import { BUNDLED_LOYALTY_META } from '../data/bundledExtras'
 import {
   computeLoyaltyBalances,
   computeMechanicStarts,
@@ -56,8 +57,8 @@ export default function LoyaltyBalancesBlock({
         <p className="text-[11px] ren-text-secondary mt-1 font-normal">
           ОСАГО + КАСКО ФЛ: начисления, кросс (скидка / КВ), КАСКО, пролонгация ОСАГО (ползунок).
           {monthKey ? ` · месяц ${monthKey}` : ' · все месяцы в выборке'}
-          {!hasKasko && ' · КАСКО: нет данных в БД'}
-          {!hasSlider && ' · ползунок: нет данных в БД'}
+          {' · КАСКО и ползунок: встроенный снимок '}
+          {BUNDLED_LOYALTY_META.embeddedAt}
         </p>
       </div>
 

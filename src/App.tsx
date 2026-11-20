@@ -12,12 +12,11 @@ import { isFullMode } from './config/mode'
 import {
   loadMainRowsFromDB,
   loadAgentRowsFromDB,
-  loadKaskoRowsFromDB,
-  loadSliderQuotesFromDB,
   saveMainRowsToDB,
   saveAgentRowsToDB,
 } from './lib/db'
-import type { SliderQuoteRow } from './lib/db'
+import { loadBundledLoyaltyExtras } from './data/bundledExtras'
+import type { SliderQuoteRow } from './utils/loyaltyBalances'
 
 const DB_ENABLED = !!(import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
 
@@ -78,11 +77,23 @@ export default function App() {
   const [loadingName, setLoadingName] = useState('')
   const [error, setError]   = useState<string | null>(null)
   const [agentRows, setAgentRows]     = useState<RawRow[] | null>(null)
-  const [kaskoRows, setKaskoRows]     = useState<RawRow[] | null>(null)
-  const [sliderQuotes, setSliderQuotes] = useState<SliderQuoteRow[] | null>(null)
+  const [kaskoRows, setKaskoRows] = useState<RawRow[]>([])
+  const [sliderQuotes, setSliderQuotes] = useState<SliderQuoteRow[]>([])
   const [agentFilename, setAgentFilename] = useState<string | undefined>()
   const [dbSaving, setDbSaving] = useState(false)
   const [session, setSession] = useState<AuthSession | null>(isFullMode ? { role: 'director' } : null)
+
+  useEffect(() => {
+    let cancelled = false
+    loadBundledLoyaltyExtras()
+      .then(({ kasko, slider }) => {
+        if (cancelled) return
+        setKaskoRows(kasko)
+        setSliderQuotes(slider)
+      })
+      .catch(() => { /* встроенный снимок недоступен */ })
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     if (!DB_ENABLED) return
@@ -91,11 +102,9 @@ export default function App() {
     setLoadingName('Загружаем данные из базы…')
     ;(async () => {
       try {
-        const [mainRows, agRows, kRows, sQuotes] = await Promise.all([
+        const [mainRows, agRows] = await Promise.all([
           loadMainRowsFromDB(),
           loadAgentRowsFromDB(),
-          loadKaskoRowsFromDB(),
-          loadSliderQuotesFromDB(),
         ])
         if (cancelled) return
         if (mainRows && mainRows.length > 0) {
@@ -106,8 +115,6 @@ export default function App() {
         if (agRows && agRows.length > 0) {
           setAgentRows(agRows)
         }
-        if (kRows && kRows.length > 0) setKaskoRows(kRows)
-        if (sQuotes && sQuotes.length > 0) setSliderQuotes(sQuotes)
       } catch {
         // DB unavailable — fall through to upload screen
       } finally {
@@ -236,8 +243,8 @@ export default function App() {
           <DistributionTab
             result={result}
             agentRows={agentRows ?? undefined}
-            kaskoRows={kaskoRows ?? undefined}
-            sliderQuotes={sliderQuotes ?? undefined}
+            kaskoRows={kaskoRows}
+            sliderQuotes={sliderQuotes}
             lockedCurator={lockedCurator}
           />
         )}
