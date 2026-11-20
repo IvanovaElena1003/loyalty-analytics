@@ -101,13 +101,22 @@ export default function App() {
   useEffect(() => {
     let cancelled = false
     loadBundledLoyaltyExtras()
-      .then(({ osago2025, kasko, slider }) => {
+      .then(({ osago2025, kasko, slider, errors }) => {
         if (cancelled) return
         setOsago2025Rows(osago2025)
         setKaskoRows(kasko)
         setSliderQuotes(slider)
+        if (errors.length > 0) {
+          setError(prev =>
+            [prev, `Встроенные данные: ${errors.join('; ')}`].filter(Boolean).join(' · '),
+          )
+        }
       })
-      .catch(() => { /* встроенный снимок недоступен */ })
+      .catch(e => {
+        if (!cancelled) {
+          setError(`Не удалось загрузить data/*.json: ${e instanceof Error ? e.message : String(e)}`)
+        }
+      })
     return () => { cancelled = true }
   }, [])
 
@@ -266,6 +275,7 @@ export default function App() {
             agentRows={agentRows ?? undefined}
             kaskoRows={kaskoRows}
             sliderQuotes={sliderQuotes}
+            osago2025Count={osago2025Rows.length}
             lockedCurator={lockedCurator}
           />
         )}

@@ -18,6 +18,7 @@ interface Props {
   agentRows?: RawRow[]
   kaskoRows?: RawRow[]
   sliderQuotes?: SliderQuoteRow[]
+  osago2025Count?: number
   lockedCurator?: string
 }
 
@@ -26,6 +27,7 @@ export default function StatusesTab({
   agentRows,
   kaskoRows,
   sliderQuotes,
+  osago2025Count = 0,
   lockedCurator,
 }: Props) {
   const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
@@ -95,10 +97,19 @@ export default function StatusesTab({
   return (
     <div className="space-y-6">
       <div className="ren-card ren-card__body text-sm ren-text-secondary">
+        Загружено из статики: ОСАГО 2025 — {osago2025Count.toLocaleString('ru-RU')} строк, КАСКО — {(kaskoRows?.length ?? 0).toLocaleString('ru-RU')}, ползунок — {(sliderQuotes?.length ?? 0).toLocaleString('ru-RU')}.
+        {osago2025Count === 0 && (
+          <span className="block mt-1 text-[var(--text-warning)] font-medium">
+            Снимок ОСАГО 2025 не подгрузился (обновите страницу или проверьте /data/bundled-osago-2025.json).
+          </span>
+        )}
+        <span className="block mt-2">
         Сводка для отчёта по статусам лояльности: начисления/списания РБ, метрики партнёров по кешбуку.
         Субучётки (Partnerseller, PartnerLead и др.) схлопываются в{' '}
         <code className="ren-bg-brand-soft px-1 rounded">HeadPartnerCB</code>.
         Исключены только роли <strong>Seller</strong> / <strong>Продавец</strong> (не «внутри партнёра»).
+        В исходном xlsx 2025 лист <strong>октябрь пустой</strong> — его нет в снимке, это не потеря при деплое.
+        </span>
       </div>
 
       <AgentFilterBar
