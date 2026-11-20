@@ -430,6 +430,98 @@ def last_complete_months(ref: datetime, n: int) -> list[str]:
     return list(reversed(out))
 
 
+TOP3_LABELS = ("Москва", "Санкт-Петербург", "Регионы")
+
+
+def _is_moscow_filial(name: str) -> bool:
+    return "москв" in name.lower()
+
+
+def _is_spb_filial(name: str) -> bool:
+    return "петербург" in name.lower()
+
+
+def wallet_top3_region(cb: str, fmap: dict[str, str]) -> str:
+    fil = filial_for(cb, fmap)
+    if _is_moscow_filial(fil):
+        return "Москва"
+    if _is_spb_filial(fil):
+        return "Санкт-Петербург"
+    return "Регионы"
+
+
+def compute_partner_engagement(
+    wallets: dict[str, WalletAgg],
+    fmap: dict[str, str],
+    agent_active: set[str],
+    region: str | None,
+) -> dict:
+    """region=None — вся сеть; иначе Москва / Санкт-Петербург / Регионы по филиалу кешбука."""
+
+    def in_slice(cb: str) -> bool:
+        if not cb:
+            return False
+        if region is None:
+            return True
+        return wallet_top3_region(cb, fmap) == region
+
+    filtered = {cb: wa for cb, wa in wallets.items() if in_slice(cb)}
+    accrual = {cb for cb, wa in filtered.items() if wa.has_accrual}
+    spend = {cb for cb, wa in filtered.items() if wa.spend_events > 0}
+    with_osago = {cb for cb, wa in filtered.items() if wa.osago_issued > 0}
+
+    if agent_active:
+        active = {cb for cb in agent_active if in_slice(cb)} if region else agent_active
+    else:
+        active = {cb for cb, wa in filtered.items() if wa.osago_issued >= MIN_OSAGO_ACTIVE}
+
+    def bucket_nth(pred) -> int | None:
+        o = c = 0
+        for cb, wa in filtered.items():
+            if not wa.has_accrual or not pred(wa.spend_events):
+                continue
+            o += wa.osago_issued
+            c += wa.cross
+        if c <= 0:
+            return None
+        return max(1, round(o / c))
+
+    partners_with_osago = len(with_osago)
+    return {
+        "pctWithAccrualAmongSellers": round(len(accrual) / partners_with_osago * 100, 1)
+        if partners_with_osago
+        else None,
+        "pctWithAccrualAmongActiveBoard": round(len(accrual) / len(active) * 100, 1) if active else None,
+        "pctSpendAmongAccrual": round(len(spend) / len(accrual) * 100, 1) if accrual else None,
+        "partnersWithAccrual": len(accrual),
+        "partnersWhoSpend": len(spend),
+        "partnersWithOsago": partners_with_osago,
+        "activePartners": len(active),
+        "buckets": [
+            {
+                "id": "zero",
+                "label": "0 раз списали",
+                "partnerCount": sum(1 for wa in filtered.values() if wa.has_accrual and wa.spend_events == 0),
+                "everyNthClient": bucket_nth(lambda n: n == 0),
+            },
+            {
+                "id": "mid",
+                "label": "3–9 раз списали",
+                "partnerCount": sum(
+                    1 for wa in filtered.values() if wa.has_accrual and 3 <= wa.spend_events <= 9
+                ),
+                "everyNthClient": bucket_nth(lambda n: 3 <= n <= 9),
+            },
+            {
+                "id": "high",
+                "label": ">10 раз списали",
+                "partnerCount": sum(1 for wa in filtered.values() if wa.has_accrual and wa.spend_events >= 10),
+                "everyNthClient": bucket_nth(lambda n: n >= 10),
+            },
+        ],
+    }
+
+
 def load_active_agent_wallets() -> set[str]:
     if not PATH_AGENTS.exists():
         return set()
@@ -448,7 +540,7 @@ def load_active_agent_wallets() -> set[str]:
     return s
 
 
-def scan_osago_partner_and_cross(paths: list[Path]) -> dict:
+def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dict:
     wallets: dict[str, WalletAgg] = defaultdict(WalletAgg)
     month_accrual: dict[str, set[str]] = defaultdict(set)
     month_spend: dict[str, set[str]] = defaultdict(set)
@@ -582,58 +674,11 @@ def scan_osago_partner_and_cross(paths: list[Path]) -> dict:
             }
         )
 
-    def bucket_nth(bucket_name: str, pred) -> int | None:
-        o = c = 0
-        for cb, wa in wallets.items():
-            if not wa.has_accrual or not pred(wa.spend_events):
-                continue
-            o += wa.osago_issued
-            c += wa.cross
-        if c <= 0:
-            return None
-        return max(1, round(o / c))
-
-    partners_with_osago = len([cb for cb, wa in wallets.items() if cb and wa.osago_issued > 0])
-
-    engagement = {
-        "pctWithAccrualAmongSellers": round(len(accrual_period) / partners_with_osago * 100, 1)
-        if partners_with_osago
-        else None,
-        "pctWithAccrualAmongActiveBoard": round(len(accrual_period) / len(active_period) * 100, 1)
-        if active_period
-        else None,
-        "pctSpendAmongAccrual": round(len(spend_period) / len(accrual_period) * 100, 1) if accrual_period else None,
-        "partnersWithAccrual": len(accrual_period),
-        "partnersWhoSpend": len(spend_period),
-        "partnersWithOsago": partners_with_osago,
-        "activePartners": len(active_period),
-        "buckets": [
-            {
-                "id": "zero",
-                "label": "0 раз списали",
-                "partnerCount": sum(
-                    1 for wa in wallets.values() if wa.has_accrual and wa.spend_events == 0
-                ),
-                "everyNthClient": bucket_nth("zero", lambda n: n == 0),
-            },
-            {
-                "id": "mid",
-                "label": "3–9 раз списали",
-                "partnerCount": sum(
-                    1 for wa in wallets.values() if wa.has_accrual and 3 <= wa.spend_events <= 9
-                ),
-                "everyNthClient": bucket_nth("mid", lambda n: 3 <= n <= 9),
-            },
-            {
-                "id": "high",
-                "label": ">10 раз списали",
-                "partnerCount": sum(
-                    1 for wa in wallets.values() if wa.has_accrual and wa.spend_events >= 10
-                ),
-                "everyNthClient": bucket_nth("high", lambda n: n >= 10),
-            },
-        ],
-    }
+    engagement = compute_partner_engagement(wallets, fmap, agent_active, None)
+    engagement_by_top3 = [
+        {"region": label, **compute_partner_engagement(wallets, fmap, agent_active, label)}
+        for label in TOP3_LABELS
+    ]
 
     cross_loyalty = {
         "issuedOsago": issued_total,
@@ -665,6 +710,7 @@ def scan_osago_partner_and_cross(paths: list[Path]) -> dict:
             "last3Months": month_rows,
         },
         "partnerEngagement": engagement,
+        "partnerEngagementByTop3": engagement_by_top3,
         "crossLoyalty": cross_loyalty,
     }
 
@@ -728,7 +774,7 @@ def main() -> None:
         if v.acc_total > 0 or v.spend_total > 0
     ]
 
-    extra = scan_osago_partner_and_cross([PATH_OSAGO_2025, PATH_OSAGO_2026])
+    extra = scan_osago_partner_and_cross([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
     spend_by_product = {
         "osagoProlongation": round(total.spend_osago_slider),
         "kaskoWalletScoring": round(total.spend_kasko),

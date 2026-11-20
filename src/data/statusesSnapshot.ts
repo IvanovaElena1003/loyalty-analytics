@@ -84,6 +84,98 @@ export const STATUSES_SNAPSHOT = {
       }
     ]
   },
+  "partnerEngagementByTop3": [
+    {
+      "region": "Москва",
+      "pctWithAccrualAmongSellers": 80.3,
+      "pctWithAccrualAmongActiveBoard": 20.0,
+      "pctSpendAmongAccrual": 35.0,
+      "partnersWithAccrual": 1768,
+      "partnersWhoSpend": 618,
+      "partnersWithOsago": 2201,
+      "activePartners": 8833,
+      "buckets": [
+        {
+          "id": "zero",
+          "label": "0 раз списали",
+          "partnerCount": 1154,
+          "everyNthClient": 70
+        },
+        {
+          "id": "mid",
+          "label": "3–9 раз списали",
+          "partnerCount": 157,
+          "everyNthClient": 11
+        },
+        {
+          "id": "high",
+          "label": ">10 раз списали",
+          "partnerCount": 130,
+          "everyNthClient": 7
+        }
+      ]
+    },
+    {
+      "region": "Санкт-Петербург",
+      "pctWithAccrualAmongSellers": 82.3,
+      "pctWithAccrualAmongActiveBoard": 31.9,
+      "pctSpendAmongAccrual": 36.1,
+      "partnersWithAccrual": 549,
+      "partnersWhoSpend": 198,
+      "partnersWithOsago": 667,
+      "activePartners": 1722,
+      "buckets": [
+        {
+          "id": "zero",
+          "label": "0 раз списали",
+          "partnerCount": 352,
+          "everyNthClient": 65
+        },
+        {
+          "id": "mid",
+          "label": "3–9 раз списали",
+          "partnerCount": 58,
+          "everyNthClient": 14
+        },
+        {
+          "id": "high",
+          "label": ">10 раз списали",
+          "partnerCount": 38,
+          "everyNthClient": 9
+        }
+      ]
+    },
+    {
+      "region": "Регионы",
+      "pctWithAccrualAmongSellers": 84.9,
+      "pctWithAccrualAmongActiveBoard": 25.3,
+      "pctSpendAmongAccrual": 48.9,
+      "partnersWithAccrual": 1121,
+      "partnersWhoSpend": 548,
+      "partnersWithOsago": 1320,
+      "activePartners": 4438,
+      "buckets": [
+        {
+          "id": "zero",
+          "label": "0 раз списали",
+          "partnerCount": 577,
+          "everyNthClient": 49
+        },
+        {
+          "id": "mid",
+          "label": "3–9 раз списали",
+          "partnerCount": 196,
+          "everyNthClient": 13
+        },
+        {
+          "id": "high",
+          "label": ">10 раз списали",
+          "partnerCount": 123,
+          "everyNthClient": 7
+        }
+      ]
+    }
+  ],
   "crossLoyalty": {
     "issuedOsago": 200752,
     "crossTotal": 18947,

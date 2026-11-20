@@ -9,6 +9,23 @@ import {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RowTotals = any
+type EngagementBucket = {
+  id: string
+  label: string
+  partnerCount: number
+  everyNthClient: number | null
+}
+type EngagementSlice = {
+  region: string
+  pctWithAccrualAmongSellers: number | null
+  pctWithAccrualAmongActiveBoard: number | null
+  pctSpendAmongAccrual: number | null
+  partnersWithAccrual: number
+  partnersWhoSpend: number
+  partnersWithOsago: number
+  activePartners: number
+  buckets: EngagementBucket[]
+}
 
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
 
@@ -46,6 +63,10 @@ function cellAmount(row: RowTotals, key: string, isPct?: boolean): string {
   return fmtRub(Number(row[key] ?? 0))
 }
 
+function accrualPctAmongSellers(e: EngagementSlice): number | null {
+  return e.pctWithAccrualAmongSellers ?? e.pctWithAccrualAmongActiveBoard
+}
+
 function noteForRow(row: RowTotals, countKey?: string, suffix?: string): string {
   if (!countKey) return ''
   const n = Number(row[countKey] ?? 0)
@@ -68,6 +89,16 @@ export default function StatusesTab() {
         .flatMap(r => r.children as RowTotals[]),
     [sliceRows],
   )
+
+  const engagementSlices = useMemo((): EngagementSlice[] => {
+    const top3 = (snap.partnerEngagementByTop3 ?? []) as EngagementSlice[]
+    const network: EngagementSlice = {
+      region: 'Вся сеть',
+      ...snap.partnerEngagement,
+      buckets: [...snap.partnerEngagement.buckets],
+    }
+    return [network, ...top3.map(s => ({ ...s, buckets: [...s.buckets] }))]
+  }, [snap])
 
   return (
     <div className="space-y-5 max-w-full">
@@ -282,6 +313,82 @@ export default function StatusesTab() {
               ))}
             </tbody>
           </table>
+
+          {engagementSlices.length > 1 && (
+            <>
+              <p className="text-xs font-semibold ren-text-brand px-3 pt-4 border-t border-[var(--stroke-divider)]">
+                Сравнение · вся сеть и топ-3 (филиал кешбука)
+              </p>
+              <table className="statuses-table statuses-table--slice w-full">
+                <thead>
+                  <tr>
+                    <th className="text-left">Показатель</th>
+                    {engagementSlices.map(s => (
+                      <th key={s.region} className="text-right">
+                        {s.region}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="statuses-table__row--emphasis">
+                    <td>Имеют накопления</td>
+                    {engagementSlices.map(s => (
+                      <td key={s.region} className="text-right tabular-nums">
+                        <span className="font-bold">{fmtPct(accrualPctAmongSellers(s))}</span>
+                        <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
+                          {fmtN(s.partnersWithAccrual)} / {fmtN(s.partnersWithOsago)}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="statuses-table__row--emphasis">
+                    <td>Списывают баллы</td>
+                    {engagementSlices.map(s => (
+                      <td key={s.region} className="text-right tabular-nums">
+                        <span className="font-bold">{fmtPct(s.pctSpendAmongAccrual)}</span>
+                        <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
+                          {fmtN(s.partnersWhoSpend)} / {fmtN(s.partnersWithAccrual)}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+              <table className="statuses-table statuses-table--slice w-full border-t border-[var(--stroke-divider)]">
+                <thead>
+                  <tr>
+                    <th className="text-left">Сегмент</th>
+                    {engagementSlices.map(s => (
+                      <th key={s.region} className="text-right text-[10px] leading-tight">
+                        {s.region}
+                        <div className="font-normal ren-text-secondary">партн. · N-й</div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(engagementSlices[0]?.buckets ?? []).map((b, bi) => (
+                    <tr key={b.id}>
+                      <td className="text-left">{b.label}</td>
+                      {engagementSlices.map(s => {
+                        const row = s.buckets[bi]
+                        return (
+                          <td key={s.region} className="text-right tabular-nums text-[11px]">
+                            <span>{fmtN(row?.partnerCount ?? 0)}</span>
+                            <span className="ren-text-brand font-semibold">
+                              {' '}
+                              · {row?.everyNthClient != null ? `${row.everyNthClient}-му` : '—'}
+                            </span>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
         </div>
       </div>
 
