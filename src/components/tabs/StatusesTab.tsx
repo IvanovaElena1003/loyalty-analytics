@@ -110,6 +110,257 @@ export default function StatusesTab() {
         </div>
       </div>
 
+      {/* Спискание по продуктам (₽) */}
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">Потрачено РБ по продуктам · {snap.periodLabel}</h3>
+        </div>
+        <div className="ren-card__body p-0">
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Продукт / механика</th>
+                <th className="text-right w-36">Сумма, ₽</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(
+                [
+                  ['ОСАГО пролонгация (ползунок)', snap.spendByProduct.osagoProlongation],
+                  ['КАСКО (кошелёк + скоринг)', snap.spendByProduct.kaskoWalletScoring],
+                  ['Кросс · скидка СП (бесполисные)', snap.spendByProduct.crossBespolisDiscount],
+                  ['Кросс · повыш. КВ (бесполисные)', snap.spendByProduct.crossBespolisKv],
+                  ['Обучение', snap.spendByProduct.training],
+                ] as const
+              ).map(([label, amount]) => (
+                <tr key={label}>
+                  <td>{label}</td>
+                  <td className="text-right tabular-nums font-medium">{fmtRub(amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
+            {snap.spendByProduct.note}
+          </p>
+        </div>
+      </div>
+
+      {/* Партнёры — чеклист слайда */}
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">Партнёры и РБ · {snap.partnerMetrics.periodLabel}</h3>
+          <p className="text-[11px] ren-text-secondary font-normal mt-1">
+            Активные:{' '}
+            {snap.partnerMetrics.activeSource === 'agent_network'
+              ? `борд агентской сети (${fmtN(snap.partnerEngagement.activePartners)})`
+              : `≥ 3 оформл. ОСАГО в периоде`}
+            . Кешбук HeadPartnerCB, без Seller / Продавец.
+          </p>
+        </div>
+        <div className="ren-card__body p-0 space-y-0">
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Показатель</th>
+                <th className="text-right">Значение</th>
+                <th className="text-right">Доля</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Партнёров с начислением РБ</td>
+                <td className="text-right tabular-nums">
+                  {fmtN(snap.partnerMetrics.fullPeriod.accrualPartners)}{' '}
+                  <span className="ren-text-secondary text-[11px]">
+                    / {fmtN(snap.partnerMetrics.fullPeriod.activePartners)}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">
+                  {fmtPct(snap.partnerMetrics.fullPeriod.accrualSharePct)}
+                </td>
+              </tr>
+              <tr>
+                <td>Партнёров со списанием (&gt;0)</td>
+                <td className="text-right tabular-nums">
+                  {fmtN(snap.partnerMetrics.fullPeriod.spendPartners)}{' '}
+                  <span className="ren-text-secondary text-[11px]">
+                    / {fmtN(snap.partnerMetrics.fullPeriod.accrualBaseForSpend)}
+                  </span>
+                </td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">
+                  {fmtPct(snap.partnerMetrics.fullPeriod.spendSharePct)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">Динамика · 3 полных месяца</p>
+          <table className="statuses-table statuses-table--slice w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Месяц</th>
+                <th className="text-right">С начисл.</th>
+                <th className="text-right">% акт.</th>
+                <th className="text-right">Со спис.</th>
+                <th className="text-right">% от накопл.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snap.partnerMetrics.last3Months.map(row => (
+                <tr key={row.ym}>
+                  <td>{row.label}</td>
+                  <td className="text-right tabular-nums text-[11px]">
+                    {fmtN(row.withAccrual)} / {fmtN(row.activePartners)}
+                  </td>
+                  <td className="text-right tabular-nums font-semibold">{fmtPct(row.accrualSharePct)}</td>
+                  <td className="text-right tabular-nums text-[11px]">
+                    {fmtN(row.withSpend)} / {fmtN(row.withAccrualEver)}
+                  </td>
+                  <td className="text-right tabular-nums font-semibold">{fmtPct(row.spendShareOfAccrualsPct)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Как партнёры используют бонусы */}
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">Как партнёры используют бонусы · за период</h3>
+        </div>
+        <div className="ren-card__body p-0">
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Показатель</th>
+                <th className="text-right w-28">%</th>
+                <th className="text-right">Детали</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="statuses-table__row--emphasis">
+                <td>Имеют накопления (начисление РБ)</td>
+                <td className="text-right tabular-nums font-bold text-2xl">
+                  {fmtPct(snap.partnerEngagement.pctWithAccrualAmongSellers ?? snap.partnerEngagement.pctWithAccrualAmongActiveBoard)}
+                </td>
+                <td className="text-right text-[11px] ren-text-secondary">
+                  {fmtN(snap.partnerEngagement.partnersWithAccrual)} /{' '}
+                  {fmtN(snap.partnerEngagement.partnersWithOsago ?? snap.partnerEngagement.activePartners)} продавали ОСАГО
+                </td>
+              </tr>
+              <tr className="statuses-table__row--emphasis">
+                <td>Списывают баллы</td>
+                <td className="text-right tabular-nums font-bold text-2xl">
+                  {fmtPct(snap.partnerEngagement.pctSpendAmongAccrual)}
+                </td>
+                <td className="text-right text-[11px] ren-text-secondary">
+                  {fmtN(snap.partnerEngagement.partnersWhoSpend)} /{' '}
+                  {fmtN(snap.partnerEngagement.partnersWithAccrual)} с накоплением
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">Кросс на 1 клиента по частоте списаний</p>
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Сегмент партнёра</th>
+                <th className="text-right">Партнёров</th>
+                <th className="text-right">Кросс каждому N-му клиенту</th>
+              </tr>
+            </thead>
+            <tbody>
+              {snap.partnerEngagement.buckets.map(b => (
+                <tr key={b.id}>
+                  <td>{b.label}</td>
+                  <td className="text-right tabular-nums">{fmtN(b.partnerCount)}</td>
+                  <td className="text-right tabular-nums font-semibold ren-text-brand">
+                    {b.everyNthClient != null ? `${b.everyNthClient}-му` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Кросс + лояльность */}
+      <div className="ren-card">
+        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+          <h3 className="ren-card__title text-sm">ОСАГО и кросс · лояльность за период</h3>
+        </div>
+        <div className="ren-card__body p-0">
+          <table className="statuses-table w-full">
+            <tbody>
+              <tr className="statuses-table__row--emphasis">
+                <td>Кросс-продукт куплен</td>
+                <td className="text-right tabular-nums font-bold">
+                  каждый {snap.crossLoyalty.everyNthCrossClient ?? '—'}-й клиент
+                </td>
+                <td className="text-right text-[11px] ren-text-secondary">
+                  {fmtN(snap.crossLoyalty.crossTotal)} / {fmtN(snap.crossLoyalty.issuedOsago)} оформл.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-xs font-semibold ren-text-brand px-3 pt-2">Кросс-Каско от бесполисных</p>
+          <table className="statuses-table w-full">
+            <thead>
+              <tr>
+                <th className="text-left">Показатель</th>
+                <th className="text-right">Значение</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Полисов со скидкой СП (бесполис.)</td>
+                <td className="text-right tabular-nums">{fmtN(snap.crossLoyalty.bespolis.crossPolicies)}</td>
+              </tr>
+              <tr>
+                <td>Частота (оформл. ОСАГО на 1 такой кросс)</td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">
+                  каждый {snap.crossLoyalty.bespolis.everyNthClient ?? '—'}-й
+                </td>
+              </tr>
+              <tr>
+                <td>Кросс со списанием РБ (скидка или КВ)</td>
+                <td className="text-right tabular-nums">
+                  {fmtPct(snap.crossLoyalty.bespolis.pctWithRbSpendAmongCross)}
+                </td>
+              </tr>
+              <tr>
+                <td>Доля полисов со скидкой СП от всех кросс</td>
+                <td className="text-right tabular-nums">
+                  {fmtPct(snap.crossLoyalty.bespolis.pctDiscountShareOfCross)}
+                </td>
+              </tr>
+              <tr>
+                <td>Средний чек (FinalPrice, медиана)</td>
+                <td className="text-right tabular-nums">
+                  {snap.crossLoyalty.bespolis.avgCheckFinal != null
+                    ? fmtN(snap.crossLoyalty.bespolis.avgCheckFinal)
+                    : '—'}{' '}
+                  ₽
+                </td>
+              </tr>
+              <tr>
+                <td>Средний PolicyPrice (медиана)</td>
+                <td className="text-right tabular-nums">
+                  {snap.crossLoyalty.bespolis.avgCheckPolicy != null
+                    ? fmtN(snap.crossLoyalty.bespolis.avgCheckPolicy)
+                    : '—'}{' '}
+                  ₽
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="text-[11px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
+            {snap.crossLoyalty.note}
+          </p>
+        </div>
+      </div>
+
       {/* 2. Даты запуска */}
       <div className="ren-card">
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">

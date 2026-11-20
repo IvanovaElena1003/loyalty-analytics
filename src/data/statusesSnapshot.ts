@@ -3,6 +3,101 @@ export const STATUSES_SNAPSHOT = {
   "generatedAt": "2026-11-20",
   "periodLabel": "30.07.2025 – 18.11.2026",
   "agentFilialMapSize": 14993,
+  "spendByProduct": {
+    "osagoProlongation": 22799742,
+    "kaskoWalletScoring": 907694,
+    "crossBespolisDiscount": 7136830,
+    "crossBespolisKv": 11660600,
+    "training": 0,
+    "note": "Обучение в xlsx лояльности не выделено — 0 ₽."
+  },
+  "partnerMetrics": {
+    "periodLabel": "30.07.2025 – 18.11.2026",
+    "activeSource": "agent_network",
+    "fullPeriod": {
+      "accrualPartners": 3438,
+      "activePartners": 14993,
+      "accrualSharePct": 22.9,
+      "spendPartners": 1364,
+      "accrualBaseForSpend": 3438,
+      "spendSharePct": 39.7
+    },
+    "last3Months": [
+      {
+        "ym": "2026-08",
+        "label": "авг 2026",
+        "withAccrual": 1646,
+        "activePartners": 14993,
+        "accrualSharePct": 11.0,
+        "withSpend": 529,
+        "withAccrualEver": 3438,
+        "spendShareOfAccrualsPct": 15.4
+      },
+      {
+        "ym": "2026-09",
+        "label": "сен 2026",
+        "withAccrual": 1659,
+        "activePartners": 14993,
+        "accrualSharePct": 11.1,
+        "withSpend": 550,
+        "withAccrualEver": 3438,
+        "spendShareOfAccrualsPct": 16.0
+      },
+      {
+        "ym": "2026-10",
+        "label": "окт 2026",
+        "withAccrual": 1711,
+        "activePartners": 14993,
+        "accrualSharePct": 11.4,
+        "withSpend": 532,
+        "withAccrualEver": 3438,
+        "spendShareOfAccrualsPct": 15.5
+      }
+    ]
+  },
+  "partnerEngagement": {
+    "pctWithAccrualAmongSellers": 82.1,
+    "pctWithAccrualAmongActiveBoard": 22.9,
+    "pctSpendAmongAccrual": 39.7,
+    "partnersWithAccrual": 3438,
+    "partnersWhoSpend": 1364,
+    "partnersWithOsago": 4188,
+    "activePartners": 14993,
+    "buckets": [
+      {
+        "id": "zero",
+        "label": "0 раз списали",
+        "partnerCount": 2083,
+        "everyNthClient": 61
+      },
+      {
+        "id": "mid",
+        "label": "3–9 раз списали",
+        "partnerCount": 411,
+        "everyNthClient": 12
+      },
+      {
+        "id": "high",
+        "label": ">10 раз списали",
+        "partnerCount": 291,
+        "everyNthClient": 7
+      }
+    ]
+  },
+  "crossLoyalty": {
+    "issuedOsago": 200752,
+    "crossTotal": 18947,
+    "everyNthCrossClient": 11,
+    "bespolis": {
+      "crossPolicies": 5087,
+      "everyNthClient": 39,
+      "pctWithRbSpendAmongCross": 70.2,
+      "pctDiscountShareOfCross": 26.8,
+      "avgCheckFinal": 1000,
+      "avgCheckPolicy": 2490
+    },
+    "note": "ДАГО и НС-пассажиры в выгрузке лояльности не размечены — только Кросс-Каско от бесполисных."
+  },
   "meta": {
     "rowsOsagoAllStatuses": 744831,
     "rowsKaskoAllStatuses": 9598,
