@@ -124,7 +124,7 @@ export default function StatusesTab() {
           startKey: 'spendOsagoSlider' as MechanicKey,
         },
         {
-          label: 'КАСКО (кошелёк + скоринг)',
+          label: 'Каско ФЛ',
           amount: snap.spendByProduct.kaskoWalletScoring,
           startKey: 'spendKasko' as MechanicKey,
         },
@@ -343,7 +343,7 @@ export default function StatusesTab() {
       {/* Как партнёры используют бонусы */}
       <div className="ren-card">
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-          <h3 className="ren-card__title text-sm">Как партнёры используют бонусы · за период</h3>
+          <h3 className="ren-card__title text-sm">Как партнёры используют бонусы · {snap.periodLabel}</h3>
         </div>
         <div className="ren-card__body p-0">
           <table className="statuses-table w-full">
