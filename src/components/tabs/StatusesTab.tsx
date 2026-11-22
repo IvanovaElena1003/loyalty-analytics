@@ -390,44 +390,11 @@ export default function StatusesTab() {
               slice={snap.partnerMetrics.rolling3Months as PartnerPeriodSlice}
             />
           )}
-          <p className="text-xs font-semibold ren-text-brand px-3 pt-3 border-t border-[var(--stroke-divider)]">
-            Динамика · 3 полных месяца
-          </p>
-          <table className="statuses-table statuses-table--slice w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Месяц</th>
-                <th className="text-right">С начисл. (&gt;0 раз)</th>
-                <th className="text-right">% оформ.</th>
-                <th className="text-right">Со спис. (&gt;0 раз)</th>
-                <th className="text-right">% от накопл.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snap.partnerMetrics.last3Months.map(row => (
-                <tr key={row.ym}>
-                  <td>{row.label}</td>
-                  <td className="text-right tabular-nums text-[11px]">
-                    {fmtN(row.withAccrual)} /{' '}
-                    {fmtN(row.issuedPartners ?? (row as { activePartners?: number }).activePartners ?? 0)}
-                  </td>
-                  <td className="text-right tabular-nums font-semibold">{fmtPctWhole(row.accrualSharePct)}</td>
-                  <td className="text-right tabular-nums text-[11px]">
-                    {fmtN(row.withSpend)} / {fmtN(row.withAccrualEver)}
-                  </td>
-                  <td className="text-right tabular-nums font-semibold">{fmtPctWhole(row.spendShareOfAccrualsPct)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-[10px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
-            Знаменатель начисления — оформившие ОСАГО и/или Каско ФЛ в этом месяце; списания — накопившие к
-            концу месяца. Скользящие окна выше — другая логика (уникальные партнёры за период, не «помесячный
-            актив»).
-            {snap.partnerMetrics.fullPeriod.spendByMechanic?.noteMutual
-              ? ` ${snap.partnerMetrics.fullPeriod.spendByMechanic.noteMutual}`
-              : ''}
-          </p>
+          {snap.partnerMetrics.fullPeriod.spendByMechanic?.noteMutual ? (
+            <p className="text-[10px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
+              {snap.partnerMetrics.fullPeriod.spendByMechanic.noteMutual}
+            </p>
+          ) : null}
         </div>
       </div>
 
