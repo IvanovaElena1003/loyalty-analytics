@@ -22,7 +22,7 @@ const fmtRbInt = (v: number) =>
 export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }) {
   const rows = [
     {
-      label: `Все партнёры · ${fmtN(data.allPartnersCount)} кешбуков (с нулями)`,
+      label: `Оформили ОСАГО и/или Каско ФЛ · ${fmtN(data.allPartnersCount)} кешбуков (с нулями)`,
       value: data.allPartnersCount > 0 ? fmtRbInt(data.balanceMeanAll) : '—',
     },
     {

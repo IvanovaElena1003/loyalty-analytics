@@ -1270,7 +1270,8 @@ def rollup_top3(by_filial: dict[str, Totals]) -> list[dict]:
 
 
 def balance_stats_from_wallets(wallets: dict[str, WalletAgg]) -> dict[str, int | float]:
-    partners = [cb for cb, wa in wallets.items() if cb and wa.in_balance_pool()]
+    # База как в «Партнёры и РБ»: оформили ≥1 ОСАГО и/или Каско ФЛ в период
+    partners = [cb for cb, wa in wallets.items() if cb and wa.has_issued]
     balances = {cb: wallets[cb].balance_for_mean() for cb in partners}
     positive = [cb for cb in partners if balances[cb] > 0]
     n_all = len(partners)

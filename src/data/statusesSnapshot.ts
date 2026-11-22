@@ -13,9 +13,9 @@ export const STATUSES_SNAPSHOT = {
   },
   "avgBonus": {
     "monthCount": 15,
-    "balanceMeanAll": 988,
+    "balanceMeanAll": 992,
     "balanceMeanPositive": 1275,
-    "allPartnersCount": 4236,
+    "allPartnersCount": 4220,
     "positiveBalanceCount": 3281,
     "accrualTotal": 86149701,
     "spendTotal": 42504866,
