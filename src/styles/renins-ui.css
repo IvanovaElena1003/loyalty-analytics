@@ -507,3 +507,13 @@ body {
 .statuses-table--slice td:first-child {
   width: 32%;
 }
+
+.statuses-table--slice .statuses-table__col-network {
+  background: color-mix(in srgb, var(--bg-brand-primary-00) 42%, var(--bg-bg-secondary));
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--text-brand-primary) 35%, transparent),
+    inset -2px 0 0 color-mix(in srgb, var(--text-brand-primary) 35%, transparent);
+}
+
+.statuses-table--slice .statuses-table__row--emphasis .statuses-table__col-network {
+  background: color-mix(in srgb, var(--bg-brand-primary-00) 65%, transparent);
+}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { STATUSES_SNAPSHOT } from '../../data/statusesSnapshot'
 import { fmtRub, type MechanicKey } from '../../utils/loyaltyBalances'
 
@@ -89,10 +89,24 @@ function accrualPctAmongIssued(e: EngagementSlice): number | null {
   )
 }
 
-function PeriodMetricCell({ row, m }: { row: RowTotals; m: MetricRowDef }) {
+function isNetworkSlice(region: unknown): boolean {
+  return String(region) === 'Вся сеть'
+}
+
+function PeriodMetricCell({
+  row,
+  m,
+  networkColumn,
+}: {
+  row: RowTotals
+  m: MetricRowDef
+  networkColumn?: boolean
+}) {
   const share = metricSharePct(row, m)
   return (
-    <td className="text-right tabular-nums">
+    <td
+      className={`text-right tabular-nums${networkColumn ? ' statuses-table__col-network' : ''}`}
+    >
       <span className={m.emphasis ? 'font-semibold ren-text-brand' : 'font-medium'}>
         {cellAmount(row, m.amountKey, m.isPct)}
       </span>
@@ -105,7 +119,6 @@ function PeriodMetricCell({ row, m }: { row: RowTotals; m: MetricRowDef }) {
 
 export default function StatusesTab() {
   const snap = STATUSES_SNAPSHOT
-  const [regionsOpen, setRegionsOpen] = useState(false)
 
   const startByKey = useMemo(() => snap.mechanicStarts, [])
   const totalRow = useMemo(() => ({ region: 'Вся сеть', ...snap.totals }), [snap.totals])
@@ -113,14 +126,6 @@ export default function StatusesTab() {
   const periodSlices = useMemo(
     () => [totalRow, ...sliceRows] as RowTotals[],
     [totalRow, sliceRows],
-  )
-
-  const regionChildren = useMemo(
-    () =>
-      sliceRows
-        .filter(r => r.rollup === 'regions' && r.children?.length)
-        .flatMap(r => r.children as RowTotals[]),
-    [sliceRows],
   )
 
   const spendProductRows = useMemo(
@@ -173,51 +178,21 @@ export default function StatusesTab() {
           <h3 className="ren-card__title text-sm">Итого за период · {snap.periodLabel}</h3>
         </div>
         <div className="ren-card__body p-0">
-          <p className="text-[11px] ren-text-secondary px-3 pt-2">Итого · вся сеть</p>
-          <table className="statuses-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Показатель</th>
-                <th className="text-right w-32">Сумма, ₽</th>
-                <th className="text-right w-24">% от итога</th>
-              </tr>
-            </thead>
-            <tbody>
-              {METRIC_ROWS.map(m => (
-                <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
-                  <td className="text-left">{m.label}</td>
-                  <td className="text-right tabular-nums font-medium">
-                    {cellAmount(totalRow, m.amountKey, m.isPct)}
-                  </td>
-                  <td className="text-right tabular-nums text-[var(--text-secondary)]">
-                    {m.isPct ? '—' : fmtPctWhole(metricSharePct(totalRow, m))}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="text-xs font-semibold ren-text-brand px-3 pt-4 border-t border-[var(--stroke-divider)]">
-            Сравнение · {snap.periodLabel} · вся сеть, Москва, СПб, регионы
-          </p>
           <table className="statuses-table statuses-table--slice w-full">
             <thead>
               <tr>
                 <th className="text-left">Показатель</th>
-                {periodSlices.map(s => (
-                  <th key={String(s.region)} className="text-right text-[11px]">
-                    {s.rollup === 'regions' ? (
-                      <button
-                        type="button"
-                        className="ren-link font-medium"
-                        onClick={() => setRegionsOpen(o => !o)}
-                      >
-                        {regionsOpen ? '▾' : '▸'} {String(s.region)}
-                      </button>
-                    ) : (
-                      String(s.region)
-                    )}
-                  </th>
-                ))}
+                {periodSlices.map(s => {
+                  const net = isNetworkSlice(s.region)
+                  return (
+                    <th
+                      key={String(s.region)}
+                      className={`text-right text-[11px]${net ? ' statuses-table__col-network' : ''}`}
+                    >
+                      {String(s.region)}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -225,7 +200,12 @@ export default function StatusesTab() {
                 <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
                   <td className="text-left">{m.label}</td>
                   {periodSlices.map(s => (
-                    <PeriodMetricCell key={String(s.region)} row={s} m={m} />
+                    <PeriodMetricCell
+                      key={String(s.region)}
+                      row={s}
+                      m={m}
+                      networkColumn={isNetworkSlice(s.region)}
+                    />
                   ))}
                 </tr>
               ))}
@@ -517,37 +497,6 @@ export default function StatusesTab() {
           )}
         </div>
       </div>
-
-      {/* Детализация регионов — только начисл / списано / утилизация */}
-      {regionsOpen && regionChildren.length > 0 && (
-        <div className="ren-card">
-          <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-            <h3 className="ren-card__title text-sm">Регионы · детализация по филиалам</h3>
-          </div>
-          <div className="ren-card__body p-0 max-h-[min(50vh,420px)] overflow-y-auto overflow-x-hidden">
-            <table className="statuses-table w-full">
-              <thead className="sticky top-0 bg-[var(--bg-bg-secondary)] z-10">
-                <tr>
-                  <th className="text-left">Филиал</th>
-                  <th className="text-right">Начислено</th>
-                  <th className="text-right">Списано</th>
-                  <th className="text-right w-20">Утилиз.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {regionChildren.map(r => (
-                  <tr key={String(r.region)}>
-                    <td className="text-left font-medium">{String(r.region)}</td>
-                    <td className="text-right tabular-nums">{fmtRub(Number(r.accTotal))}</td>
-                    <td className="text-right tabular-nums ren-text-brand">{fmtRub(Number(r.spendTotal))}</td>
-                    <td className="text-right tabular-nums">{fmtPctWhole(r.utilPct as number | null)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
 
     </div>
   )
