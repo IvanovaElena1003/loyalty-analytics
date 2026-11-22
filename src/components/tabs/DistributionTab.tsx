@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import type { AggregateResult, MonthMetrics } from '../../types'
+import type { AggregateResult } from '../../types'
 import type { RawRow } from '../../types'
 import { AgentFilterBar } from '../AgentFilterBar'
 import {
@@ -9,8 +9,6 @@ import {
   type AgentFilters,
 } from '../../utils/agentNetwork'
 import { aggregate } from '../../utils/aggregate'
-import { partnerWalletKey } from '../../utils/partnerWallet'
-
 interface Props {
   result: AggregateResult
   agentRows?: RawRow[]
@@ -72,111 +70,6 @@ function extractDistValues(rows: RawRow[], monthKey: string | null) {
   }
 
   return { accrualValues, accrualZeroCount, spendingValues, spendingZeroCount }
-}
-
-/** Ср. доступный остаток (AvailableForUsePoints) на партнёра RenId — снимок в выборке. */
-function extractPartnerCurrentBalanceAvgs(rows: RawRow[], monthKey: string | null) {
-  const balance = new Map<string, number>()
-  const accrualPartners = new Set<string>()
-  const allPartners = new Set<string>()
-
-  for (const row of rows) {
-    const state = String(row.State ?? '')
-    if (EXCLUDED_DIST.has(state)) continue
-    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-
-    const wallet = partnerWalletKey(row)
-    if (!wallet) continue
-    allPartners.add(wallet)
-
-    if (state === 'PolicyIssued') {
-      const lp = toNum(row.LoyaltyPointsInLK)
-      if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(wallet)
-    }
-
-    const av = toNum(row['AvailableForUsePoints'])
-    if (!isNullVal(row['AvailableForUsePoints'])) {
-      balance.set(wallet, Math.max(balance.get(wallet) ?? 0, av))
-    }
-  }
-
-  function meanAmong(ids: Set<string>, positiveOnly: boolean): number {
-    const list = positiveOnly
-      ? [...ids].filter(id => (balance.get(id) ?? 0) > 0)
-      : [...ids]
-    if (list.length === 0) return 0
-    let sum = 0
-    for (const id of list) sum += balance.get(id) ?? 0
-    return sum / list.length
-  }
-
-  const withPositiveBalance = [...allPartners].filter(id => (balance.get(id) ?? 0) > 0).length
-
-  return {
-    meanAll: meanAmong(allPartners, false),
-    meanPositiveOnly: meanAmong(allPartners, true),
-    allPartnersCount: allPartners.size,
-    positiveBalanceCount: withPositiveBalance,
-    accrualPartnersCount: accrualPartners.size,
-  }
-}
-
-/** Для партнёров, у которых есть хотя бы одно начисление — их данные по списаниям */
-function extractAccrualPartnerSpending(rows: RawRow[], monthKey: string | null) {
-  // 1. Собираем партнёров с начислениями
-  const accrualPartners = new Set<string>()
-  for (const row of rows) {
-    if (String(row.State ?? '') !== 'PolicyIssued') continue
-    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const wallet = partnerWalletKey(row)
-    if (!wallet) continue
-    const lp = toNum(row.LoyaltyPointsInLK)
-    if (!isNullVal(row.LoyaltyPointsInLK) && lp > 0) accrualPartners.add(wallet)
-  }
-
-  // 2. Считаем списания только для этих партнёров
-  const partnerAmount = new Map<string, number>()
-  const partnerEvents = new Map<string, number>()
-  for (const w of accrualPartners) { partnerAmount.set(w, 0); partnerEvents.set(w, 0) }
-
-  for (const row of rows) {
-    const state = String(row.State ?? '')
-    if (EXCLUDED_DIST.has(state)) continue
-    if (String(row.CrossIsBought ?? '') !== 'Да') continue
-    if (monthKey !== null && getMonthKey(row.CreateDate) !== monthKey) continue
-    const wallet = partnerWalletKey(row)
-    if (!wallet || !accrualPartners.has(wallet)) continue
-    const policyPrice = !isNullVal(row.PolicyPrice) ? toNum(row.PolicyPrice) : BASE_PRICE_DIST
-    const fp  = toNum(row.FinalPrice)
-    const kv  = toNum(row.ChargedToIncreasedKV)
-    const hasKV       = !isNullVal(row.ChargedToIncreasedKV) && kv !== 0
-    const hasDiscount = !isNullVal(row.FinalPrice) && fp !== policyPrice
-    const spend = (hasKV ? kv : 0) + (hasDiscount ? policyPrice - fp : 0)
-    if (spend > 0) {
-      partnerAmount.set(wallet, (partnerAmount.get(wallet) ?? 0) + spend)
-      partnerEvents.set(wallet, (partnerEvents.get(wallet) ?? 0) + 1)
-    }
-  }
-
-  const values: number[] = []
-  let zeroCount = 0
-  let totalEvents = 0
-  for (const [w, amount] of partnerAmount.entries()) {
-    if (amount > 0) values.push(amount)
-    else zeroCount++
-    totalEvents += partnerEvents.get(w) ?? 0
-  }
-  const totalRb = values.reduce((s, v) => s + v, 0)
-  const spentAtLeastOnce = values.length
-
-  return {
-    values,
-    zeroCount,
-    accrualPartnersCount: accrualPartners.size,
-    spentAtLeastOnce,
-    totalEvents,
-    totalRb,
-  }
 }
 
 // ─── Тип распределения ───────────────────────────────────────────────────────
@@ -295,21 +188,6 @@ function computeDist(
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const fmtN   = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const fmtF   = (v: number) => v.toLocaleString('ru-RU', { maximumFractionDigits: 1 })
-const fmtRbInt = (v: number) =>
-  Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
-
-const fmtDec1 = (n: number) =>
-  n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-
-/** Крупные суммы: 7,3М; мелкие — полные РБ. */
-const fmtRbCompact = (v: number) => {
-  if (!Number.isFinite(v)) return '—'
-  if (Math.abs(v) >= 1_000_000) return `${fmtDec1(v / 1_000_000)}М`
-  return fmtRbInt(v)
-}
-const fmtPct1 = (v: number) =>
-  Number.isFinite(v) ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '—'
-
 function humanLabel(b: { from: number; to: number }, unit: string): string {
   const hi = b.to === Infinity ? Infinity : Math.round(b.to)
   if (b.from <= 0 && hi === Infinity) return `любые, ${unit}`
@@ -327,7 +205,7 @@ const BAR_COLORS = [
 function DistBlock({
   title, subtitle, dist, unit,
   hideZeroChip, showMeanAll, meanNonZeroLabel, meanAllLabel,
-  meanNonZeroOverride, meanAllOverride,
+  meanNonZeroOverride, meanAllOverride, hideEventCounts,
 }: {
   title: string
   subtitle: string
@@ -339,6 +217,7 @@ function DistBlock({
   meanAllLabel?: string
   meanNonZeroOverride?: number  // если задан — показываем вместо dist.mean
   meanAllOverride?: number      // если задан — показываем вместо dist.meanAll
+  hideEventCounts?: boolean
 }) {
   if (dist.total === 0) {
     return (
@@ -363,21 +242,25 @@ function DistBlock({
       </div>
 
       <div className="ren-card__body flex flex-wrap gap-6 border-b border-[var(--stroke-divider)] ren-bg-brand-soft">
-        <div>
-          <span className="text-xs ren-text-secondary">Всего событий</span>
-          <p className="text-lg font-bold text-[var(--text-primary)]">{fmtN(dist.total)}</p>
-        </div>
+        {!hideEventCounts && (
+          <div>
+            <span className="text-xs ren-text-secondary">Всего событий</span>
+            <p className="text-lg font-bold text-[var(--text-primary)]">{fmtN(dist.total)}</p>
+          </div>
+        )}
         {dist.nonZeroCount > 0 && (
           <>
-            <div>
-              <span className="text-xs ren-text-secondary">С ненулевым значением</span>
-              <p className="text-lg font-bold ren-text-brand">{fmtN(dist.nonZeroCount)}</p>
-            </div>
+            {!hideEventCounts && (
+              <div>
+                <span className="text-xs ren-text-secondary">С ненулевым значением</span>
+                <p className="text-lg font-bold ren-text-brand">{fmtN(dist.nonZeroCount)}</p>
+              </div>
+            )}
             <div>
               <span className="text-xs ren-text-secondary">{meanLabel}</span>
               <p className="text-lg font-bold ren-text-brand">{fmtN(Math.round(meanNonZeroValue))} {unit}</p>
             </div>
-            {showMeanAll && (
+            {showMeanAll && !hideEventCounts && (
               <div>
                 <span className="text-xs ren-text-secondary">{meanAllLabelResolved}</span>
                 <p className="text-lg font-bold ren-text-brand">{fmtN(Math.round(meanAllValue))} {unit}</p>
@@ -460,199 +343,6 @@ function DistBlock({
   )
 }
 
-// ─── Средние показатели Рен-бонусов ──────────────────────────────────────────
-function AvgCard({
-  title, value, value2, sub, detailLines,
-}: {
-  title: string
-  value: string
-  value2?: string
-  sub?: string
-  detailLines?: { label: string; value: string }[]
-}) {
-  return (
-    <div className="ren-card ren-card__body flex flex-col gap-0.5">
-      <p className="text-xs ren-text-brand font-medium uppercase tracking-wide leading-tight">{title}</p>
-      <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5 tabular-nums">{value}</p>
-      {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
-      {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
-      {detailLines && detailLines.length > 0 && (
-        <div className="mt-2.5 space-y-1">
-          {detailLines.map((line) => (
-            <p key={line.label} className="text-sm leading-snug">
-              <span className="ren-text-secondary">{line.label}</span>{' '}
-              <span className="font-bold ren-text-brand tabular-nums">{line.value}</span>
-            </p>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AvgBonusBlock({
-  totals,
-  months,
-  balanceAvgs,
-}: {
-  totals: MonthMetrics
-  months: MonthMetrics[]
-  balanceAvgs: ReturnType<typeof extractPartnerCurrentBalanceAvgs>
-}) {
-  const n = months.length
-  if (n === 0) return null
-
-  const avgBalanceAllPartners = balanceAvgs.meanAll
-  const avgBalancePositiveOnly = balanceAvgs.meanPositiveOnly
-  const avgAccrualRub  = totals.bonus_accrued / n
-  const avgSpendingRub = totals.bonus_spent_total / n
-  const avgDiscountRb  = totals.bonus_spent_discount / n
-  const avgKvRb        = totals.bonus_spent_kv  / n
-  const spendShareOfAccrual =
-    avgAccrualRub > 0 ? (avgSpendingRub / avgAccrualRub) * 100 : 0
-
-  const tableRows = [
-    {
-      label: 'Баланс кошелька · все',
-      total: balanceAvgs.allPartnersCount > 0 ? fmtRbInt(avgBalanceAllPartners) : '—',
-      avg: '—',
-      snapshot: true,
-    },
-    {
-      label: 'Баланс · остаток > 0',
-      total: balanceAvgs.positiveBalanceCount > 0 ? fmtRbInt(avgBalancePositiveOnly) : '—',
-      avg: '—',
-      snapshot: true,
-    },
-    {
-      label: 'Начисления',
-      total: fmtRbCompact(totals.bonus_accrued),
-      avg: fmtRbCompact(avgAccrualRub),
-      snapshot: false,
-    },
-    {
-      label: 'Списания',
-      total: fmtRbCompact(totals.bonus_spent_total),
-      avg: fmtRbCompact(avgSpendingRub),
-      snapshot: false,
-    },
-  ]
-
-  return (
-    <div className="ren-card">
-      <div className="ren-card__header">
-        <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
-        <p className="ren-card__subtitle">Среднее арифметическое по {n} месяцам наблюдений</p>
-      </div>
-      <div className="p-4 grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        <AvgCard
-          title="Ср. баланс в кошельке"
-          value={fmtRbInt(avgBalanceAllPartners)}
-          sub={`${fmtN(balanceAvgs.allPartnersCount)} партнёров · с нулями`}
-        />
-        <AvgCard
-          title="Ср. баланс в кошельке"
-          value={fmtRbInt(avgBalancePositiveOnly)}
-          sub={`${fmtN(balanceAvgs.positiveBalanceCount)} · остаток > 0`}
-        />
-        <AvgCard
-          title="Ср. начислений / мес."
-          value={fmtRbCompact(avgAccrualRub)}
-          sub="за месяц"
-        />
-        <AvgCard
-          title="Ср. списаний итого / мес."
-          value={fmtRbCompact(avgSpendingRub)}
-          value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
-          detailLines={[
-            { label: 'Скидка КВ', value: fmtRbInt(avgDiscountRb) },
-            { label: 'Повыш. КВ', value: fmtRbInt(avgKvRb) },
-          ]}
-        />
-      </div>
-      <div className="border-t border-[var(--stroke-divider)] overflow-x-auto">
-        <table className="ren-table w-full text-sm">
-          <thead>
-            <tr>
-              <th className="px-4 py-2 text-left">Показатель</th>
-              <th className="px-4 py-2 text-right">Итого</th>
-              <th className="px-4 py-2 text-right">Ср. / мес.</th>
-            </tr>
-          </thead>
-          <tbody className="text-[var(--text-primary)]">
-            {tableRows.map((r, i) => (
-              <tr key={i} className="border-t border-[var(--stroke-divider)]">
-                <td className="px-4 py-2.5">{r.label}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-medium">{r.total}</td>
-                <td
-                  className={`px-4 py-2.5 text-right tabular-nums ${
-                    r.snapshot ? 'text-[var(--text-tertiary)]' : 'ren-text-brand font-semibold'
-                  }`}
-                >
-                  {r.avg}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-// ─── Блок: начисляющие партнёры → их списания ────────────────────────────────
-type AccrualSpendingData = ReturnType<typeof extractAccrualPartnerSpending>
-
-function AccrualSpendingBlock({ data }: { data: AccrualSpendingData }) {
-  if (data.accrualPartnersCount === 0) return null
-  const spentPct = (data.spentAtLeastOnce / data.accrualPartnersCount) * 100
-  const neverPct = ((data.accrualPartnersCount - data.spentAtLeastOnce) / data.accrualPartnersCount) * 100
-  const meanAmongSpent = data.spentAtLeastOnce > 0 ? data.totalRb / data.spentAtLeastOnce : 0
-  const meanAmongAll   = data.accrualPartnersCount > 0 ? data.totalRb / data.accrualPartnersCount : 0
-
-  return (
-    <div className="space-y-3">
-      {/* Сводка по воронке */}
-      <div className="ren-card">
-        <div className="ren-card__header">
-          <h3 className="ren-card__title text-sm uppercase tracking-wide">
-            Из начисляющих партнёров — кто списывал?
-          </h3>
-          <p className="ren-card__subtitle">
-            База: партнёры, у которых есть хотя бы одно начисление (State = PolicyIssued, LoyaltyPointsInLK &gt; 0)
-          </p>
-        </div>
-        <div className="ren-card__body flex flex-wrap gap-6">
-          <div>
-            <p className="text-xs ren-text-secondary">Партнёров с начислениями</p>
-            <p className="text-3xl font-bold ren-text-brand">{fmtN(data.accrualPartnersCount)}</p>
-          </div>
-          <div>
-            <p className="text-xs ren-text-secondary">Из них списали хоть раз</p>
-            <p className="text-3xl font-bold ren-text-brand">{fmtN(data.spentAtLeastOnce)}</p>
-            <p className="text-xs ren-text-secondary mt-0.5">{fmtF(spentPct)}% от начисляющих</p>
-          </div>
-          <div>
-            <p className="text-xs ren-text-secondary">Ни разу не списали</p>
-            <p className="text-3xl font-bold text-[var(--text-secondary)]">{fmtN(data.accrualPartnersCount - data.spentAtLeastOnce)}</p>
-            <p className="text-xs ren-text-secondary mt-0.5">{fmtF(neverPct)}% от начисляющих</p>
-          </div>
-          <div>
-            <p className="text-xs ren-text-secondary">Ср. списание на 1 (кто списывал)</p>
-            <p className="text-3xl font-bold text-[var(--text-primary)]">{fmtN(Math.round(meanAmongSpent))}</p>
-            <p className="text-xs ren-text-secondary mt-0.5">РБ</p>
-          </div>
-          <div>
-            <p className="text-xs ren-text-secondary">Ср. списание на 1 (все начисляющие)</p>
-            <p className="text-3xl font-bold ren-text-secondary">{fmtN(Math.round(meanAmongAll))}</p>
-            <p className="text-xs ren-text-secondary mt-0.5">РБ</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ─── Главный компонент ────────────────────────────────────────────────────────
 export default function DistributionTab({ result, agentRows, lockedCurator }: Props) {
   const [agentFilters, setAgentFilters] = useState<AgentFilters>(() =>
@@ -664,7 +354,7 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
     [enrichedRows, agentFilters],
   )
   const filteredAgg = useMemo(() => aggregate(filteredRows), [filteredRows])
-  const { totals, months } = filteredAgg
+  const { months } = filteredAgg
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null)
 
   const activeFilterCount = useMemo(
@@ -685,16 +375,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
   const spendingDist = useMemo(
     () => computeDist(distData.spendingValues, distData.spendingZeroCount),
     [distData]
-  )
-
-  const accrualSpendData = useMemo(
-    () => extractAccrualPartnerSpending(filteredRows, selectedMonth),
-    [filteredRows, selectedMonth]
-  )
-
-  const balanceAvgs = useMemo(
-    () => extractPartnerCurrentBalanceAvgs(filteredRows, selectedMonth),
-    [filteredRows, selectedMonth],
   )
 
   return (
@@ -736,18 +416,6 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         )}
       </div>
 
-      {/* Средние показатели Рен-бонусов */}
-      <AvgBonusBlock totals={totals} months={months} balanceAvgs={balanceAvgs} />
-
-      {/* ── В разрезе партнёров ── */}
-      <div className="flex items-center gap-4">
-        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
-        <span className="ren-section-marker">В разрезе партнёров</span>
-        <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
-      </div>
-
-      <AccrualSpendingBlock data={accrualSpendData} />
-
       {/* ── В разрезе полисов ── */}
       <div className="flex items-center gap-4">
         <div className="h-0.5 flex-1 bg-[var(--bg-brand-primary-01)]" />
@@ -762,9 +430,8 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         dist={accrualDist}
         unit="Рен-бонусов"
         hideZeroChip
-        showMeanAll
-        meanNonZeroLabel="Среднее (не включая нулевые) по полису ОСАГО ФЛ"
-        meanAllLabel="Среднее (включая нулевые) по полису ОСАГО ФЛ"
+        hideEventCounts
+        meanNonZeroLabel="Среднее кол-во Рен-бонусов по полису ОСАГО ФЛ"
       />
 
       {/* п.9: Распределение списанных по полису Кросс-Каско */}
@@ -774,6 +441,7 @@ export default function DistributionTab({ result, agentRows, lockedCurator }: Pr
         dist={spendingDist}
         unit="Рен-бонусов"
         hideZeroChip
+        hideEventCounts
         meanNonZeroLabel="Среднее списание на полис Каско от бесполисных"
       />
 

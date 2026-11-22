@@ -11,6 +11,21 @@ export const STATUSES_SNAPSHOT = {
     "training": 0,
     "note": "Обучение в xlsx лояльности не выделено — 0 ₽."
   },
+  "avgBonus": {
+    "monthCount": 15,
+    "balanceMeanAll": 1084,
+    "balanceMeanPositive": 1256,
+    "allPartnersCount": 4188,
+    "positiveBalanceCount": 3614,
+    "accrualTotal": 86149701,
+    "spendTotal": 42504866,
+    "spendDiscount": 7136830,
+    "spendKv": 11660600,
+    "avgAccrualPerMonth": 5743313,
+    "avgSpendPerMonth": 2833658,
+    "avgDiscountPerMonth": 475789,
+    "avgKvPerMonth": 777373
+  },
   "spendNthByMechanic": {
     "periodFull": "30.07.2025 – 18.11.2026",
     "periodRolling3": "19.08.2026 – 18.11.2026",

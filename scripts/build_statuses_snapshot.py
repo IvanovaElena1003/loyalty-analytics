@@ -1201,6 +1201,72 @@ def rollup_top3(by_filial: dict[str, Totals]) -> list[dict]:
     return out
 
 
+def scan_wallet_balances_for_avg(paths: list[Path]) -> tuple[dict[str, int | float], int]:
+    balances: dict[str, float] = {}
+    partners: set[str] = set()
+    months: set[str] = set()
+    for path in paths:
+        if not path.exists():
+            continue
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for sheet_name in wb.sheetnames:
+            sh = wb[sheet_name]
+            it = sh.iter_rows(values_only=True)
+            try:
+                header = next(it)
+            except StopIteration:
+                continue
+            idx = header_map(header)
+            for row in it:
+                if not row:
+                    continue
+                state = str(cell(row, idx, "State") or "")
+                if state in EXCLUDED or state != ISSUED:
+                    continue
+                dt = parse_dt(cell(row, idx, "CreateDate"))
+                if dt is None or not in_window(dt):
+                    continue
+                months.add(ym_str(dt))
+                cb = wallet_key(row, idx)
+                if not cb:
+                    continue
+                partners.add(cb)
+                av_raw = cell(row, idx, "AvailableForUsePoints")
+                if not is_null(av_raw):
+                    balances[cb] = max(balances.get(cb, 0.0), to_num(av_raw))
+        wb.close()
+    positive = [p for p in partners if balances.get(p, 0) > 0]
+    n_all = len(partners)
+    mean_all = sum(balances.get(p, 0) for p in partners) / n_all if n_all else 0.0
+    mean_pos = sum(balances.get(p, 0) for p in positive) / len(positive) if positive else 0.0
+    stats = {
+        "meanAll": round(mean_all),
+        "meanPositiveOnly": round(mean_pos),
+        "allPartnersCount": n_all,
+        "positiveBalanceCount": len(positive),
+    }
+    return stats, len(months)
+
+
+def build_avg_bonus(total: Totals, balance: dict[str, int | float], month_count: int) -> dict:
+    n = max(month_count, 1)
+    return {
+        "monthCount": month_count,
+        "balanceMeanAll": int(balance["meanAll"]),
+        "balanceMeanPositive": int(balance["meanPositiveOnly"]),
+        "allPartnersCount": int(balance["allPartnersCount"]),
+        "positiveBalanceCount": int(balance["positiveBalanceCount"]),
+        "accrualTotal": round(total.acc_total),
+        "spendTotal": round(total.spend_total),
+        "spendDiscount": round(total.spend_cross_discount),
+        "spendKv": round(total.spend_cross_kv),
+        "avgAccrualPerMonth": round(total.acc_total / n),
+        "avgSpendPerMonth": round(total.spend_total / n),
+        "avgDiscountPerMonth": round(total.spend_cross_discount / n),
+        "avgKvPerMonth": round(total.spend_cross_kv / n),
+    }
+
+
 def main() -> None:
     fmap = load_filial_map()
     total = Totals()
@@ -1221,6 +1287,9 @@ def main() -> None:
         for k, v in sorted(by_filial.items(), key=lambda x: x[1].spend_total, reverse=True)
         if v.acc_total > 0 or v.spend_total > 0
     ]
+
+    balance_stats, month_count = scan_wallet_balances_for_avg([PATH_OSAGO_2025, PATH_OSAGO_2026])
+    avg_bonus = build_avg_bonus(total, balance_stats, month_count)
 
     extra = scan_osago_partner_and_cross([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
     slider_top3 = aggregate_slider_top3(by_filial)
@@ -1244,6 +1313,7 @@ def main() -> None:
         "periodLabel": "30.07.2025 – 18.11.2026",
         "agentFilialMapSize": len(fmap),
         "spendByProduct": spend_by_product,
+        "avgBonus": avg_bonus,
         **extra,
         "meta": {
             "rowsOsagoAllStatuses": osago_rows[0],

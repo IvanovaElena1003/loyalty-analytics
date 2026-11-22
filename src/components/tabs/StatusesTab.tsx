@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { STATUSES_SNAPSHOT } from '../../data/statusesSnapshot'
 import { fmtRub, type MechanicKey } from '../../utils/loyaltyBalances'
+import AvgBonusMetricsCard, { type AvgBonusSnapshot } from '../AvgBonusMetricsCard'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RowTotals = any
@@ -427,6 +428,10 @@ export default function StatusesTab() {
       <p className="text-sm ren-text-secondary">
         Предрасчёт из xlsx ({snap.generatedAt}). Филиалы: B2Partners — {snap.agentFilialMapSize.toLocaleString('ru-RU')} кешбуков.
       </p>
+
+      {(snap as unknown as { avgBonus?: AvgBonusSnapshot }).avgBonus ? (
+        <AvgBonusMetricsCard data={(snap as unknown as { avgBonus: AvgBonusSnapshot }).avgBonus} />
+      ) : null}
 
       {/* 1. Итого за период — одна таблица вместо плиток */}
       <div className="ren-card">
