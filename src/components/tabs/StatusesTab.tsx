@@ -506,12 +506,6 @@ export default function StatusesTab() {
                 <td className="text-right tabular-nums">{fmtN(snap.crossLoyalty.bespolis.crossPolicies)}</td>
               </tr>
               <tr>
-                <td>Частота (оформл. ОСАГО на 1 такой кросс)</td>
-                <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  каждый {snap.crossLoyalty.bespolis.everyNthClient ?? '—'}-й
-                </td>
-              </tr>
-              <tr>
                 <td>Кросс со списанием РБ (скидка или КВ)</td>
                 <td className="text-right tabular-nums">
                   {fmtPctWhole(snap.crossLoyalty.bespolis.pctWithRbSpendAmongCross)}
