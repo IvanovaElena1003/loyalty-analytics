@@ -11,6 +11,175 @@ export const STATUSES_SNAPSHOT = {
     "training": 0,
     "note": "Обучение в xlsx лояльности не выделено — 0 ₽."
   },
+  "spendNthByMechanic": {
+    "periodFull": "30.07.2025 – 18.11.2026",
+    "periodRolling3": "19.08.2026 – 18.11.2026",
+    "fullPeriodByTop3": [
+      {
+        "region": "Вся сеть",
+        "mechanics": {
+          "cross": {
+            "events": 13332,
+            "baseIssuedOsago": 200752,
+            "everyNthClient": 15
+          },
+          "osagoSlider": {
+            "events": 21568,
+            "baseIssuedOsago": 200752,
+            "everyNthClient": 9
+          },
+          "kaskoFl": {
+            "events": 133,
+            "baseIssuedKasko": 1051,
+            "everyNthClient": 8
+          }
+        }
+      },
+      {
+        "region": "Москва",
+        "mechanics": {
+          "cross": {
+            "events": 6000,
+            "baseIssuedOsago": 84576,
+            "everyNthClient": 14
+          },
+          "osagoSlider": {
+            "events": 10676,
+            "baseIssuedOsago": 84576,
+            "everyNthClient": 8
+          },
+          "kaskoFl": {
+            "events": 48,
+            "baseIssuedKasko": 201,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Санкт-Петербург",
+        "mechanics": {
+          "cross": {
+            "events": 1612,
+            "baseIssuedOsago": 33850,
+            "everyNthClient": 21
+          },
+          "osagoSlider": {
+            "events": 4588,
+            "baseIssuedOsago": 33850,
+            "everyNthClient": 7
+          },
+          "kaskoFl": {
+            "events": 17,
+            "baseIssuedKasko": 70,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Регионы",
+        "mechanics": {
+          "cross": {
+            "events": 5720,
+            "baseIssuedOsago": 82326,
+            "everyNthClient": 14
+          },
+          "osagoSlider": {
+            "events": 6304,
+            "baseIssuedOsago": 82326,
+            "everyNthClient": 13
+          },
+          "kaskoFl": {
+            "events": 68,
+            "baseIssuedKasko": 780,
+            "everyNthClient": 11
+          }
+        }
+      }
+    ],
+    "rolling3MonthsByTop3": [
+      {
+        "region": "Вся сеть",
+        "mechanics": {
+          "cross": {
+            "events": 5349,
+            "baseIssuedOsago": 65467,
+            "everyNthClient": 12
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 65467,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 133,
+            "baseIssuedKasko": 956,
+            "everyNthClient": 7
+          }
+        }
+      },
+      {
+        "region": "Москва",
+        "mechanics": {
+          "cross": {
+            "events": 2225,
+            "baseIssuedOsago": 27796,
+            "everyNthClient": 12
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 27796,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 48,
+            "baseIssuedKasko": 183,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Санкт-Петербург",
+        "mechanics": {
+          "cross": {
+            "events": 580,
+            "baseIssuedOsago": 11352,
+            "everyNthClient": 20
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 11352,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 17,
+            "baseIssuedKasko": 62,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Регионы",
+        "mechanics": {
+          "cross": {
+            "events": 2544,
+            "baseIssuedOsago": 26319,
+            "everyNthClient": 10
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 26319,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 68,
+            "baseIssuedKasko": 711,
+            "everyNthClient": 10
+          }
+        }
+      }
+    ],
+    "noteSlider3m": "ОСАГО пролонгация (ползунок): дат в агрегате нет — «каждому N-му» только за всё время."
+  },
   "partnerMetrics": {
     "periodLabel": "30.07.2025 – 18.11.2026",
     "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",

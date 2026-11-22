@@ -113,6 +113,24 @@ type PartnerPeriodSlice = {
   }
 }
 
+type MechanicNthItem = {
+  events: number
+  baseIssuedOsago?: number
+  baseIssuedKasko?: number
+  everyNthClient: number | null
+}
+
+type SpendNthRegionRow = {
+  region: string
+  mechanics: Record<'cross' | 'osagoSlider' | 'kaskoFl', MechanicNthItem>
+}
+
+const MECH_NTH_LINES: { key: 'cross' | 'osagoSlider' | 'kaskoFl'; label: string }[] = [
+  { key: 'cross', label: 'Кросс-Каско бесп. (скидка / КВ)' },
+  { key: 'osagoSlider', label: 'ОСАГО пролонгация (ползунок)' },
+  { key: 'kaskoFl', label: 'Каско ФЛ (кошелёк / скоринг)' },
+]
+
 const MECHANIC_SPEND_LINES: { key: 'cross' | 'kasko' | 'osagoSlider'; label: string }[] = [
   { key: 'cross', label: 'в т.ч. кросс (скидка СП / повыш. КВ)' },
   { key: 'kasko', label: 'в т.ч. Каско ФЛ' },
@@ -242,6 +260,69 @@ function PartnerWindowRegionTable({
   )
 }
 
+function SpendNthMechanicTable({
+  title,
+  rows,
+  isFirst,
+}: {
+  title: string
+  rows: SpendNthRegionRow[]
+  isFirst?: boolean
+}) {
+  return (
+    <>
+      <p
+        className={`text-xs font-semibold ren-text-brand px-3 ${
+          isFirst ? 'pt-3' : 'pt-3 border-t border-[var(--stroke-divider)]'
+        }`}
+      >
+        {title}
+      </p>
+      <table className="statuses-table statuses-table--slice w-full">
+        <thead>
+          <tr>
+            <th className="text-left">Механика списания</th>
+            {rows.map(r => (
+              <th
+                key={r.region}
+                className={`text-right text-[11px]${isNetworkSlice(r.region) ? ' statuses-table__col-network' : ''}`}
+              >
+                {r.region}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {MECH_NTH_LINES.map(line => (
+            <tr key={line.key}>
+              <td className="text-left text-[11px]">{line.label}</td>
+              {rows.map(r => {
+                const m = r.mechanics[line.key]
+                const base = m.baseIssuedKasko ?? m.baseIssuedOsago ?? 0
+                return (
+                  <td
+                    key={r.region}
+                    className={`text-right tabular-nums text-[11px]${
+                      isNetworkSlice(r.region) ? ' statuses-table__col-network' : ''
+                    }`}
+                  >
+                    <span className="font-semibold ren-text-brand">
+                      {m.everyNthClient != null ? `${m.everyNthClient}-му` : '—'}
+                    </span>
+                    <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
+                      {fmtN(m.events)} / {fmtN(base)}
+                    </div>
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  )
+}
+
 function partnerTop3Slices(
   snap: typeof STATUSES_SNAPSHOT,
   key: 'fullPeriodByTop3' | 'rolling12MonthsByTop3' | 'rolling3MonthsByTop3',
@@ -328,6 +409,18 @@ export default function StatusesTab() {
     }
     return [network, ...top3.map(s => ({ ...s, buckets: [...s.buckets] }))]
   }, [snap])
+
+  const spendNth = (
+    snap as unknown as {
+      spendNthByMechanic?: {
+        fullPeriodByTop3: SpendNthRegionRow[]
+        rolling3MonthsByTop3: SpendNthRegionRow[]
+        periodFull?: string
+        periodRolling3?: string
+        noteSlider3m?: string
+      }
+    }
+  ).spendNthByMechanic
 
   return (
     <div className="space-y-5 max-w-full">
@@ -463,78 +556,9 @@ export default function StatusesTab() {
           <h3 className="ren-card__title text-sm">Как партнёры используют бонусы · {snap.periodLabel}</h3>
         </div>
         <div className="ren-card__body p-0">
-          <table className="statuses-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Показатель</th>
-                <th className="text-right w-28">%</th>
-                <th className="text-right">Детали</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="statuses-table__row--emphasis">
-                <td>Имеют накопления (начисление РБ)</td>
-                <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPctWhole(accrualPctAmongIssued(snap.partnerEngagement as unknown as EngagementSlice))}
-                </td>
-                <td className="text-right text-[11px] ren-text-secondary">
-                  {fmtN(snap.partnerEngagement.partnersWithAccrual)} /{' '}
-                  {fmtN(issuedPartnersCount(snap.partnerEngagement as unknown as EngagementSlice))}{' '}
-                  оформили ОСАГО и/или Каско ФЛ
-                </td>
-              </tr>
-              <tr className="statuses-table__row--emphasis">
-                <td>Списывают РБ · любая механика</td>
-                <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPctWhole(snap.partnerEngagement.pctSpendAmongAccrual)}
-                </td>
-                <td className="text-right text-[11px] ren-text-secondary">
-                  {fmtN(snap.partnerEngagement.partnersWhoSpend)} /{' '}
-                  {fmtN(snap.partnerEngagement.partnersWithAccrual)} с накоплением
-                </td>
-              </tr>
-              <tr>
-                <td className="pl-4 text-[11px]">в т.ч. списание на кросс (скидка / КВ)</td>
-                <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtPctWhole(snap.partnerEngagement.pctSpendCrossAmongAccrual ?? null)}
-                </td>
-                <td className="text-right text-[11px] ren-text-secondary">
-                  {fmtN(snap.partnerEngagement.partnersWhoSpendCross ?? 0)} /{' '}
-                  {fmtN(snap.partnerEngagement.partnersWithAccrual)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">
-            Частота списаний · любая механика · кросс на 1 клиента · {snap.periodLabel}
-          </p>
-          <p className="text-[10px] ren-text-secondary px-3 pb-1">
-            Сегменты — по числу списаний (кросс, Каско, ползунок); «N-й клиент» — только кросс-Каско.
-          </p>
-          <table className="statuses-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Сегмент партнёра</th>
-                <th className="text-right">Партнёров</th>
-                <th className="text-right">Кросс каждому N-му клиенту</th>
-              </tr>
-            </thead>
-            <tbody>
-              {snap.partnerEngagement.buckets.map(b => (
-                <tr key={b.id}>
-                  <td>{b.label}</td>
-                  <td className="text-right tabular-nums">{fmtN(b.partnerCount)}</td>
-                  <td className="text-right tabular-nums font-semibold ren-text-brand">
-                    {b.everyNthClient != null ? `${b.everyNthClient}-му` : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
           {engagementSlices.length > 1 && (
             <>
-              <p className="text-xs font-semibold ren-text-brand px-3 pt-4 border-t border-[var(--stroke-divider)]">
+              <p className="text-xs font-semibold ren-text-brand px-3 pt-3">
                 Сравнение · {snap.periodLabel} · вся сеть и топ-3
               </p>
               <table className="statuses-table statuses-table--slice w-full">
@@ -586,38 +610,26 @@ export default function StatusesTab() {
                   </tr>
                 </tbody>
               </table>
-              <table className="statuses-table statuses-table--slice w-full border-t border-[var(--stroke-divider)]">
-                <thead>
-                  <tr>
-                    <th className="text-left">Сегмент</th>
-                    {engagementSlices.map(s => (
-                      <th key={s.region} className="text-right text-[10px] leading-tight">
-                        {s.region}
-                        <div className="font-normal ren-text-secondary">партн. · N-й</div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(engagementSlices[0]?.buckets ?? []).map((b, bi) => (
-                    <tr key={b.id}>
-                      <td className="text-left">{b.label}</td>
-                      {engagementSlices.map(s => {
-                        const row = s.buckets[bi]
-                        return (
-                          <td key={s.region} className="text-right tabular-nums text-[11px]">
-                            <span>{fmtN(row?.partnerCount ?? 0)}</span>
-                            <span className="ren-text-brand font-semibold">
-                              {' '}
-                              · {row?.everyNthClient != null ? `${row.everyNthClient}-му` : '—'}
-                            </span>
-                          </td>
-                        )
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {spendNth?.fullPeriodByTop3?.length ? (
+                <>
+                  <SpendNthMechanicTable
+                    isFirst
+                    title={`Каждому N-му клиенту · за всё время (${spendNth.periodFull ?? snap.periodLabel})`}
+                    rows={spendNth.fullPeriodByTop3}
+                  />
+                  <p className="text-[10px] ren-text-secondary px-3 pt-1">
+                    Дробь: списаний по механике / оформленных полисов (ОСАГО для кросса и ползунка, Каско ФЛ для
+                    кошелька).
+                  </p>
+                  <SpendNthMechanicTable
+                    title={`Каждому N-му клиенту · скользящие 3 мес (${spendNth.periodRolling3 ?? ''})`}
+                    rows={spendNth.rolling3MonthsByTop3 ?? []}
+                  />
+                  {spendNth.noteSlider3m ? (
+                    <p className="text-[10px] ren-text-secondary px-3 py-2">{spendNth.noteSlider3m}</p>
+                  ) : null}
+                </>
+              ) : null}
             </>
           )}
         </div>

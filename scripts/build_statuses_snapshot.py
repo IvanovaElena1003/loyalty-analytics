@@ -616,6 +616,73 @@ def last_complete_months(ref: datetime, n: int) -> list[str]:
 
 
 TOP3_LABELS = ("Москва", "Санкт-Петербург", "Регионы")
+REGION_SLICES = ("Вся сеть", *TOP3_LABELS)
+
+
+@dataclass
+class MechanicNthAgg:
+    osago_issued: int = 0
+    cross_rb: int = 0
+    kasko_issued: int = 0
+    kasko_spend: int = 0
+    slider_policies: int = 0
+
+
+def new_regional_nth() -> dict[str, MechanicNthAgg]:
+    return {label: MechanicNthAgg() for label in REGION_SLICES}
+
+
+def regions_for_wallet(cb: str, fmap: dict[str, str]) -> tuple[str, ...]:
+    if not cb:
+        return ("Вся сеть", "Регионы")
+    top3 = wallet_top3_region(cb, fmap)
+    return ("Вся сеть", top3)
+
+
+def every_nth_client(numerator: int, denominator: int) -> int | None:
+    if denominator <= 0 or numerator <= 0:
+        return None
+    return max(1, round(numerator / denominator))
+
+
+def mechanic_nth_payload(agg: MechanicNthAgg) -> dict:
+    return {
+        "cross": {
+            "events": agg.cross_rb,
+            "baseIssuedOsago": agg.osago_issued,
+            "everyNthClient": every_nth_client(agg.osago_issued, agg.cross_rb),
+        },
+        "osagoSlider": {
+            "events": agg.slider_policies,
+            "baseIssuedOsago": agg.osago_issued,
+            "everyNthClient": every_nth_client(agg.osago_issued, agg.slider_policies),
+        },
+        "kaskoFl": {
+            "events": agg.kasko_spend,
+            "baseIssuedKasko": agg.kasko_issued,
+            "everyNthClient": every_nth_client(agg.kasko_issued, agg.kasko_spend),
+        },
+    }
+
+
+def spend_nth_rows(nth_map: dict[str, MechanicNthAgg]) -> list[dict]:
+    return [{"region": label, "mechanics": mechanic_nth_payload(nth_map[label])} for label in REGION_SLICES]
+
+
+def aggregate_slider_top3(by_filial: dict[str, Totals]) -> dict[str, int]:
+    out = {label: 0 for label in REGION_SLICES}
+    for name, bucket in by_filial.items():
+        cnt = bucket.osago_slider_cnt
+        if cnt <= 0:
+            continue
+        out["Вся сеть"] += cnt
+        if _is_moscow_filial(name):
+            out["Москва"] += cnt
+        elif _is_spb_filial(name):
+            out["Санкт-Петербург"] += cnt
+        else:
+            out["Регионы"] += cnt
+    return out
 
 
 def _is_moscow_filial(name: str) -> bool:
@@ -718,6 +785,10 @@ def scan_kasko_wallets(
     month_spend_kasko: dict[str, set[str]],
     month_issued: dict[str, set[str]],
     first_acc_ym: dict[str, str],
+    nth_full: dict[str, MechanicNthAgg],
+    nth_r3: dict[str, MechanicNthAgg],
+    r3_start: datetime,
+    fmap: dict[str, str],
 ) -> None:
     if not path.exists():
         return
@@ -749,6 +820,10 @@ def scan_kasko_wallets(
         ym = ym_str(dt)
         wa.kasko_issued += 1
         month_issued[ym].add(cb)
+        for reg in regions_for_wallet(cb, fmap):
+            nth_full[reg].kasko_issued += 1
+            if dt >= r3_start:
+                nth_r3[reg].kasko_issued += 1
 
         lpo = to_num(cell(row, idx, "LoyaltyPointsOut"))
         ov = to_num(cell(row, idx, "OriginalValue"))
@@ -761,6 +836,10 @@ def scan_kasko_wallets(
             wa.spend_events += 1
             month_spend[ym].add(cb)
             month_spend_kasko[ym].add(cb)
+            for reg in regions_for_wallet(cb, fmap):
+                nth_full[reg].kasko_spend += 1
+                if dt >= r3_start:
+                    nth_r3[reg].kasko_spend += 1
     wb.close()
 
 
@@ -824,6 +903,9 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     month_spend_slider: dict[str, set[str]] = defaultdict(set)
     month_issued: dict[str, set[str]] = defaultdict(set)
     first_acc_ym: dict[str, str] = {}
+    nth_full = new_regional_nth()
+    nth_r3 = new_regional_nth()
+    r3_start = trailing_window_start(END, 3)
 
     issued_total = 0
     cross_total = 0
@@ -875,6 +957,10 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                 if cb and wa is not None:
                     wa.osago_issued += 1
                 issued_total += 1
+                for reg in regions_for_wallet(cb, fmap):
+                    nth_full[reg].osago_issued += 1
+                    if dt >= r3_start:
+                        nth_r3[reg].osago_issued += 1
 
                 if str(cell(row, idx, "CrossIsBought") or "").strip() != "Да":
                     continue
@@ -902,11 +988,25 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                     wa.cross_spend_events += 1
                     month_spend[ym].add(cb)
                     month_spend_cross[ym].add(cb)
+                    for reg in regions_for_wallet(cb, fmap):
+                        nth_full[reg].cross_rb += 1
+                        if dt >= r3_start:
+                            nth_r3[reg].cross_rb += 1
         wb.close()
 
     spend_ym = ym_str(END)
     scan_kasko_wallets(
-        PATH_KASKO, wallets, month_accrual, month_spend, month_spend_kasko, month_issued, first_acc_ym
+        PATH_KASKO,
+        wallets,
+        month_accrual,
+        month_spend,
+        month_spend_kasko,
+        month_issued,
+        first_acc_ym,
+        nth_full,
+        nth_r3,
+        r3_start,
+        fmap,
     )
     scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, month_spend_slider, spend_ym)
 
@@ -916,7 +1016,6 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
     full_period_label = fmt_period_label(START, END)
     r12_start = trailing_window_start(END, 12)
-    r3_start = trailing_window_start(END, 3)
     issued_r12 = partners_in_date_range(month_issued, r12_start, END)
     accrual_r12 = partners_in_date_range(month_accrual, r12_start, END)
     spend_r12 = partners_in_date_range(month_spend, r12_start, END)
@@ -975,6 +1074,15 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     }
 
     return {
+        "spendNthByMechanic": {
+            "periodFull": full_period_label,
+            "periodRolling3": fmt_period_label(r3_start, END),
+            "fullPeriodByTop3": spend_nth_rows(nth_full),
+            "rolling3MonthsByTop3": spend_nth_rows(nth_r3),
+            "noteSlider3m": (
+                "ОСАГО пролонгация (ползунок): дат в агрегате нет — «каждому N-му» только за всё время."
+            ),
+        },
         "partnerMetrics": {
             "periodLabel": full_period_label,
             "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
@@ -1115,6 +1223,13 @@ def main() -> None:
     ]
 
     extra = scan_osago_partner_and_cross([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
+    slider_top3 = aggregate_slider_top3(by_filial)
+    for row in extra["spendNthByMechanic"]["fullPeriodByTop3"]:
+        reg = row["region"]
+        cnt = slider_top3.get(reg, 0)
+        row["mechanics"]["osagoSlider"]["events"] = cnt
+        base = row["mechanics"]["osagoSlider"]["baseIssuedOsago"]
+        row["mechanics"]["osagoSlider"]["everyNthClient"] = every_nth_client(base, cnt)
     spend_by_product = {
         "osagoProlongation": round(total.spend_osago_slider),
         "kaskoWalletScoring": round(total.spend_kasko),
