@@ -385,9 +385,14 @@ def merge_totals(dst: Totals, src: Totals) -> None:
 @dataclass
 class WalletAgg:
     osago_issued: int = 0
+    kasko_issued: int = 0
     cross: int = 0
     spend_events: int = 0
     has_accrual: bool = False
+
+    @property
+    def has_issued(self) -> bool:
+        return self.osago_issued > 0 or self.kasko_issued > 0
 
 
 def is_cross_spend_row(row: tuple, idx: dict[str, int]) -> bool:
@@ -468,12 +473,7 @@ def compute_partner_engagement(
     filtered = {cb: wa for cb, wa in wallets.items() if in_slice(cb)}
     accrual = {cb for cb, wa in filtered.items() if wa.has_accrual}
     spend = {cb for cb, wa in filtered.items() if wa.spend_events > 0}
-    with_osago = {cb for cb, wa in filtered.items() if wa.osago_issued > 0}
-
-    if agent_active:
-        active = {cb for cb in agent_active if in_slice(cb)} if region else agent_active
-    else:
-        active = {cb for cb, wa in filtered.items() if wa.osago_issued >= MIN_OSAGO_ACTIVE}
+    with_issued = {cb for cb, wa in filtered.items() if wa.has_issued}
 
     def bucket_nth(pred) -> int | None:
         o = c = 0
@@ -486,17 +486,16 @@ def compute_partner_engagement(
             return None
         return max(1, round(o / c))
 
-    partners_with_osago = len(with_osago)
+    partners_with_issued = len(with_issued)
     return {
-        "pctWithAccrualAmongSellers": round(len(accrual) / partners_with_osago * 100, 1)
-        if partners_with_osago
+        "pctWithAccrualAmongIssued": round(len(accrual) / partners_with_issued * 100, 1)
+        if partners_with_issued
         else None,
-        "pctWithAccrualAmongActiveBoard": round(len(accrual) / len(active) * 100, 1) if active else None,
         "pctSpendAmongAccrual": round(len(spend) / len(accrual) * 100, 1) if accrual else None,
         "partnersWithAccrual": len(accrual),
         "partnersWhoSpend": len(spend),
-        "partnersWithOsago": partners_with_osago,
-        "activePartners": len(active),
+        "partnersWithIssued": partners_with_issued,
+        "partnersWithOsago": sum(1 for wa in filtered.values() if wa.osago_issued > 0),
         "buckets": [
             {
                 "id": "zero",
@@ -522,6 +521,93 @@ def compute_partner_engagement(
     }
 
 
+def _mark_accrual(cb: str, ym: str, month_accrual: dict[str, set[str]], first_acc_ym: dict[str, str]) -> None:
+    month_accrual[ym].add(cb)
+    if cb not in first_acc_ym or ym < first_acc_ym[cb]:
+        first_acc_ym[cb] = ym
+
+
+def scan_kasko_wallets(
+    path: Path,
+    wallets: dict[str, WalletAgg],
+    month_accrual: dict[str, set[str]],
+    month_spend: dict[str, set[str]],
+    month_issued: dict[str, set[str]],
+    first_acc_ym: dict[str, str],
+) -> None:
+    if not path.exists():
+        return
+    wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    sh = wb[wb.sheetnames[0]]
+    it = sh.iter_rows(values_only=True)
+    try:
+        header = next(it)
+    except StopIteration:
+        wb.close()
+        return
+    idx = header_map(header)
+    for row in it:
+        if not row:
+            continue
+        role = str(cell(row, idx, "Role") or "").strip()
+        if role in SELLER_ROLES:
+            continue
+        state = str(cell(row, idx, "State") or "")
+        if state in EXCLUDED or state != ISSUED:
+            continue
+        dt = parse_dt(cell(row, idx, "CreateDate"))
+        if dt is None or not in_window(dt):
+            continue
+        cb = wallet_key(row, idx) or str(cell(row, idx, "CashbookId") or "").strip()
+        if not cb:
+            continue
+        wa = wallets[cb]
+        ym = ym_str(dt)
+        wa.kasko_issued += 1
+        month_issued[ym].add(cb)
+
+        lpo = to_num(cell(row, idx, "LoyaltyPointsOut"))
+        ov = to_num(cell(row, idx, "OriginalValue"))
+        if lpo > 0 and ov > 0:
+            wa.has_accrual = True
+            _mark_accrual(cb, ym, month_accrual, first_acc_ym)
+
+        spend = to_num(cell(row, idx, "WalletBonuses")) + to_num(cell(row, idx, "ScoringBonuses"))
+        if spend > 0:
+            wa.spend_events += 1
+            month_spend[ym].add(cb)
+    wb.close()
+
+
+def scan_slider_wallet_spend(
+    path: Path,
+    wallets: dict[str, WalletAgg],
+    month_spend: dict[str, set[str]],
+) -> None:
+    if not path.exists():
+        return
+    try:
+        ag = pd.read_excel(path, sheet_name="Агенты", header=0)
+    except Exception:
+        return
+    for _, r in ag.iterrows():
+        cb_raw = r.get("Кэшбук")
+        if pd.isna(cb_raw):
+            continue
+        cb = str(int(cb_raw)) if isinstance(cb_raw, float) and cb_raw == int(cb_raw) else str(cb_raw).strip()
+        if not cb:
+            continue
+        spend = to_num(r.get("Списано ренбонусов"))
+        if spend <= 0:
+            continue
+        wa = wallets[cb]
+        if wa.spend_events == 0:
+            wa.spend_events = 1
+        else:
+            wa.spend_events += 1
+        # дата в агрегате агентов нет — в динамику месяца не кладём
+
+
 def load_active_agent_wallets() -> set[str]:
     if not PATH_AGENTS.exists():
         return set()
@@ -544,7 +630,8 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     wallets: dict[str, WalletAgg] = defaultdict(WalletAgg)
     month_accrual: dict[str, set[str]] = defaultdict(set)
     month_spend: dict[str, set[str]] = defaultdict(set)
-    month_osago: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    month_issued: dict[str, set[str]] = defaultdict(set)
+    first_acc_ym: dict[str, str] = {}
 
     issued_total = 0
     cross_total = 0
@@ -588,10 +675,10 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                 lp = to_num(cell(row, idx, "LoyaltyPointsInLK"))
                 if cb and wa is not None and not is_null(cell(row, idx, "LoyaltyPointsInLK")) and lp > 0:
                     wa.has_accrual = True
-                    month_accrual[ym].add(cb)
+                    _mark_accrual(cb, ym, month_accrual, first_acc_ym)
 
                 if cb:
-                    month_osago[ym][cb] += 1
+                    month_issued[ym].add(cb)
 
                 if cb and wa is not None:
                     wa.osago_issued += 1
@@ -623,16 +710,12 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                     month_spend[ym].add(cb)
         wb.close()
 
-    agent_active = load_active_agent_wallets()
-    active_source = "agent_network" if agent_active else "osago_min3"
-    active_period: set[str]
-    if agent_active:
-        active_period = set(agent_active)
-    else:
-        active_period = {cb for cb, wa in wallets.items() if wa.osago_issued >= MIN_OSAGO_ACTIVE}
+    scan_kasko_wallets(PATH_KASKO, wallets, month_accrual, month_spend, month_issued, first_acc_ym)
+    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend)
 
-    accrual_period = {cb for cb, wa in wallets.items() if wa.has_accrual}
-    spend_period = {cb for cb, wa in wallets.items() if wa.spend_events > 0}
+    issued_period = {cb for cb, wa in wallets.items() if cb and wa.has_issued}
+    accrual_period = {cb for cb, wa in wallets.items() if cb and wa.has_accrual}
+    spend_period = {cb for cb, wa in wallets.items() if cb and wa.spend_events > 0}
 
     ref = END
     months_3 = last_complete_months(ref, 3)
@@ -644,36 +727,25 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         label = f"{month_labels[mo - 1]} {y}"
         m_start, m_end = month_range(ym)
 
-        if agent_active:
-            active_m = agent_active
-        else:
-            active_m = {
-                cb
-                for cb, cnt in month_osago[ym].items()
-                if cnt >= MIN_OSAGO_ACTIVE
-            }
-
+        issued_m = month_issued.get(ym, set())
         acc_m = month_accrual.get(ym, set())
         spend_m = month_spend.get(ym, set())
-        ever_acc = {
-            cb
-            for cb, wa in wallets.items()
-            if wa.has_accrual
-        }
+        ever_acc_m = {cb for cb, y0 in first_acc_ym.items() if y0 <= ym}
 
         month_rows.append(
             {
                 "ym": ym,
                 "label": label,
                 "withAccrual": len(acc_m),
-                "activePartners": len(active_m),
-                "accrualSharePct": round(len(acc_m) / len(active_m) * 100, 1) if active_m else None,
+                "issuedPartners": len(issued_m),
+                "accrualSharePct": round(len(acc_m) / len(issued_m) * 100, 1) if issued_m else None,
                 "withSpend": len(spend_m),
-                "withAccrualEver": len(ever_acc),
-                "spendShareOfAccrualsPct": round(len(spend_m) / len(ever_acc) * 100, 1) if ever_acc else None,
+                "withAccrualEver": len(ever_acc_m),
+                "spendShareOfAccrualsPct": round(len(spend_m) / len(ever_acc_m) * 100, 1) if ever_acc_m else None,
             }
         )
 
+    agent_active = load_active_agent_wallets()
     engagement = compute_partner_engagement(wallets, fmap, agent_active, None)
     engagement_by_top3 = [
         {"region": label, **compute_partner_engagement(wallets, fmap, agent_active, label)}
@@ -698,11 +770,13 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     return {
         "partnerMetrics": {
             "periodLabel": "30.07.2025 – 18.11.2026",
-            "activeSource": active_source,
+            "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
             "fullPeriod": {
                 "accrualPartners": len(accrual_period),
-                "activePartners": len(active_period),
-                "accrualSharePct": round(len(accrual_period) / len(active_period) * 100, 1) if active_period else None,
+                "issuedPartners": len(issued_period),
+                "accrualSharePct": round(len(accrual_period) / len(issued_period) * 100, 1)
+                if issued_period
+                else None,
                 "spendPartners": len(spend_period),
                 "accrualBaseForSpend": len(accrual_period),
                 "spendSharePct": round(len(spend_period) / len(accrual_period) * 100, 1) if accrual_period else None,

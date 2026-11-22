@@ -12,13 +12,14 @@ type EngagementBucket = {
 }
 type EngagementSlice = {
   region: string
-  pctWithAccrualAmongSellers: number | null
-  pctWithAccrualAmongActiveBoard: number | null
+  pctWithAccrualAmongIssued?: number | null
+  pctWithAccrualAmongSellers?: number | null
+  pctWithAccrualAmongActiveBoard?: number | null
   pctSpendAmongAccrual: number | null
   partnersWithAccrual: number
   partnersWhoSpend: number
-  partnersWithOsago: number
-  activePartners: number
+  partnersWithIssued?: number
+  partnersWithOsago?: number
   buckets: EngagementBucket[]
 }
 
@@ -73,8 +74,17 @@ function metricSharePct(row: RowTotals, m: MetricRowDef): number | null {
   return (Number(row[m.amountKey] ?? 0) / base) * 100
 }
 
-function accrualPctAmongSellers(e: EngagementSlice): number | null {
-  return e.pctWithAccrualAmongSellers ?? e.pctWithAccrualAmongActiveBoard
+function issuedPartnersCount(e: EngagementSlice): number {
+  return e.partnersWithIssued ?? e.partnersWithOsago ?? 0
+}
+
+function accrualPctAmongIssued(e: EngagementSlice): number | null {
+  return (
+    e.pctWithAccrualAmongIssued ??
+    e.pctWithAccrualAmongSellers ??
+    e.pctWithAccrualAmongActiveBoard ??
+    null
+  )
 }
 
 function PeriodMetricCell({ row, m }: { row: RowTotals; m: MetricRowDef }) {
@@ -263,11 +273,9 @@ export default function StatusesTab() {
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
           <h3 className="ren-card__title text-sm">Партнёры и РБ · {snap.partnerMetrics.periodLabel}</h3>
           <p className="text-[11px] ren-text-secondary font-normal mt-1">
-            Активные:{' '}
-            {snap.partnerMetrics.activeSource === 'agent_network'
-              ? `борд агентской сети (${fmtN(snap.partnerEngagement.activePartners)})`
-              : `≥ 3 оформл. ОСАГО в периоде`}
-            . Кешбук HeadPartnerCB, без Seller / Продавец.
+            {snap.partnerMetrics.method ??
+              'Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.'}{' '}
+            Кешбук HeadPartnerCB, без Seller / Продавец.
           </p>
         </div>
         <div className="ren-card__body p-0 space-y-0">
@@ -285,7 +293,12 @@ export default function StatusesTab() {
                 <td className="text-right tabular-nums">
                   {fmtN(snap.partnerMetrics.fullPeriod.accrualPartners)}{' '}
                   <span className="ren-text-secondary text-[11px]">
-                    / {fmtN(snap.partnerMetrics.fullPeriod.activePartners)}
+                    /{' '}
+                    {fmtN(
+                      snap.partnerMetrics.fullPeriod.issuedPartners ??
+                        (snap.partnerMetrics.fullPeriod as { activePartners?: number }).activePartners ??
+                        0,
+                    )}
                   </span>
                 </td>
                 <td className="text-right tabular-nums font-semibold ren-text-brand">
@@ -312,7 +325,7 @@ export default function StatusesTab() {
               <tr>
                 <th className="text-left">Месяц</th>
                 <th className="text-right">С начисл.</th>
-                <th className="text-right">% акт.</th>
+                <th className="text-right">% оформ.</th>
                 <th className="text-right">Со спис.</th>
                 <th className="text-right">% от накопл.</th>
               </tr>
@@ -322,7 +335,8 @@ export default function StatusesTab() {
                 <tr key={row.ym}>
                   <td>{row.label}</td>
                   <td className="text-right tabular-nums text-[11px]">
-                    {fmtN(row.withAccrual)} / {fmtN(row.activePartners)}
+                    {fmtN(row.withAccrual)} /{' '}
+                    {fmtN(row.issuedPartners ?? (row as { activePartners?: number }).activePartners ?? 0)}
                   </td>
                   <td className="text-right tabular-nums font-semibold">{fmtPctWhole(row.accrualSharePct)}</td>
                   <td className="text-right tabular-nums text-[11px]">
@@ -354,11 +368,12 @@ export default function StatusesTab() {
               <tr className="statuses-table__row--emphasis">
                 <td>Имеют накопления (начисление РБ)</td>
                 <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPctWhole(snap.partnerEngagement.pctWithAccrualAmongSellers ?? snap.partnerEngagement.pctWithAccrualAmongActiveBoard)}
+                  {fmtPctWhole(accrualPctAmongIssued(snap.partnerEngagement as EngagementSlice))}
                 </td>
                 <td className="text-right text-[11px] ren-text-secondary">
                   {fmtN(snap.partnerEngagement.partnersWithAccrual)} /{' '}
-                  {fmtN(snap.partnerEngagement.partnersWithOsago ?? snap.partnerEngagement.activePartners)} продавали ОСАГО
+                  {fmtN(issuedPartnersCount(snap.partnerEngagement as EngagementSlice))}{' '}
+                  оформили ОСАГО и/или Каско ФЛ
                 </td>
               </tr>
               <tr className="statuses-table__row--emphasis">
@@ -416,9 +431,9 @@ export default function StatusesTab() {
                     <td>Имеют накопления</td>
                     {engagementSlices.map(s => (
                       <td key={s.region} className="text-right tabular-nums">
-                        <span className="font-bold">{fmtPctWhole(accrualPctAmongSellers(s))}</span>
+                        <span className="font-bold">{fmtPctWhole(accrualPctAmongIssued(s))}</span>
                         <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
-                          {fmtN(s.partnersWithAccrual)} / {fmtN(s.partnersWithOsago)}
+                          {fmtN(s.partnersWithAccrual)} / {fmtN(issuedPartnersCount(s))}
                         </div>
                       </td>
                     ))}
