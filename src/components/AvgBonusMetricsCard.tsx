@@ -1,91 +1,54 @@
 export type AvgBonusSnapshot = {
-  monthCount: number
   balanceMeanAll: number
   balanceMeanPositive: number
   allPartnersCount: number
   positiveBalanceCount: number
-  accrualTotal: number
-  spendTotal: number
-  spendDiscount: number
-  spendKv: number
-  avgAccrualPerMonth: number
-  avgSpendPerMonth: number
-  avgDiscountPerMonth: number
-  avgKvPerMonth: number
+  monthCount?: number
+  accrualTotal?: number
+  spendTotal?: number
+  spendDiscount?: number
+  spendKv?: number
+  avgAccrualPerMonth?: number
+  avgSpendPerMonth?: number
+  avgDiscountPerMonth?: number
+  avgKvPerMonth?: number
   balanceNote?: string
 }
 
 const fmtN = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const fmtRbInt = (v: number) =>
   Number.isFinite(v) ? `${fmtN(Math.round(v))} РБ` : '—'
-const fmtDec1 = (n: number) =>
-  n.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-const fmtRbCompact = (v: number) => {
-  if (!Number.isFinite(v)) return '—'
-  if (Math.abs(v) >= 1_000_000) return `${fmtDec1(v / 1_000_000)}М`
-  return fmtRbInt(v)
-}
 
 export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }) {
-  const n = Math.max(data.monthCount, 1)
-
-  const tableRows = [
+  const rows = [
     {
-      label: `Баланс кошелька · все · ${fmtN(data.allPartnersCount)} партнёров, с нулями`,
-      total: data.allPartnersCount > 0 ? fmtRbInt(data.balanceMeanAll) : '—',
-      avg: '—',
-      snapshot: true,
+      label: `Все партнёры · ${fmtN(data.allPartnersCount)} кешбуков (с нулями)`,
+      value: data.allPartnersCount > 0 ? fmtRbInt(data.balanceMeanAll) : '—',
     },
     {
-      label: `Баланс · остаток > 0 · ${fmtN(data.positiveBalanceCount)} партнёров`,
-      total: data.positiveBalanceCount > 0 ? fmtRbInt(data.balanceMeanPositive) : '—',
-      avg: '—',
-      snapshot: true,
-    },
-    {
-      label: 'Начисления',
-      total: fmtRbCompact(data.accrualTotal),
-      avg: fmtRbCompact(data.avgAccrualPerMonth),
-      snapshot: false,
-    },
-    {
-      label: 'Списания',
-      total: fmtRbCompact(data.spendTotal),
-      avg: fmtRbCompact(data.avgSpendPerMonth),
-      snapshot: false,
+      label: `Остаток > 0 · ${fmtN(data.positiveBalanceCount)} кешбуков`,
+      value: data.positiveBalanceCount > 0 ? fmtRbInt(data.balanceMeanPositive) : '—',
     },
   ]
 
   return (
     <div className="ren-card">
       <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-        <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
-        <p className="ren-card__subtitle text-[11px]">
-          {data.balanceNote ??
-            `Баланс по лояльности; начисления и списания — ср. за ${n} мес. с полисами`}
-        </p>
+        <h3 className="ren-card__title text-sm">Средний остаток Рен-бонусов · на текущий момент</h3>
       </div>
       <div className="ren-card__body p-0">
         <table className="statuses-table w-full">
           <thead>
             <tr>
-              <th className="text-left">Показатель</th>
-              <th className="text-right">Итого</th>
-              <th className="text-right">Ср. / мес.</th>
+              <th className="text-left">База</th>
+              <th className="text-right w-36">Ср. остаток</th>
             </tr>
           </thead>
           <tbody>
-            {tableRows.map(r => (
+            {rows.map(r => (
               <tr key={r.label}>
                 <td className="text-left text-[11px]">{r.label}</td>
-                <td className="text-right tabular-nums font-medium">{r.total}</td>
-                <td
-                  className={`text-right tabular-nums ${
-                    r.snapshot ? 'ren-text-secondary' : 'ren-text-brand font-semibold'
-                  }`}
-                >
-                  {r.avg}
-                </td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">{r.value}</td>
               </tr>
             ))}
           </tbody>
