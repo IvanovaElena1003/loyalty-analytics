@@ -388,6 +388,7 @@ class WalletAgg:
     kasko_issued: int = 0
     cross: int = 0
     spend_events: int = 0
+    cross_spend_events: int = 0
     has_accrual: bool = False
 
     @property
@@ -473,6 +474,7 @@ def compute_partner_engagement(
     filtered = {cb: wa for cb, wa in wallets.items() if in_slice(cb)}
     accrual = {cb for cb, wa in filtered.items() if wa.has_accrual}
     spend = {cb for cb, wa in filtered.items() if wa.spend_events > 0}
+    spend_cross = {cb for cb, wa in filtered.items() if wa.cross_spend_events > 0}
     with_issued = {cb for cb, wa in filtered.items() if wa.has_issued}
 
     def bucket_nth(pred) -> int | None:
@@ -492,6 +494,8 @@ def compute_partner_engagement(
         if partners_with_issued
         else None,
         "pctSpendAmongAccrual": round(len(spend) / len(accrual) * 100, 1) if accrual else None,
+        "partnersWhoSpendCross": len(spend_cross),
+        "pctSpendCrossAmongAccrual": round(len(spend_cross) / len(accrual) * 100, 1) if accrual else None,
         "partnersWithAccrual": len(accrual),
         "partnersWhoSpend": len(spend),
         "partnersWithIssued": partners_with_issued,
@@ -707,6 +711,7 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
                 if cb and wa is not None and is_cross_spend_row(row, idx):
                     wa.spend_events += 1
+                    wa.cross_spend_events += 1
                     month_spend[ym].add(cb)
         wb.close()
 

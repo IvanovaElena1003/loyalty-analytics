@@ -18,6 +18,8 @@ type EngagementSlice = {
   pctSpendAmongAccrual: number | null
   partnersWithAccrual: number
   partnersWhoSpend: number
+  partnersWhoSpendCross?: number
+  pctSpendCrossAmongAccrual?: number | null
   partnersWithIssued?: number
   partnersWithOsago?: number
   buckets: EngagementBucket[]
@@ -195,7 +197,7 @@ export default function StatusesTab() {
             </tbody>
           </table>
           <p className="text-xs font-semibold ren-text-brand px-3 pt-4 border-t border-[var(--stroke-divider)]">
-            Сравнение · вся сеть, Москва, Санкт-Петербург, регионы
+            Сравнение · {snap.periodLabel} · вся сеть, Москва, СПб, регионы
           </p>
           <table className="statuses-table statuses-table--slice w-full">
             <thead>
@@ -377,7 +379,7 @@ export default function StatusesTab() {
                 </td>
               </tr>
               <tr className="statuses-table__row--emphasis">
-                <td>Списывают баллы</td>
+                <td>Списывают РБ · любая механика</td>
                 <td className="text-right tabular-nums font-bold text-2xl">
                   {fmtPctWhole(snap.partnerEngagement.pctSpendAmongAccrual)}
                 </td>
@@ -386,9 +388,24 @@ export default function StatusesTab() {
                   {fmtN(snap.partnerEngagement.partnersWithAccrual)} с накоплением
                 </td>
               </tr>
+              <tr>
+                <td className="pl-4 text-[11px]">в т.ч. списание на кросс (скидка / КВ)</td>
+                <td className="text-right tabular-nums font-semibold ren-text-brand">
+                  {fmtPctWhole(snap.partnerEngagement.pctSpendCrossAmongAccrual ?? null)}
+                </td>
+                <td className="text-right text-[11px] ren-text-secondary">
+                  {fmtN(snap.partnerEngagement.partnersWhoSpendCross ?? 0)} /{' '}
+                  {fmtN(snap.partnerEngagement.partnersWithAccrual)}
+                </td>
+              </tr>
             </tbody>
           </table>
-          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">Кросс на 1 клиента по частоте списаний</p>
+          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">
+            Частота списаний · любая механика · кросс на 1 клиента · {snap.periodLabel}
+          </p>
+          <p className="text-[10px] ren-text-secondary px-3 pb-1">
+            Сегменты — по числу списаний (кросс, Каско, ползунок); «N-й клиент» — только кросс-Каско.
+          </p>
           <table className="statuses-table w-full">
             <thead>
               <tr>
@@ -413,7 +430,7 @@ export default function StatusesTab() {
           {engagementSlices.length > 1 && (
             <>
               <p className="text-xs font-semibold ren-text-brand px-3 pt-4 border-t border-[var(--stroke-divider)]">
-                Сравнение · вся сеть и топ-3 (филиал кешбука)
+                Сравнение · {snap.periodLabel} · вся сеть и топ-3
               </p>
               <table className="statuses-table statuses-table--slice w-full">
                 <thead>
@@ -439,12 +456,25 @@ export default function StatusesTab() {
                     ))}
                   </tr>
                   <tr className="statuses-table__row--emphasis">
-                    <td>Списывают баллы</td>
+                    <td>Списывают · любая мех.</td>
                     {engagementSlices.map(s => (
                       <td key={s.region} className="text-right tabular-nums">
                         <span className="font-bold">{fmtPctWhole(s.pctSpendAmongAccrual)}</span>
                         <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
                           {fmtN(s.partnersWhoSpend)} / {fmtN(s.partnersWithAccrual)}
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                  <tr>
+                    <td className="text-[11px]">в т.ч. кросс</td>
+                    {engagementSlices.map(s => (
+                      <td key={s.region} className="text-right tabular-nums text-[11px]">
+                        <span className="font-semibold ren-text-brand">
+                          {fmtPctWhole(s.pctSpendCrossAmongAccrual ?? null)}
+                        </span>
+                        <div className="text-[10px] ren-text-secondary">
+                          {fmtN(s.partnersWhoSpendCross ?? 0)} / {fmtN(s.partnersWithAccrual)}
                         </div>
                       </td>
                     ))}
@@ -491,7 +521,7 @@ export default function StatusesTab() {
       {/* Кросс + лояльность */}
       <div className="ren-card">
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-          <h3 className="ren-card__title text-sm">ОСАГО и кросс · лояльность за период</h3>
+          <h3 className="ren-card__title text-sm">ОСАГО и кросс · лояльность · {snap.periodLabel}</h3>
         </div>
         <div className="ren-card__body p-0">
           <table className="statuses-table w-full">
