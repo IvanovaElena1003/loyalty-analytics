@@ -368,11 +368,11 @@ export default function StatusesTab() {
               <tr className="statuses-table__row--emphasis">
                 <td>Имеют накопления (начисление РБ)</td>
                 <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPctWhole(accrualPctAmongIssued(snap.partnerEngagement as EngagementSlice))}
+                  {fmtPctWhole(accrualPctAmongIssued(snap.partnerEngagement as unknown as EngagementSlice))}
                 </td>
                 <td className="text-right text-[11px] ren-text-secondary">
                   {fmtN(snap.partnerEngagement.partnersWithAccrual)} /{' '}
-                  {fmtN(issuedPartnersCount(snap.partnerEngagement as EngagementSlice))}{' '}
+                  {fmtN(issuedPartnersCount(snap.partnerEngagement as unknown as EngagementSlice))}{' '}
                   оформили ОСАГО и/или Каско ФЛ
                 </td>
               </tr>
