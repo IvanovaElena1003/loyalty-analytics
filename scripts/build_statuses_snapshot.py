@@ -1095,7 +1095,7 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
             "rolling12MonthsByTop3": spend_nth_rows(nth_r12),
             "rolling3MonthsByTop3": spend_nth_rows(nth_r3),
             "noteSlider3m": (
-                "ОСАГО пролонгация (ползунок): дат в агрегате нет — «каждому N-му» только за всё время."
+                "ОСАГО ФЛ пролонгация: дат в агрегате нет — «каждому N-му» только за всё время."
             ),
         },
         "partnerMetrics": {

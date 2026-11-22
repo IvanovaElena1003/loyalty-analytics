@@ -94,8 +94,8 @@ type SpendNthRegionRow = {
 
 const MECH_NTH_LINES: { key: 'cross' | 'osagoSlider' | 'kaskoFl'; label: string }[] = [
   { key: 'cross', label: 'Кросс-Каско бесп. (скидка / КВ)' },
-  { key: 'osagoSlider', label: 'ОСАГО пролонгация (ползунок)' },
-  { key: 'kaskoFl', label: 'Каско ФЛ (кошелёк / скоринг)' },
+  { key: 'osagoSlider', label: 'ОСАГО ФЛ пролонгация' },
+  { key: 'kaskoFl', label: 'Каско ФЛ' },
 ]
 
 const MECHANIC_SPEND_LINES: { key: 'cross' | 'kasko' | 'osagoSlider'; label: string }[] = [
