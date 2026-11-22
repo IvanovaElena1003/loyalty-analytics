@@ -95,6 +95,348 @@ export const STATUSES_SNAPSHOT = {
         "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
       }
     },
+    "fullPeriodByTop3": [
+      {
+        "periodLabel": "30.07.2025 – 18.11.2026",
+        "accrualPartners": 3445,
+        "issuedPartners": 4220,
+        "accrualSharePct": 81.6,
+        "spendPartners": 2070,
+        "accrualBaseForSpend": 3445,
+        "spendSharePct": 60.1,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 1364,
+            "pctOfAccrualBase": 39.6,
+            "pctOfSpenders": 65.9
+          },
+          "kasko": {
+            "partners": 72,
+            "pctOfAccrualBase": 2.1,
+            "pctOfSpenders": 3.5
+          },
+          "osagoSlider": {
+            "partners": 1598,
+            "pctOfAccrualBase": 46.4,
+            "pctOfSpenders": 77.2
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Вся сеть"
+      },
+      {
+        "periodLabel": "30.07.2025 – 18.11.2026",
+        "accrualPartners": 1769,
+        "issuedPartners": 2203,
+        "accrualSharePct": 80.3,
+        "spendPartners": 994,
+        "accrualBaseForSpend": 1769,
+        "spendSharePct": 56.2,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 618,
+            "pctOfAccrualBase": 34.9,
+            "pctOfSpenders": 62.2
+          },
+          "kasko": {
+            "partners": 17,
+            "pctOfAccrualBase": 1.0,
+            "pctOfSpenders": 1.7
+          },
+          "osagoSlider": {
+            "partners": 789,
+            "pctOfAccrualBase": 44.6,
+            "pctOfSpenders": 79.4
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Москва"
+      },
+      {
+        "periodLabel": "30.07.2025 – 18.11.2026",
+        "accrualPartners": 549,
+        "issuedPartners": 667,
+        "accrualSharePct": 82.3,
+        "spendPartners": 373,
+        "accrualBaseForSpend": 549,
+        "spendSharePct": 67.9,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 198,
+            "pctOfAccrualBase": 36.1,
+            "pctOfSpenders": 53.1
+          },
+          "kasko": {
+            "partners": 4,
+            "pctOfAccrualBase": 0.7,
+            "pctOfSpenders": 1.1
+          },
+          "osagoSlider": {
+            "partners": 314,
+            "pctOfAccrualBase": 57.2,
+            "pctOfSpenders": 84.2
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Санкт-Петербург"
+      },
+      {
+        "periodLabel": "30.07.2025 – 18.11.2026",
+        "accrualPartners": 1127,
+        "issuedPartners": 1350,
+        "accrualSharePct": 83.5,
+        "spendPartners": 703,
+        "accrualBaseForSpend": 1127,
+        "spendSharePct": 62.4,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 548,
+            "pctOfAccrualBase": 48.6,
+            "pctOfSpenders": 78.0
+          },
+          "kasko": {
+            "partners": 51,
+            "pctOfAccrualBase": 4.5,
+            "pctOfSpenders": 7.3
+          },
+          "osagoSlider": {
+            "partners": 495,
+            "pctOfAccrualBase": 43.9,
+            "pctOfSpenders": 70.4
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Регионы"
+      }
+    ],
+    "rolling12MonthsByTop3": [
+      {
+        "periodLabel": "19.11.2025 – 18.11.2026",
+        "accrualPartners": 3388,
+        "issuedPartners": 4122,
+        "accrualSharePct": 82.2,
+        "spendPartners": 2067,
+        "accrualBaseForSpend": 3388,
+        "spendSharePct": 61.0,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 1357,
+            "pctOfAccrualBase": 40.1,
+            "pctOfSpenders": 65.7
+          },
+          "kasko": {
+            "partners": 72,
+            "pctOfAccrualBase": 2.1,
+            "pctOfSpenders": 3.5
+          },
+          "osagoSlider": {
+            "partners": 1598,
+            "pctOfAccrualBase": 47.2,
+            "pctOfSpenders": 77.3
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Вся сеть"
+      },
+      {
+        "periodLabel": "19.11.2025 – 18.11.2026",
+        "accrualPartners": 1742,
+        "issuedPartners": 2141,
+        "accrualSharePct": 81.4,
+        "spendPartners": 991,
+        "accrualBaseForSpend": 1742,
+        "spendSharePct": 56.9,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 613,
+            "pctOfAccrualBase": 35.2,
+            "pctOfSpenders": 61.9
+          },
+          "kasko": {
+            "partners": 17,
+            "pctOfAccrualBase": 1.0,
+            "pctOfSpenders": 1.7
+          },
+          "osagoSlider": {
+            "partners": 789,
+            "pctOfAccrualBase": 45.3,
+            "pctOfSpenders": 79.6
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Москва"
+      },
+      {
+        "periodLabel": "19.11.2025 – 18.11.2026",
+        "accrualPartners": 543,
+        "issuedPartners": 661,
+        "accrualSharePct": 82.1,
+        "spendPartners": 373,
+        "accrualBaseForSpend": 543,
+        "spendSharePct": 68.7,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 197,
+            "pctOfAccrualBase": 36.3,
+            "pctOfSpenders": 52.8
+          },
+          "kasko": {
+            "partners": 4,
+            "pctOfAccrualBase": 0.7,
+            "pctOfSpenders": 1.1
+          },
+          "osagoSlider": {
+            "partners": 314,
+            "pctOfAccrualBase": 57.8,
+            "pctOfSpenders": 84.2
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Санкт-Петербург"
+      },
+      {
+        "periodLabel": "19.11.2025 – 18.11.2026",
+        "accrualPartners": 1103,
+        "issuedPartners": 1320,
+        "accrualSharePct": 83.6,
+        "spendPartners": 703,
+        "accrualBaseForSpend": 1103,
+        "spendSharePct": 63.7,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 547,
+            "pctOfAccrualBase": 49.6,
+            "pctOfSpenders": 77.8
+          },
+          "kasko": {
+            "partners": 51,
+            "pctOfAccrualBase": 4.6,
+            "pctOfSpenders": 7.3
+          },
+          "osagoSlider": {
+            "partners": 495,
+            "pctOfAccrualBase": 44.9,
+            "pctOfSpenders": 70.4
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Регионы"
+      }
+    ],
+    "rolling3MonthsByTop3": [
+      {
+        "periodLabel": "19.08.2026 – 18.11.2026",
+        "accrualPartners": 2618,
+        "issuedPartners": 3343,
+        "accrualSharePct": 78.3,
+        "spendPartners": 1880,
+        "accrualBaseForSpend": 2618,
+        "spendSharePct": 71.8,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 998,
+            "pctOfAccrualBase": 38.1,
+            "pctOfSpenders": 53.1
+          },
+          "kasko": {
+            "partners": 72,
+            "pctOfAccrualBase": 2.8,
+            "pctOfSpenders": 3.8
+          },
+          "osagoSlider": {
+            "partners": 1598,
+            "pctOfAccrualBase": 61.0,
+            "pctOfSpenders": 85.0
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Вся сеть"
+      },
+      {
+        "periodLabel": "19.08.2026 – 18.11.2026",
+        "accrualPartners": 1297,
+        "issuedPartners": 1650,
+        "accrualSharePct": 78.6,
+        "spendPartners": 893,
+        "accrualBaseForSpend": 1297,
+        "spendSharePct": 68.9,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 430,
+            "pctOfAccrualBase": 33.2,
+            "pctOfSpenders": 48.2
+          },
+          "kasko": {
+            "partners": 17,
+            "pctOfAccrualBase": 1.3,
+            "pctOfSpenders": 1.9
+          },
+          "osagoSlider": {
+            "partners": 789,
+            "pctOfAccrualBase": 60.8,
+            "pctOfSpenders": 88.4
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Москва"
+      },
+      {
+        "periodLabel": "19.08.2026 – 18.11.2026",
+        "accrualPartners": 416,
+        "issuedPartners": 543,
+        "accrualSharePct": 76.6,
+        "spendPartners": 343,
+        "accrualBaseForSpend": 416,
+        "spendSharePct": 82.5,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 133,
+            "pctOfAccrualBase": 32.0,
+            "pctOfSpenders": 38.8
+          },
+          "kasko": {
+            "partners": 4,
+            "pctOfAccrualBase": 1.0,
+            "pctOfSpenders": 1.2
+          },
+          "osagoSlider": {
+            "partners": 314,
+            "pctOfAccrualBase": 75.5,
+            "pctOfSpenders": 91.5
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Санкт-Петербург"
+      },
+      {
+        "periodLabel": "19.08.2026 – 18.11.2026",
+        "accrualPartners": 905,
+        "issuedPartners": 1150,
+        "accrualSharePct": 78.7,
+        "spendPartners": 644,
+        "accrualBaseForSpend": 905,
+        "spendSharePct": 71.2,
+        "spendByMechanic": {
+          "cross": {
+            "partners": 435,
+            "pctOfAccrualBase": 48.1,
+            "pctOfSpenders": 67.5
+          },
+          "kasko": {
+            "partners": 51,
+            "pctOfAccrualBase": 5.6,
+            "pctOfSpenders": 7.9
+          },
+          "osagoSlider": {
+            "partners": 495,
+            "pctOfAccrualBase": 54.7,
+            "pctOfSpenders": 76.9
+          },
+          "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+        },
+        "region": "Регионы"
+      }
+    ],
     "last3Months": [
       {
         "ym": "2026-08",

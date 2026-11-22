@@ -96,6 +96,7 @@ type MechanicSpendRow = {
 }
 
 type PartnerPeriodSlice = {
+  region?: string
   periodLabel: string
   accrualPartners: number
   issuedPartners?: number
@@ -118,78 +119,137 @@ const MECHANIC_SPEND_LINES: { key: 'cross' | 'kasko' | 'osagoSlider'; label: str
   { key: 'osagoSlider', label: 'в т.ч. ОСАГО пролонгация (ползунок)' },
 ]
 
-function PartnerPeriodBlock({
+function PartnerSliceMetricCell({
+  numerator,
+  denominator,
+  pct,
+  networkColumn,
+}: {
+  numerator: number
+  denominator: number
+  pct: number | null
+  networkColumn?: boolean
+}) {
+  return (
+    <td
+      className={`text-right tabular-nums text-[11px]${networkColumn ? ' statuses-table__col-network' : ''}`}
+    >
+      <span className="font-medium">
+        {fmtN(numerator)} <span className="ren-text-secondary">/ {fmtN(denominator)}</span>
+      </span>
+      <div className="text-[10px] ren-text-brand font-semibold mt-0.5">{fmtPctWhole(pct)}</div>
+    </td>
+  )
+}
+
+function PartnerWindowRegionTable({
   title,
-  slice,
+  slices,
   isFirst,
 }: {
   title: string
-  slice: PartnerPeriodSlice
+  slices: PartnerPeriodSlice[]
   isFirst?: boolean
 }) {
-  const issued =
-    slice.issuedPartners ?? slice.activePartners ?? 0
-  const spendMech = slice.spendByMechanic
+  const periodLabel = slices[0]?.periodLabel ?? ''
   return (
-  <>
+    <>
       <p
         className={`text-xs font-semibold ren-text-brand px-3 ${
           isFirst ? 'pt-2' : 'pt-3 border-t border-[var(--stroke-divider)]'
         }`}
       >
         {title}{' '}
-        <span className="font-normal ren-text-secondary">({slice.periodLabel})</span>
+        <span className="font-normal ren-text-secondary">({periodLabel})</span>
       </p>
-      <table className="statuses-table w-full">
+      <table className="statuses-table statuses-table--slice w-full">
+        <thead>
+          <tr>
+            <th className="text-left">Показатель</th>
+            {slices.map(s => (
+              <th
+                key={String(s.region)}
+                className={`text-right text-[11px]${isNetworkSlice(s.region) ? ' statuses-table__col-network' : ''}`}
+              >
+                {String(s.region ?? '—')}
+              </th>
+            ))}
+          </tr>
+        </thead>
         <tbody>
           <tr>
-            <td className="text-left w-[55%]">Партнёров с начислением РБ (&gt;0 раз)</td>
-            <td className="text-right tabular-nums">
-              {fmtN(slice.accrualPartners)}{' '}
-              <span className="ren-text-secondary text-[11px]">/ {fmtN(issued)}</span>
-              <span className="block text-[10px] ren-text-secondary font-normal mt-0.5">
+            <td className="text-left">
+              Партнёров с начислением РБ (&gt;0 раз)
+              <span className="block text-[10px] ren-text-secondary font-normal">
                 оформивших ОСАГО и/или Каско ФЛ
               </span>
             </td>
-            <td className="text-right tabular-nums font-semibold ren-text-brand w-20">
-              {fmtPctWhole(slice.accrualSharePct)}
-            </td>
+            {slices.map(s => {
+              const issued = s.issuedPartners ?? s.activePartners ?? 0
+              return (
+                <PartnerSliceMetricCell
+                  key={String(s.region)}
+                  numerator={s.accrualPartners}
+                  denominator={issued}
+                  pct={s.accrualSharePct}
+                  networkColumn={isNetworkSlice(s.region)}
+                />
+              )
+            })}
           </tr>
           <tr>
-            <td className="text-left">Партнёров со списанием (&gt;0 раз)</td>
-            <td className="text-right tabular-nums">
-              {fmtN(slice.spendPartners)}{' '}
-              <span className="ren-text-secondary text-[11px]">/ {fmtN(slice.accrualBaseForSpend)}</span>
-              <span className="block text-[10px] ren-text-secondary font-normal mt-0.5">с накоплением</span>
+            <td className="text-left">
+              Партнёров со списанием (&gt;0 раз)
+              <span className="block text-[10px] ren-text-secondary font-normal">с накоплением</span>
             </td>
-            <td className="text-right tabular-nums font-semibold ren-text-brand">
-              {fmtPctWhole(slice.spendSharePct)}
-            </td>
+            {slices.map(s => (
+              <PartnerSliceMetricCell
+                key={String(s.region)}
+                numerator={s.spendPartners}
+                denominator={s.accrualBaseForSpend}
+                pct={s.spendSharePct}
+                networkColumn={isNetworkSlice(s.region)}
+              />
+            ))}
           </tr>
-          {spendMech
-            ? MECHANIC_SPEND_LINES.map(({ key, label }) => {
-                const row = spendMech[key]
-                if (!row) return null
+          {MECHANIC_SPEND_LINES.map(({ key, label }) => (
+            <tr key={key}>
+              <td className="text-left pl-3 text-[11px] ren-text-secondary">{label}</td>
+              {slices.map(s => {
+                const row = s.spendByMechanic?.[key]
+                if (!row) {
+                  return (
+                    <td key={String(s.region)} className="text-right text-gray-300">
+                      —
+                    </td>
+                  )
+                }
                 return (
-                  <tr key={String(key)}>
-                    <td className="text-left pl-4 text-[11px] ren-text-secondary">{label}</td>
-                    <td className="text-right tabular-nums text-[11px]">
-                      {fmtN(row.partners)}{' '}
-                      <span className="ren-text-secondary">
-                        / {fmtN(slice.accrualBaseForSpend)}
-                      </span>
-                    </td>
-                    <td className="text-right tabular-nums text-[11px] font-semibold ren-text-brand">
-                      {fmtPctWhole(row.pctOfAccrualBase)}
-                    </td>
-                  </tr>
+                  <PartnerSliceMetricCell
+                    key={String(s.region)}
+                    numerator={row.partners}
+                    denominator={s.accrualBaseForSpend}
+                    pct={row.pctOfAccrualBase}
+                    networkColumn={isNetworkSlice(s.region)}
+                  />
                 )
-              })
-            : null}
+              })}
+            </tr>
+          ))}
         </tbody>
       </table>
     </>
   )
+}
+
+function partnerTop3Slices(
+  snap: typeof STATUSES_SNAPSHOT,
+  key: 'fullPeriodByTop3' | 'rolling12MonthsByTop3' | 'rolling3MonthsByTop3',
+  fallback: PartnerPeriodSlice,
+): PartnerPeriodSlice[] {
+  const rows = (snap.partnerMetrics as Record<string, unknown>)[key] as PartnerPeriodSlice[] | undefined
+  if (rows?.length) return rows
+  return [{ region: 'Вся сеть', ...fallback }]
 }
 
 function isNetworkSlice(region: unknown): boolean {
@@ -364,32 +424,31 @@ export default function StatusesTab() {
           </p>
         </div>
         <div className="ren-card__body p-0 space-y-0">
-          <table className="statuses-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Показатель</th>
-                <th className="text-right">Значение</th>
-                <th className="text-right w-20">Доля</th>
-              </tr>
-            </thead>
-          </table>
-          <PartnerPeriodBlock
+          <PartnerWindowRegionTable
             title="За всё время"
             isFirst
-            slice={snap.partnerMetrics.fullPeriod as PartnerPeriodSlice}
+            slices={partnerTop3Slices(
+              snap,
+              'fullPeriodByTop3',
+              snap.partnerMetrics.fullPeriod as PartnerPeriodSlice,
+            )}
           />
-          {snap.partnerMetrics.rolling12Months != null && (
-            <PartnerPeriodBlock
-              title="Скользящий год"
-              slice={snap.partnerMetrics.rolling12Months as PartnerPeriodSlice}
-            />
-          )}
-          {snap.partnerMetrics.rolling3Months != null && (
-            <PartnerPeriodBlock
-              title="Скользящие 3 мес"
-              slice={snap.partnerMetrics.rolling3Months as PartnerPeriodSlice}
-            />
-          )}
+          <PartnerWindowRegionTable
+            title="Скользящий год"
+            slices={partnerTop3Slices(
+              snap,
+              'rolling12MonthsByTop3',
+              snap.partnerMetrics.rolling12Months as PartnerPeriodSlice,
+            )}
+          />
+          <PartnerWindowRegionTable
+            title="Скользящие 3 мес"
+            slices={partnerTop3Slices(
+              snap,
+              'rolling3MonthsByTop3',
+              snap.partnerMetrics.rolling3Months as PartnerPeriodSlice,
+            )}
+          />
           {snap.partnerMetrics.fullPeriod.spendByMechanic?.noteMutual ? (
             <p className="text-[10px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
               {snap.partnerMetrics.fullPeriod.spendByMechanic.noteMutual}

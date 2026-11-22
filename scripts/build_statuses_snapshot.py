@@ -457,12 +457,10 @@ def partners_in_date_range(
     return out
 
 
-def spend_mechanic_breakdown(
-    month_cross: dict[str, set[str]],
-    month_kasko: dict[str, set[str]],
-    month_slider: dict[str, set[str]],
-    range_start: datetime,
-    range_end: datetime,
+def spend_mechanic_breakdown_sets(
+    cross: set[str],
+    kasko: set[str],
+    slider: set[str],
     accrual_n: int,
     spend_n: int,
 ) -> dict:
@@ -475,11 +473,90 @@ def spend_mechanic_breakdown(
         }
 
     return {
-        "cross": row(partners_in_date_range(month_cross, range_start, range_end)),
-        "kasko": row(partners_in_date_range(month_kasko, range_start, range_end)),
-        "osagoSlider": row(partners_in_date_range(month_slider, range_start, range_end)),
+        "cross": row(cross),
+        "kasko": row(kasko),
+        "osagoSlider": row(slider),
         "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк.",
     }
+
+
+def spend_mechanic_breakdown(
+    month_cross: dict[str, set[str]],
+    month_kasko: dict[str, set[str]],
+    month_slider: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+    accrual_n: int,
+    spend_n: int,
+) -> dict:
+    return spend_mechanic_breakdown_sets(
+        partners_in_date_range(month_cross, range_start, range_end),
+        partners_in_date_range(month_kasko, range_start, range_end),
+        partners_in_date_range(month_slider, range_start, range_end),
+        accrual_n,
+        spend_n,
+    )
+
+
+def filter_by_top3(partners: set[str], region: str | None, fmap: dict[str, str]) -> set[str]:
+    if region is None:
+        return {cb for cb in partners if cb}
+    return {cb for cb in partners if cb and wallet_top3_region(cb, fmap) == region}
+
+
+def partner_window_slice(
+    region: str | None,
+    fmap: dict[str, str],
+    month_issued: dict[str, set[str]],
+    month_accrual: dict[str, set[str]],
+    month_spend: dict[str, set[str]],
+    month_cross: dict[str, set[str]],
+    month_kasko: dict[str, set[str]],
+    month_slider: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+    period_label: str,
+) -> dict:
+    issued = filter_by_top3(partners_in_date_range(month_issued, range_start, range_end), region, fmap)
+    accrual = filter_by_top3(partners_in_date_range(month_accrual, range_start, range_end), region, fmap)
+    spend = filter_by_top3(partners_in_date_range(month_spend, range_start, range_end), region, fmap)
+    cross = filter_by_top3(partners_in_date_range(month_cross, range_start, range_end), region, fmap)
+    kasko = filter_by_top3(partners_in_date_range(month_kasko, range_start, range_end), region, fmap)
+    slider = filter_by_top3(partners_in_date_range(month_slider, range_start, range_end), region, fmap)
+    mech = spend_mechanic_breakdown_sets(cross, kasko, slider, len(accrual), len(spend))
+    out = partner_period_slice(issued, accrual, spend, period_label, mech)
+    out["region"] = "Вся сеть" if region is None else region
+    return out
+
+
+def partner_metrics_by_top3(
+    fmap: dict[str, str],
+    month_issued: dict[str, set[str]],
+    month_accrual: dict[str, set[str]],
+    month_spend: dict[str, set[str]],
+    month_cross: dict[str, set[str]],
+    month_kasko: dict[str, set[str]],
+    month_slider: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+    period_label: str,
+) -> list[dict]:
+    return [
+        partner_window_slice(
+            region,
+            fmap,
+            month_issued,
+            month_accrual,
+            month_spend,
+            month_cross,
+            month_kasko,
+            month_slider,
+            range_start,
+            range_end,
+            period_label,
+        )
+        for region in (None, *TOP3_LABELS)
+    ]
 
 
 def partner_period_slice(
@@ -933,6 +1010,42 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                 month_spend_slider,
                 r3_start,
                 END,
+            ),
+            "fullPeriodByTop3": partner_metrics_by_top3(
+                fmap,
+                month_issued,
+                month_accrual,
+                month_spend,
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                START,
+                END,
+                full_period_label,
+            ),
+            "rolling12MonthsByTop3": partner_metrics_by_top3(
+                fmap,
+                month_issued,
+                month_accrual,
+                month_spend,
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                r12_start,
+                END,
+                fmt_period_label(r12_start, END),
+            ),
+            "rolling3MonthsByTop3": partner_metrics_by_top3(
+                fmap,
+                month_issued,
+                month_accrual,
+                month_spend,
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                r3_start,
+                END,
+                fmt_period_label(r3_start, END),
             ),
             "last3Months": month_rows,
         },
