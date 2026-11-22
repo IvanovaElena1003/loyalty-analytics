@@ -5,27 +5,6 @@ import AvgBonusMetricsCard, { type AvgBonusSnapshot } from '../AvgBonusMetricsCa
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RowTotals = any
-type EngagementBucket = {
-  id: string
-  label: string
-  partnerCount: number
-  everyNthClient: number | null
-}
-type EngagementSlice = {
-  region: string
-  pctWithAccrualAmongIssued?: number | null
-  pctWithAccrualAmongSellers?: number | null
-  pctWithAccrualAmongActiveBoard?: number | null
-  pctSpendAmongAccrual: number | null
-  partnersWithAccrual: number
-  partnersWhoSpend: number
-  partnersWhoSpendCross?: number
-  pctSpendCrossAmongAccrual?: number | null
-  partnersWithIssued?: number
-  partnersWithOsago?: number
-  buckets: EngagementBucket[]
-}
-
 const fmtN = (n: number) => n.toLocaleString('ru-RU')
 
 function fmtDateRu(iso: string | null | undefined): string {
@@ -75,19 +54,6 @@ function metricSharePct(row: RowTotals, m: MetricRowDef): number | null {
   const base = Number(row[baseKey] ?? 0)
   if (base <= 0) return null
   return (Number(row[m.amountKey] ?? 0) / base) * 100
-}
-
-function issuedPartnersCount(e: EngagementSlice): number {
-  return e.partnersWithIssued ?? e.partnersWithOsago ?? 0
-}
-
-function accrualPctAmongIssued(e: EngagementSlice): number | null {
-  return (
-    e.pctWithAccrualAmongIssued ??
-    e.pctWithAccrualAmongSellers ??
-    e.pctWithAccrualAmongActiveBoard ??
-    null
-  )
 }
 
 type MechanicSpendRow = {
@@ -401,16 +367,6 @@ export default function StatusesTab() {
     [snap.spendByProduct],
   )
 
-  const engagementSlices = useMemo((): EngagementSlice[] => {
-    const top3 = (snap.partnerEngagementByTop3 ?? []) as unknown as EngagementSlice[]
-    const network: EngagementSlice = {
-      region: 'Вся сеть',
-      ...snap.partnerEngagement,
-      buckets: [...snap.partnerEngagement.buckets],
-    }
-    return [network, ...top3.map(s => ({ ...s, buckets: [...s.buckets] }))]
-  }, [snap])
-
   const spendNth = (
     snap as unknown as {
       spendNthByMechanic?: {
@@ -428,10 +384,6 @@ export default function StatusesTab() {
       <p className="text-sm ren-text-secondary">
         Предрасчёт из xlsx ({snap.generatedAt}). Филиалы: B2Partners — {snap.agentFilialMapSize.toLocaleString('ru-RU')} кешбуков.
       </p>
-
-      {(snap as unknown as { avgBonus?: AvgBonusSnapshot }).avgBonus ? (
-        <AvgBonusMetricsCard data={(snap as unknown as { avgBonus: AvgBonusSnapshot }).avgBonus} />
-      ) : null}
 
       {/* 1. Итого за период — одна таблица вместо плиток */}
       <div className="ren-card">
@@ -561,84 +513,32 @@ export default function StatusesTab() {
           <h3 className="ren-card__title text-sm">Как партнёры используют бонусы · {snap.periodLabel}</h3>
         </div>
         <div className="ren-card__body p-0">
-          {engagementSlices.length > 1 && (
+          {spendNth?.fullPeriodByTop3?.length ? (
             <>
-              <p className="text-xs font-semibold ren-text-brand px-3 pt-3">
-                Сравнение · {snap.periodLabel} · вся сеть и топ-3
+              <SpendNthMechanicTable
+                isFirst
+                title={`Каждому N-му клиенту · за всё время (${spendNth.periodFull ?? snap.periodLabel})`}
+                rows={spendNth.fullPeriodByTop3}
+              />
+              <p className="text-[10px] ren-text-secondary px-3 pt-1">
+                Дробь: списаний по механике / оформленных полисов (ОСАГО для кросса и ползунка, Каско ФЛ для
+                кошелька).
               </p>
-              <table className="statuses-table statuses-table--slice w-full">
-                <thead>
-                  <tr>
-                    <th className="text-left">Показатель</th>
-                    {engagementSlices.map(s => (
-                      <th key={s.region} className="text-right">
-                        {s.region}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr className="statuses-table__row--emphasis">
-                    <td>Имеют накопления</td>
-                    {engagementSlices.map(s => (
-                      <td key={s.region} className="text-right tabular-nums">
-                        <span className="font-bold">{fmtPctWhole(accrualPctAmongIssued(s))}</span>
-                        <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
-                          {fmtN(s.partnersWithAccrual)} / {fmtN(issuedPartnersCount(s))}
-                        </div>
-                      </td>
-                    ))}
-                  </tr>
-                  <tr className="statuses-table__row--emphasis">
-                    <td>Списывают · любая мех.</td>
-                    {engagementSlices.map(s => (
-                      <td key={s.region} className="text-right tabular-nums">
-                        <span className="font-bold">{fmtPctWhole(s.pctSpendAmongAccrual)}</span>
-                        <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
-                          {fmtN(s.partnersWhoSpend)} / {fmtN(s.partnersWithAccrual)}
-                        </div>
-                      </td>
-                    ))}
-                  </tr>
-                  <tr>
-                    <td className="text-[11px]">в т.ч. кросс</td>
-                    {engagementSlices.map(s => (
-                      <td key={s.region} className="text-right tabular-nums text-[11px]">
-                        <span className="font-semibold ren-text-brand">
-                          {fmtPctWhole(s.pctSpendCrossAmongAccrual ?? null)}
-                        </span>
-                        <div className="text-[10px] ren-text-secondary">
-                          {fmtN(s.partnersWhoSpendCross ?? 0)} / {fmtN(s.partnersWithAccrual)}
-                        </div>
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-              {spendNth?.fullPeriodByTop3?.length ? (
-                <>
-                  <SpendNthMechanicTable
-                    isFirst
-                    title={`Каждому N-му клиенту · за всё время (${spendNth.periodFull ?? snap.periodLabel})`}
-                    rows={spendNth.fullPeriodByTop3}
-                  />
-                  <p className="text-[10px] ren-text-secondary px-3 pt-1">
-                    Дробь: списаний по механике / оформленных полисов (ОСАГО для кросса и ползунка, Каско ФЛ для
-                    кошелька).
-                  </p>
-                  <SpendNthMechanicTable
-                    title={`Каждому N-му клиенту · скользящие 3 мес (${spendNth.periodRolling3 ?? ''})`}
-                    rows={spendNth.rolling3MonthsByTop3 ?? []}
-                  />
-                  {spendNth.noteSlider3m ? (
-                    <p className="text-[10px] ren-text-secondary px-3 py-2">{spendNth.noteSlider3m}</p>
-                  ) : null}
-                </>
+              <SpendNthMechanicTable
+                title={`Каждому N-му клиенту · скользящие 3 мес (${spendNth.periodRolling3 ?? ''})`}
+                rows={spendNth.rolling3MonthsByTop3 ?? []}
+              />
+              {spendNth.noteSlider3m ? (
+                <p className="text-[10px] ren-text-secondary px-3 py-2">{spendNth.noteSlider3m}</p>
               ) : null}
             </>
-          )}
+          ) : null}
         </div>
       </div>
+
+      {(snap as unknown as { avgBonus?: AvgBonusSnapshot }).avgBonus ? (
+        <AvgBonusMetricsCard data={(snap as unknown as { avgBonus: AvgBonusSnapshot }).avgBonus} />
+      ) : null}
 
     </div>
   )
