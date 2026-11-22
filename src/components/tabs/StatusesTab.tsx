@@ -89,6 +89,66 @@ function accrualPctAmongIssued(e: EngagementSlice): number | null {
   )
 }
 
+type PartnerPeriodSlice = {
+  periodLabel: string
+  accrualPartners: number
+  issuedPartners?: number
+  activePartners?: number
+  accrualSharePct: number | null
+  spendPartners: number
+  accrualBaseForSpend: number
+  spendSharePct: number | null
+}
+
+function PartnerPeriodBlock({
+  title,
+  slice,
+  isFirst,
+}: {
+  title: string
+  slice: PartnerPeriodSlice
+  isFirst?: boolean
+}) {
+  const issued =
+    slice.issuedPartners ?? slice.activePartners ?? 0
+  return (
+  <>
+      <p
+        className={`text-xs font-semibold ren-text-brand px-3 ${
+          isFirst ? 'pt-2' : 'pt-3 border-t border-[var(--stroke-divider)]'
+        }`}
+      >
+        {title}{' '}
+        <span className="font-normal ren-text-secondary">({slice.periodLabel})</span>
+      </p>
+      <table className="statuses-table w-full">
+        <tbody>
+          <tr>
+            <td className="text-left w-[55%]">Партнёров с начислением РБ</td>
+            <td className="text-right tabular-nums">
+              {fmtN(slice.accrualPartners)}{' '}
+              <span className="ren-text-secondary text-[11px]">/ {fmtN(issued)}</span>
+            </td>
+            <td className="text-right tabular-nums font-semibold ren-text-brand w-20">
+              {fmtPctWhole(slice.accrualSharePct)}
+            </td>
+          </tr>
+          <tr>
+            <td className="text-left">Партнёров со списанием (&gt;0)</td>
+            <td className="text-right tabular-nums">
+              {fmtN(slice.spendPartners)}{' '}
+              <span className="ren-text-secondary text-[11px]">/ {fmtN(slice.accrualBaseForSpend)}</span>
+            </td>
+            <td className="text-right tabular-nums font-semibold ren-text-brand">
+              {fmtPctWhole(slice.spendSharePct)}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </>
+  )
+}
+
 function isNetworkSlice(region: unknown): boolean {
   return String(region) === 'Вся сеть'
 }
@@ -253,7 +313,7 @@ export default function StatusesTab() {
       {/* Партнёры — чеклист слайда */}
       <div className="ren-card">
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-          <h3 className="ren-card__title text-sm">Партнёры и РБ · {snap.partnerMetrics.periodLabel}</h3>
+          <h3 className="ren-card__title text-sm">Партнёры и РБ</h3>
           <p className="text-[11px] ren-text-secondary font-normal mt-1">
             {snap.partnerMetrics.method ??
               'Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.'}{' '}
@@ -266,41 +326,27 @@ export default function StatusesTab() {
               <tr>
                 <th className="text-left">Показатель</th>
                 <th className="text-right">Значение</th>
-                <th className="text-right">Доля</th>
+                <th className="text-right w-20">Доля</th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td>Партнёров с начислением РБ</td>
-                <td className="text-right tabular-nums">
-                  {fmtN(snap.partnerMetrics.fullPeriod.accrualPartners)}{' '}
-                  <span className="ren-text-secondary text-[11px]">
-                    /{' '}
-                    {fmtN(
-                      snap.partnerMetrics.fullPeriod.issuedPartners ??
-                        (snap.partnerMetrics.fullPeriod as { activePartners?: number }).activePartners ??
-                        0,
-                    )}
-                  </span>
-                </td>
-                <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtPctWhole(snap.partnerMetrics.fullPeriod.accrualSharePct)}
-                </td>
-              </tr>
-              <tr>
-                <td>Партнёров со списанием (&gt;0)</td>
-                <td className="text-right tabular-nums">
-                  {fmtN(snap.partnerMetrics.fullPeriod.spendPartners)}{' '}
-                  <span className="ren-text-secondary text-[11px]">
-                    / {fmtN(snap.partnerMetrics.fullPeriod.accrualBaseForSpend)}
-                  </span>
-                </td>
-                <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtPctWhole(snap.partnerMetrics.fullPeriod.spendSharePct)}
-                </td>
-              </tr>
-            </tbody>
           </table>
+          <PartnerPeriodBlock
+            title="За всё время"
+            isFirst
+            slice={snap.partnerMetrics.fullPeriod as PartnerPeriodSlice}
+          />
+          {snap.partnerMetrics.rolling12Months != null && (
+            <PartnerPeriodBlock
+              title="Скользящий год"
+              slice={snap.partnerMetrics.rolling12Months as PartnerPeriodSlice}
+            />
+          )}
+          {snap.partnerMetrics.rolling3Months != null && (
+            <PartnerPeriodBlock
+              title="Скользящие 3 мес"
+              slice={snap.partnerMetrics.rolling3Months as PartnerPeriodSlice}
+            />
+          )}
           <p className="text-xs font-semibold ren-text-brand px-3 pt-3">Динамика · 3 полных месяца</p>
           <table className="statuses-table statuses-table--slice w-full">
             <thead>

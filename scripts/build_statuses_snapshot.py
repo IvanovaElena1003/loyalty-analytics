@@ -424,6 +424,51 @@ def month_range(ym: str) -> tuple[datetime, datetime]:
     return start, end
 
 
+def fmt_period_label(start: datetime, end: datetime) -> str:
+    return f"{start.strftime('%d.%m.%Y')} – {end.strftime('%d.%m.%Y')}"
+
+
+def trailing_window_start(end: datetime, months: int) -> datetime:
+    """Скользящее окно [start … end], календарные месяцы (день+1 после «-N мес»)."""
+    y, m, d = end.year, end.month, end.day
+    m -= months
+    while m <= 0:
+        m += 12
+        y -= 1
+    _, last_in_month = month_range(f"{y}-{m:02d}")
+    day = min(d, last_in_month.day)
+    anchor = datetime(y, m, day)
+    start = anchor + timedelta(days=1)
+    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+    return max(start, START)
+
+
+def partners_in_date_range(
+    month_map: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+) -> set[str]:
+    out: set[str] = set()
+    for ym, members in month_map.items():
+        m_start, m_end = month_range(ym)
+        if m_end < range_start or m_start > range_end:
+            continue
+        out |= members
+    return out
+
+
+def partner_period_slice(issued: set[str], accrual: set[str], spend: set[str], period_label: str) -> dict:
+    return {
+        "periodLabel": period_label,
+        "accrualPartners": len(accrual),
+        "issuedPartners": len(issued),
+        "accrualSharePct": round(len(accrual) / len(issued) * 100, 1) if issued else None,
+        "spendPartners": len(spend),
+        "accrualBaseForSpend": len(accrual),
+        "spendSharePct": round(len(spend) / len(accrual) * 100, 1) if accrual else None,
+    }
+
+
 def last_complete_months(ref: datetime, n: int) -> list[str]:
     out: list[str] = []
     y, m = ref.year, ref.month
@@ -587,6 +632,7 @@ def scan_slider_wallet_spend(
     path: Path,
     wallets: dict[str, WalletAgg],
     month_spend: dict[str, set[str]],
+    spend_ym: str,
 ) -> None:
     if not path.exists():
         return
@@ -609,7 +655,8 @@ def scan_slider_wallet_spend(
             wa.spend_events = 1
         else:
             wa.spend_events += 1
-        # дата в агрегате агентов нет — в динамику месяца не кладём
+        # дата в агрегате агентов нет — относим к месяцу среза (конец периода)
+        month_spend[spend_ym].add(cb)
 
 
 def load_active_agent_wallets() -> set[str]:
@@ -715,12 +762,23 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                     month_spend[ym].add(cb)
         wb.close()
 
+    spend_ym = ym_str(END)
     scan_kasko_wallets(PATH_KASKO, wallets, month_accrual, month_spend, month_issued, first_acc_ym)
-    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend)
+    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, spend_ym)
 
     issued_period = {cb for cb, wa in wallets.items() if cb and wa.has_issued}
     accrual_period = {cb for cb, wa in wallets.items() if cb and wa.has_accrual}
     spend_period = {cb for cb, wa in wallets.items() if cb and wa.spend_events > 0}
+
+    full_period_label = fmt_period_label(START, END)
+    r12_start = trailing_window_start(END, 12)
+    r3_start = trailing_window_start(END, 3)
+    issued_r12 = partners_in_date_range(month_issued, r12_start, END)
+    accrual_r12 = partners_in_date_range(month_accrual, r12_start, END)
+    spend_r12 = partners_in_date_range(month_spend, r12_start, END)
+    issued_r3 = partners_in_date_range(month_issued, r3_start, END)
+    accrual_r3 = partners_in_date_range(month_accrual, r3_start, END)
+    spend_r3 = partners_in_date_range(month_spend, r3_start, END)
 
     ref = END
     months_3 = last_complete_months(ref, 3)
@@ -774,18 +832,23 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
     return {
         "partnerMetrics": {
-            "periodLabel": "30.07.2025 – 18.11.2026",
+            "periodLabel": full_period_label,
             "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
-            "fullPeriod": {
-                "accrualPartners": len(accrual_period),
-                "issuedPartners": len(issued_period),
-                "accrualSharePct": round(len(accrual_period) / len(issued_period) * 100, 1)
-                if issued_period
-                else None,
-                "spendPartners": len(spend_period),
-                "accrualBaseForSpend": len(accrual_period),
-                "spendSharePct": round(len(spend_period) / len(accrual_period) * 100, 1) if accrual_period else None,
-            },
+            "fullPeriod": partner_period_slice(
+                issued_period, accrual_period, spend_period, full_period_label
+            ),
+            "rolling12Months": partner_period_slice(
+                issued_r12,
+                accrual_r12,
+                spend_r12,
+                fmt_period_label(r12_start, END),
+            ),
+            "rolling3Months": partner_period_slice(
+                issued_r3,
+                accrual_r3,
+                spend_r3,
+                fmt_period_label(r3_start, END),
+            ),
             "last3Months": month_rows,
         },
         "partnerEngagement": engagement,

@@ -15,12 +15,31 @@ export const STATUSES_SNAPSHOT = {
     "periodLabel": "30.07.2025 – 18.11.2026",
     "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
     "fullPeriod": {
+      "periodLabel": "30.07.2025 – 18.11.2026",
       "accrualPartners": 3445,
       "issuedPartners": 4220,
       "accrualSharePct": 81.6,
       "spendPartners": 2070,
       "accrualBaseForSpend": 3445,
       "spendSharePct": 60.1
+    },
+    "rolling12Months": {
+      "periodLabel": "19.11.2025 – 18.11.2026",
+      "accrualPartners": 3388,
+      "issuedPartners": 4122,
+      "accrualSharePct": 82.2,
+      "spendPartners": 2067,
+      "accrualBaseForSpend": 3388,
+      "spendSharePct": 61.0
+    },
+    "rolling3Months": {
+      "periodLabel": "19.08.2026 – 18.11.2026",
+      "accrualPartners": 2618,
+      "issuedPartners": 3343,
+      "accrualSharePct": 78.3,
+      "spendPartners": 1880,
+      "accrualBaseForSpend": 2618,
+      "spendSharePct": 71.8
     },
     "last3Months": [
       {
