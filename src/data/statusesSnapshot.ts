@@ -28,6 +28,7 @@ export const STATUSES_SNAPSHOT = {
   },
   "spendNthByMechanic": {
     "periodFull": "30.07.2025 – 18.11.2026",
+    "periodRolling12": "19.11.2025 – 18.11.2026",
     "periodRolling3": "19.08.2026 – 18.11.2026",
     "fullPeriodByTop3": [
       {
@@ -102,6 +103,88 @@ export const STATUSES_SNAPSHOT = {
             "events": 6304,
             "baseIssuedOsago": 82326,
             "everyNthClient": 13
+          },
+          "kaskoFl": {
+            "events": 68,
+            "baseIssuedKasko": 780,
+            "everyNthClient": 11
+          }
+        }
+      }
+    ],
+    "rolling12MonthsByTop3": [
+      {
+        "region": "Вся сеть",
+        "mechanics": {
+          "cross": {
+            "events": 13132,
+            "baseIssuedOsago": 182969,
+            "everyNthClient": 14
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 182969,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 133,
+            "baseIssuedKasko": 1051,
+            "everyNthClient": 8
+          }
+        }
+      },
+      {
+        "region": "Москва",
+        "mechanics": {
+          "cross": {
+            "events": 5895,
+            "baseIssuedOsago": 77300,
+            "everyNthClient": 13
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 77300,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 48,
+            "baseIssuedKasko": 201,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Санкт-Петербург",
+        "mechanics": {
+          "cross": {
+            "events": 1586,
+            "baseIssuedOsago": 31288,
+            "everyNthClient": 20
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 31288,
+            "everyNthClient": null
+          },
+          "kaskoFl": {
+            "events": 17,
+            "baseIssuedKasko": 70,
+            "everyNthClient": 4
+          }
+        }
+      },
+      {
+        "region": "Регионы",
+        "mechanics": {
+          "cross": {
+            "events": 5651,
+            "baseIssuedOsago": 74381,
+            "everyNthClient": 13
+          },
+          "osagoSlider": {
+            "events": 0,
+            "baseIssuedOsago": 74381,
+            "everyNthClient": null
           },
           "kaskoFl": {
             "events": 68,

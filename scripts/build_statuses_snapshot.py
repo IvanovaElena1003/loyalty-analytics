@@ -786,7 +786,9 @@ def scan_kasko_wallets(
     month_issued: dict[str, set[str]],
     first_acc_ym: dict[str, str],
     nth_full: dict[str, MechanicNthAgg],
+    nth_r12: dict[str, MechanicNthAgg],
     nth_r3: dict[str, MechanicNthAgg],
+    r12_start: datetime,
     r3_start: datetime,
     fmap: dict[str, str],
 ) -> None:
@@ -822,6 +824,8 @@ def scan_kasko_wallets(
         month_issued[ym].add(cb)
         for reg in regions_for_wallet(cb, fmap):
             nth_full[reg].kasko_issued += 1
+            if dt >= r12_start:
+                nth_r12[reg].kasko_issued += 1
             if dt >= r3_start:
                 nth_r3[reg].kasko_issued += 1
 
@@ -838,6 +842,8 @@ def scan_kasko_wallets(
             month_spend_kasko[ym].add(cb)
             for reg in regions_for_wallet(cb, fmap):
                 nth_full[reg].kasko_spend += 1
+                if dt >= r12_start:
+                    nth_r12[reg].kasko_spend += 1
                 if dt >= r3_start:
                     nth_r3[reg].kasko_spend += 1
     wb.close()
@@ -904,7 +910,9 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     month_issued: dict[str, set[str]] = defaultdict(set)
     first_acc_ym: dict[str, str] = {}
     nth_full = new_regional_nth()
+    nth_r12 = new_regional_nth()
     nth_r3 = new_regional_nth()
+    r12_start = trailing_window_start(END, 12)
     r3_start = trailing_window_start(END, 3)
 
     issued_total = 0
@@ -959,6 +967,8 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                 issued_total += 1
                 for reg in regions_for_wallet(cb, fmap):
                     nth_full[reg].osago_issued += 1
+                    if dt >= r12_start:
+                        nth_r12[reg].osago_issued += 1
                     if dt >= r3_start:
                         nth_r3[reg].osago_issued += 1
 
@@ -990,6 +1000,8 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                     month_spend_cross[ym].add(cb)
                     for reg in regions_for_wallet(cb, fmap):
                         nth_full[reg].cross_rb += 1
+                        if dt >= r12_start:
+                            nth_r12[reg].cross_rb += 1
                         if dt >= r3_start:
                             nth_r3[reg].cross_rb += 1
         wb.close()
@@ -1004,7 +1016,9 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         month_issued,
         first_acc_ym,
         nth_full,
+        nth_r12,
         nth_r3,
+        r12_start,
         r3_start,
         fmap,
     )
@@ -1015,7 +1029,6 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     spend_period = {cb for cb, wa in wallets.items() if cb and wa.spend_events > 0}
 
     full_period_label = fmt_period_label(START, END)
-    r12_start = trailing_window_start(END, 12)
     issued_r12 = partners_in_date_range(month_issued, r12_start, END)
     accrual_r12 = partners_in_date_range(month_accrual, r12_start, END)
     spend_r12 = partners_in_date_range(month_spend, r12_start, END)
@@ -1076,8 +1089,10 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     return {
         "spendNthByMechanic": {
             "periodFull": full_period_label,
+            "periodRolling12": fmt_period_label(r12_start, END),
             "periodRolling3": fmt_period_label(r3_start, END),
             "fullPeriodByTop3": spend_nth_rows(nth_full),
+            "rolling12MonthsByTop3": spend_nth_rows(nth_r12),
             "rolling3MonthsByTop3": spend_nth_rows(nth_r3),
             "noteSlider3m": (
                 "ОСАГО пролонгация (ползунок): дат в агрегате нет — «каждому N-му» только за всё время."

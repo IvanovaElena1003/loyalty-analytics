@@ -371,8 +371,10 @@ export default function StatusesTab() {
     snap as unknown as {
       spendNthByMechanic?: {
         fullPeriodByTop3: SpendNthRegionRow[]
+        rolling12MonthsByTop3?: SpendNthRegionRow[]
         rolling3MonthsByTop3: SpendNthRegionRow[]
         periodFull?: string
+        periodRolling12?: string
         periodRolling3?: string
         noteSlider3m?: string
       }
@@ -520,6 +522,12 @@ export default function StatusesTab() {
                 title={`Каждому N-му клиенту · за всё время (${spendNth.periodFull ?? snap.periodLabel})`}
                 rows={spendNth.fullPeriodByTop3}
               />
+              {spendNth.rolling12MonthsByTop3?.length ? (
+                <SpendNthMechanicTable
+                  title={`Каждому N-му клиенту · скользящий год (${spendNth.periodRolling12 ?? ''})`}
+                  rows={spendNth.rolling12MonthsByTop3}
+                />
+              ) : null}
               <p className="text-[10px] ren-text-secondary px-3 pt-1">
                 Дробь: списаний по механике / оформленных полисов (ОСАГО для кросса и ползунка, Каско ФЛ для
                 кошелька).
