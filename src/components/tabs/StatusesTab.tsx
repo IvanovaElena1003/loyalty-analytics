@@ -431,7 +431,7 @@ export default function StatusesTab() {
       {/* 1. Итого за период — одна таблица вместо плиток */}
       <div className="ren-card">
         <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-          <h3 className="ren-card__title text-sm">Итого за период · {snap.periodLabel}</h3>
+          <h3 className="ren-card__title text-sm">За всё время ({snap.periodLabel})</h3>
         </div>
         <div className="ren-card__body p-0">
           <table className="statuses-table statuses-table--slice w-full">
