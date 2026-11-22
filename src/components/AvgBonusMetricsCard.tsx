@@ -24,46 +24,19 @@ const fmtRbCompact = (v: number) => {
   if (Math.abs(v) >= 1_000_000) return `${fmtDec1(v / 1_000_000)}М`
   return fmtRbInt(v)
 }
-const fmtPct1 = (v: number) =>
-  Number.isFinite(v)
-    ? v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
-    : '—'
-
-function AvgCard({
-  title,
-  value,
-  sub,
-  value2,
-}: {
-  title: string
-  value: string
-  sub?: string
-  value2?: string
-}) {
-  return (
-    <div className="ren-card ren-card__body flex flex-col gap-0.5">
-      <p className="text-xs ren-text-brand font-medium uppercase tracking-wide leading-tight">{title}</p>
-      <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5 tabular-nums">{value}</p>
-      {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
-      {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
-    </div>
-  )
-}
 
 export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }) {
   const n = Math.max(data.monthCount, 1)
-  const spendShareOfAccrual =
-    data.avgAccrualPerMonth > 0 ? (data.avgSpendPerMonth / data.avgAccrualPerMonth) * 100 : 0
 
   const tableRows = [
     {
-      label: 'Баланс кошелька · все',
+      label: `Баланс кошелька · все · ${fmtN(data.allPartnersCount)} партнёров, с нулями`,
       total: data.allPartnersCount > 0 ? fmtRbInt(data.balanceMeanAll) : '—',
       avg: '—',
       snapshot: true,
     },
     {
-      label: 'Баланс · остаток > 0',
+      label: `Баланс · остаток > 0 · ${fmtN(data.positiveBalanceCount)} партнёров`,
       total: data.positiveBalanceCount > 0 ? fmtRbInt(data.balanceMeanPositive) : '—',
       avg: '—',
       snapshot: true,
@@ -87,32 +60,10 @@ export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }
       <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
         <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
         <p className="ren-card__subtitle text-[11px]">
-          Среднее арифметическое по {n} месяцам наблюдений
+          Баланс — снимок по выгрузке; начисления и списания — ср. арифметическое за {n} мес. с полисами
         </p>
       </div>
-      <div className="p-3 grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <AvgCard
-          title="Ср. баланс в кошельке"
-          value={fmtRbInt(data.balanceMeanAll)}
-          sub={`${fmtN(data.allPartnersCount)} партнёров · с нулями`}
-        />
-        <AvgCard
-          title="Ср. баланс в кошельке"
-          value={fmtRbInt(data.balanceMeanPositive)}
-          sub={`${fmtN(data.positiveBalanceCount)} · остаток > 0`}
-        />
-        <AvgCard
-          title="Ср. начислений / мес."
-          value={fmtRbCompact(data.avgAccrualPerMonth)}
-          sub="за месяц"
-        />
-        <AvgCard
-          title="Ср. списаний итого / мес."
-          value={fmtRbCompact(data.avgSpendPerMonth)}
-          value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
-        />
-      </div>
-      <div className="border-t border-[var(--stroke-divider)]">
+      <div className="ren-card__body p-0">
         <table className="statuses-table w-full">
           <thead>
             <tr>
@@ -124,7 +75,7 @@ export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }
           <tbody>
             {tableRows.map(r => (
               <tr key={r.label}>
-                <td className="text-left">{r.label}</td>
+                <td className="text-left text-[11px]">{r.label}</td>
                 <td className="text-right tabular-nums font-medium">{r.total}</td>
                 <td
                   className={`text-right tabular-nums ${
