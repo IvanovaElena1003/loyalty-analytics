@@ -13,10 +13,10 @@ export const STATUSES_SNAPSHOT = {
   },
   "avgBonus": {
     "monthCount": 15,
-    "balanceMeanAll": 1084,
-    "balanceMeanPositive": 1256,
-    "allPartnersCount": 4188,
-    "positiveBalanceCount": 3614,
+    "balanceMeanAll": 988,
+    "balanceMeanPositive": 1275,
+    "allPartnersCount": 4236,
+    "positiveBalanceCount": 3281,
     "accrualTotal": 86149701,
     "spendTotal": 42504866,
     "spendDiscount": 7136830,
@@ -24,7 +24,8 @@ export const STATUSES_SNAPSHOT = {
     "avgAccrualPerMonth": 5743313,
     "avgSpendPerMonth": 2833658,
     "avgDiscountPerMonth": 475789,
-    "avgKvPerMonth": 777373
+    "avgKvPerMonth": 777373,
+    "balanceNote": "ОСАГО+Каско+списания (кросс, кошелёк/скоринг, ползунок). Остаток: AvailableForUsePoints на последней котировке ОСАГО; иначе начислено − списано по кешбуку."
   },
   "spendNthByMechanic": {
     "periodFull": "30.07.2025 – 18.11.2026",

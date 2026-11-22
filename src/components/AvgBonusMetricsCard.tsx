@@ -12,6 +12,7 @@ export type AvgBonusSnapshot = {
   avgSpendPerMonth: number
   avgDiscountPerMonth: number
   avgKvPerMonth: number
+  balanceNote?: string
 }
 
 const fmtN = (v: number) => Math.round(v).toLocaleString('ru-RU')
@@ -60,7 +61,8 @@ export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }
       <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
         <h3 className="ren-card__title text-sm uppercase tracking-wide">Средние показатели Рен-бонусов</h3>
         <p className="ren-card__subtitle text-[11px]">
-          Баланс — снимок по выгрузке; начисления и списания — ср. арифметическое за {n} мес. с полисами
+          {data.balanceNote ??
+            `Баланс по лояльности; начисления и списания — ср. за ${n} мес. с полисами`}
         </p>
       </div>
       <div className="ren-card__body p-0">

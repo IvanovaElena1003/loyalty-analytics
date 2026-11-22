@@ -390,10 +390,38 @@ class WalletAgg:
     spend_events: int = 0
     cross_spend_events: int = 0
     has_accrual: bool = False
+    acc_osago_amt: float = 0.0
+    acc_kasko_amt: float = 0.0
+    spend_cross_amt: float = 0.0
+    spend_kasko_amt: float = 0.0
+    spend_slider_amt: float = 0.0
+    latest_dt: datetime | None = None
+    latest_available: float | None = None
 
     @property
     def has_issued(self) -> bool:
         return self.osago_issued > 0 or self.kasko_issued > 0
+
+    def balance_for_mean(self) -> float:
+        if self.latest_available is not None:
+            return max(0.0, self.latest_available)
+        net = (
+            self.acc_osago_amt
+            + self.acc_kasko_amt
+            - self.spend_cross_amt
+            - self.spend_kasko_amt
+            - self.spend_slider_amt
+        )
+        return max(0.0, net)
+
+    def in_balance_pool(self) -> bool:
+        return (
+            self.has_issued
+            or self.has_accrual
+            or self.spend_events > 0
+            or self.acc_kasko_amt > 0
+            or self.spend_slider_amt > 0
+        )
 
 
 def is_cross_spend_row(row: tuple, idx: dict[str, int]) -> bool:
@@ -791,6 +819,7 @@ def scan_kasko_wallets(
     r12_start: datetime,
     r3_start: datetime,
     fmap: dict[str, str],
+    months_observed: set[str] | None = None,
 ) -> None:
     if not path.exists():
         return
@@ -820,6 +849,8 @@ def scan_kasko_wallets(
             continue
         wa = wallets[cb]
         ym = ym_str(dt)
+        if months_observed is not None:
+            months_observed.add(ym)
         wa.kasko_issued += 1
         month_issued[ym].add(cb)
         for reg in regions_for_wallet(cb, fmap):
@@ -833,11 +864,13 @@ def scan_kasko_wallets(
         ov = to_num(cell(row, idx, "OriginalValue"))
         if lpo > 0 and ov > 0:
             wa.has_accrual = True
+            wa.acc_kasko_amt += ov * lpo
             _mark_accrual(cb, ym, month_accrual, first_acc_ym)
 
         spend = to_num(cell(row, idx, "WalletBonuses")) + to_num(cell(row, idx, "ScoringBonuses"))
         if spend > 0:
             wa.spend_events += 1
+            wa.spend_kasko_amt += spend
             month_spend[ym].add(cb)
             month_spend_kasko[ym].add(cb)
             for reg in regions_for_wallet(cb, fmap):
@@ -873,6 +906,7 @@ def scan_slider_wallet_spend(
         if spend <= 0:
             continue
         wa = wallets[cb]
+        wa.spend_slider_amt += spend
         if wa.spend_events == 0:
             wa.spend_events = 1
         else:
@@ -914,6 +948,7 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     nth_r3 = new_regional_nth()
     r12_start = trailing_window_start(END, 12)
     r3_start = trailing_window_start(END, 3)
+    months_observed: set[str] = set()
 
     issued_total = 0
     cross_total = 0
@@ -952,12 +987,21 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
                 cb = wk or str(cell(row, idx, "CashbookId") or "").strip()
                 ym = ym_str(dt)
+                months_observed.add(ym)
                 wa = wallets[cb] if cb else None
 
                 lp = to_num(cell(row, idx, "LoyaltyPointsInLK"))
                 if cb and wa is not None and not is_null(cell(row, idx, "LoyaltyPointsInLK")) and lp > 0:
                     wa.has_accrual = True
+                    wa.acc_osago_amt += lp
                     _mark_accrual(cb, ym, month_accrual, first_acc_ym)
+
+                if cb and wa is not None:
+                    av_raw = cell(row, idx, "AvailableForUsePoints")
+                    if not is_null(av_raw):
+                        if wa.latest_dt is None or dt >= wa.latest_dt:
+                            wa.latest_dt = dt
+                            wa.latest_available = to_num(av_raw)
 
                 if cb:
                     month_issued[ym].add(cb)
@@ -996,6 +1040,10 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                 if cb and wa is not None and is_cross_spend_row(row, idx):
                     wa.spend_events += 1
                     wa.cross_spend_events += 1
+                    if has_disc and fp < pp:
+                        wa.spend_cross_amt += pp - fp
+                    if has_kv:
+                        wa.spend_cross_amt += abs(kv)
                     month_spend[ym].add(cb)
                     month_spend_cross[ym].add(cb)
                     for reg in regions_for_wallet(cb, fmap):
@@ -1021,6 +1069,7 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         r12_start,
         r3_start,
         fmap,
+        months_observed,
     )
     scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, month_spend_slider, spend_ym)
 
@@ -1086,7 +1135,11 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         "note": "ДАГО и НС-пассажиры в выгрузке лояльности не размечены — только Кросс-Каско от бесполисных.",
     }
 
+    balance_stats = balance_stats_from_wallets(wallets)
+
     return {
+        "partnerBalanceMonthCount": len(months_observed),
+        "partnerBalanceStats": balance_stats,
         "spendNthByMechanic": {
             "periodFull": full_period_label,
             "periodRolling12": fmt_period_label(r12_start, END),
@@ -1216,51 +1269,19 @@ def rollup_top3(by_filial: dict[str, Totals]) -> list[dict]:
     return out
 
 
-def scan_wallet_balances_for_avg(paths: list[Path]) -> tuple[dict[str, int | float], int]:
-    balances: dict[str, float] = {}
-    partners: set[str] = set()
-    months: set[str] = set()
-    for path in paths:
-        if not path.exists():
-            continue
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
-        for sheet_name in wb.sheetnames:
-            sh = wb[sheet_name]
-            it = sh.iter_rows(values_only=True)
-            try:
-                header = next(it)
-            except StopIteration:
-                continue
-            idx = header_map(header)
-            for row in it:
-                if not row:
-                    continue
-                state = str(cell(row, idx, "State") or "")
-                if state in EXCLUDED or state != ISSUED:
-                    continue
-                dt = parse_dt(cell(row, idx, "CreateDate"))
-                if dt is None or not in_window(dt):
-                    continue
-                months.add(ym_str(dt))
-                cb = wallet_key(row, idx)
-                if not cb:
-                    continue
-                partners.add(cb)
-                av_raw = cell(row, idx, "AvailableForUsePoints")
-                if not is_null(av_raw):
-                    balances[cb] = max(balances.get(cb, 0.0), to_num(av_raw))
-        wb.close()
-    positive = [p for p in partners if balances.get(p, 0) > 0]
+def balance_stats_from_wallets(wallets: dict[str, WalletAgg]) -> dict[str, int | float]:
+    partners = [cb for cb, wa in wallets.items() if cb and wa.in_balance_pool()]
+    balances = {cb: wallets[cb].balance_for_mean() for cb in partners}
+    positive = [cb for cb in partners if balances[cb] > 0]
     n_all = len(partners)
-    mean_all = sum(balances.get(p, 0) for p in partners) / n_all if n_all else 0.0
-    mean_pos = sum(balances.get(p, 0) for p in positive) / len(positive) if positive else 0.0
-    stats = {
+    mean_all = sum(balances[cb] for cb in partners) / n_all if n_all else 0.0
+    mean_pos = sum(balances[cb] for cb in positive) / len(positive) if positive else 0.0
+    return {
         "meanAll": round(mean_all),
         "meanPositiveOnly": round(mean_pos),
         "allPartnersCount": n_all,
         "positiveBalanceCount": len(positive),
     }
-    return stats, len(months)
 
 
 def build_avg_bonus(total: Totals, balance: dict[str, int | float], month_count: int) -> dict:
@@ -1279,6 +1300,11 @@ def build_avg_bonus(total: Totals, balance: dict[str, int | float], month_count:
         "avgSpendPerMonth": round(total.spend_total / n),
         "avgDiscountPerMonth": round(total.spend_cross_discount / n),
         "avgKvPerMonth": round(total.spend_cross_kv / n),
+        "balanceNote": (
+            "ОСАГО+Каско+списания (кросс, кошелёк/скоринг, ползунок). "
+            "Остаток: AvailableForUsePoints на последней котировке ОСАГО; "
+            "иначе начислено − списано по кешбуку."
+        ),
     }
 
 
@@ -1303,10 +1329,12 @@ def main() -> None:
         if v.acc_total > 0 or v.spend_total > 0
     ]
 
-    balance_stats, month_count = scan_wallet_balances_for_avg([PATH_OSAGO_2025, PATH_OSAGO_2026])
-    avg_bonus = build_avg_bonus(total, balance_stats, month_count)
-
     extra = scan_osago_partner_and_cross([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
+    month_count = int(extra.pop("partnerBalanceMonthCount", 0) or 0)
+    balance_stats = extra.pop("partnerBalanceStats", None)
+    if not balance_stats:
+        balance_stats = balance_stats_from_wallets({})
+    avg_bonus = build_avg_bonus(total, balance_stats, month_count)
     slider_top3 = aggregate_slider_top3(by_filial)
     for row in extra["spendNthByMechanic"]["fullPeriodByTop3"]:
         reg = row["region"]
