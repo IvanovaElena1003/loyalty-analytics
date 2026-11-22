@@ -1,10 +1,6 @@
 import { useMemo, useState } from 'react'
 import { STATUSES_SNAPSHOT } from '../../data/statusesSnapshot'
-import {
-  MECHANIC_LABELS,
-  fmtRub,
-  type MechanicKey,
-} from '../../utils/loyaltyBalances'
+import { fmtRub, type MechanicKey } from '../../utils/loyaltyBalances'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RowTotals = any
@@ -553,33 +549,7 @@ export default function StatusesTab() {
         </div>
       </div>
 
-      {/* 2. Даты запуска */}
-      <div className="ren-card">
-        <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-          <h3 className="ren-card__title text-sm">Механики и даты запуска</h3>
-        </div>
-        <div className="ren-card__body p-0">
-          <table className="statuses-table w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Механика</th>
-                <th className="text-right w-28">Дата</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(Object.keys(MECHANIC_LABELS) as MechanicKey[]).map(key => (
-                <tr key={key}>
-                  <td className="text-left">{MECHANIC_LABELS[key]}</td>
-                  <td className="text-right tabular-nums">{fmtDateRu(startByKey[key as keyof typeof startByKey])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* 3. Москва / СПб / Регионы — метрики строками, без горизонтального скролла */}
-      {/* 4. Детализация регионов — только начисл / списано / утилизация */}
+      {/* Детализация регионов — только начисл / списано / утилизация */}
       {regionsOpen && regionChildren.length > 0 && (
         <div className="ren-card">
           <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
