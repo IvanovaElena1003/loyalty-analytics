@@ -273,8 +273,20 @@ function SpendNthMechanicTable({
                       isNetworkSlice(r.region) ? ' statuses-table__col-network' : ''
                     }`}
                   >
-                    <span className="font-semibold ren-text-brand">
-                      {m.everyNthClient != null ? `${m.everyNthClient}-му` : '—'}
+                    <span
+                      className={
+                        m.everyNthClient != null
+                          ? 'font-semibold ren-text-brand'
+                          : line.key === 'osagoSlider' && m.events === 0
+                            ? 'font-normal ren-text-secondary text-[10px] leading-snug block text-left sm:text-right'
+                            : 'font-semibold ren-text-brand'
+                      }
+                    >
+                      {m.everyNthClient != null
+                        ? `${m.everyNthClient}-му`
+                        : line.key === 'osagoSlider' && m.events === 0
+                          ? 'нет возможности посчитать'
+                          : '—'}
                     </span>
                     <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
                       {fmtN(m.events)} / {fmtN(base)}
