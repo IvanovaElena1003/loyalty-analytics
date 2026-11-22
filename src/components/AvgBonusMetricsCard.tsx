@@ -34,13 +34,11 @@ function AvgCard({
   value,
   sub,
   value2,
-  detailLines,
 }: {
   title: string
   value: string
   sub?: string
   value2?: string
-  detailLines?: { label: string; value: string }[]
 }) {
   return (
     <div className="ren-card ren-card__body flex flex-col gap-0.5">
@@ -48,16 +46,6 @@ function AvgCard({
       <p className="text-xl font-bold text-[var(--text-primary)] mt-0.5 tabular-nums">{value}</p>
       {value2 && <p className="text-sm font-semibold ren-text-secondary">{value2}</p>}
       {sub && <p className="text-xs ren-text-secondary mt-0.5 leading-snug">{sub}</p>}
-      {detailLines && detailLines.length > 0 && (
-        <div className="mt-2.5 space-y-1">
-          {detailLines.map(line => (
-            <p key={line.label} className="text-sm leading-snug">
-              <span className="ren-text-secondary">{line.label}</span>{' '}
-              <span className="font-bold ren-text-brand tabular-nums">{line.value}</span>
-            </p>
-          ))}
-        </div>
-      )}
     </div>
   )
 }
@@ -122,10 +110,6 @@ export default function AvgBonusMetricsCard({ data }: { data: AvgBonusSnapshot }
           title="Ср. списаний итого / мес."
           value={fmtRbCompact(data.avgSpendPerMonth)}
           value2={`${fmtPct1(spendShareOfAccrual)}% от начислений`}
-          detailLines={[
-            { label: 'Скидка КВ', value: fmtRbInt(data.avgDiscountPerMonth) },
-            { label: 'Повыш. КВ', value: fmtRbInt(data.avgKvPerMonth) },
-          ]}
         />
       </div>
       <div className="border-t border-[var(--stroke-divider)]">
