@@ -457,8 +457,39 @@ def partners_in_date_range(
     return out
 
 
-def partner_period_slice(issued: set[str], accrual: set[str], spend: set[str], period_label: str) -> dict:
+def spend_mechanic_breakdown(
+    month_cross: dict[str, set[str]],
+    month_kasko: dict[str, set[str]],
+    month_slider: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+    accrual_n: int,
+    spend_n: int,
+) -> dict:
+    def row(partners: set[str]) -> dict:
+        n = len(partners)
+        return {
+            "partners": n,
+            "pctOfAccrualBase": round(n / accrual_n * 100, 1) if accrual_n else None,
+            "pctOfSpenders": round(n / spend_n * 100, 1) if spend_n else None,
+        }
+
     return {
+        "cross": row(partners_in_date_range(month_cross, range_start, range_end)),
+        "kasko": row(partners_in_date_range(month_kasko, range_start, range_end)),
+        "osagoSlider": row(partners_in_date_range(month_slider, range_start, range_end)),
+        "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк.",
+    }
+
+
+def partner_period_slice(
+    issued: set[str],
+    accrual: set[str],
+    spend: set[str],
+    period_label: str,
+    spend_by_mechanic: dict | None = None,
+) -> dict:
+    out = {
         "periodLabel": period_label,
         "accrualPartners": len(accrual),
         "issuedPartners": len(issued),
@@ -467,6 +498,32 @@ def partner_period_slice(issued: set[str], accrual: set[str], spend: set[str], p
         "accrualBaseForSpend": len(accrual),
         "spendSharePct": round(len(spend) / len(accrual) * 100, 1) if accrual else None,
     }
+    if spend_by_mechanic is not None:
+        out["spendByMechanic"] = spend_by_mechanic
+    return out
+
+
+def partner_slice_with_mechanics(
+    issued: set[str],
+    accrual: set[str],
+    spend: set[str],
+    period_label: str,
+    month_cross: dict[str, set[str]],
+    month_kasko: dict[str, set[str]],
+    month_slider: dict[str, set[str]],
+    range_start: datetime,
+    range_end: datetime,
+) -> dict:
+    mech = spend_mechanic_breakdown(
+        month_cross,
+        month_kasko,
+        month_slider,
+        range_start,
+        range_end,
+        len(accrual),
+        len(spend),
+    )
+    return partner_period_slice(issued, accrual, spend, period_label, mech)
 
 
 def last_complete_months(ref: datetime, n: int) -> list[str]:
@@ -581,6 +638,7 @@ def scan_kasko_wallets(
     wallets: dict[str, WalletAgg],
     month_accrual: dict[str, set[str]],
     month_spend: dict[str, set[str]],
+    month_spend_kasko: dict[str, set[str]],
     month_issued: dict[str, set[str]],
     first_acc_ym: dict[str, str],
 ) -> None:
@@ -625,6 +683,7 @@ def scan_kasko_wallets(
         if spend > 0:
             wa.spend_events += 1
             month_spend[ym].add(cb)
+            month_spend_kasko[ym].add(cb)
     wb.close()
 
 
@@ -632,6 +691,7 @@ def scan_slider_wallet_spend(
     path: Path,
     wallets: dict[str, WalletAgg],
     month_spend: dict[str, set[str]],
+    month_spend_slider: dict[str, set[str]],
     spend_ym: str,
 ) -> None:
     if not path.exists():
@@ -657,6 +717,7 @@ def scan_slider_wallet_spend(
             wa.spend_events += 1
         # дата в агрегате агентов нет — относим к месяцу среза (конец периода)
         month_spend[spend_ym].add(cb)
+        month_spend_slider[spend_ym].add(cb)
 
 
 def load_active_agent_wallets() -> set[str]:
@@ -681,6 +742,9 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
     wallets: dict[str, WalletAgg] = defaultdict(WalletAgg)
     month_accrual: dict[str, set[str]] = defaultdict(set)
     month_spend: dict[str, set[str]] = defaultdict(set)
+    month_spend_cross: dict[str, set[str]] = defaultdict(set)
+    month_spend_kasko: dict[str, set[str]] = defaultdict(set)
+    month_spend_slider: dict[str, set[str]] = defaultdict(set)
     month_issued: dict[str, set[str]] = defaultdict(set)
     first_acc_ym: dict[str, str] = {}
 
@@ -760,11 +824,14 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
                     wa.spend_events += 1
                     wa.cross_spend_events += 1
                     month_spend[ym].add(cb)
+                    month_spend_cross[ym].add(cb)
         wb.close()
 
     spend_ym = ym_str(END)
-    scan_kasko_wallets(PATH_KASKO, wallets, month_accrual, month_spend, month_issued, first_acc_ym)
-    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, spend_ym)
+    scan_kasko_wallets(
+        PATH_KASKO, wallets, month_accrual, month_spend, month_spend_kasko, month_issued, first_acc_ym
+    )
+    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, month_spend_slider, spend_ym)
 
     issued_period = {cb for cb, wa in wallets.items() if cb and wa.has_issued}
     accrual_period = {cb for cb, wa in wallets.items() if cb and wa.has_accrual}
@@ -834,20 +901,38 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         "partnerMetrics": {
             "periodLabel": full_period_label,
             "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
-            "fullPeriod": partner_period_slice(
-                issued_period, accrual_period, spend_period, full_period_label
+            "fullPeriod": partner_slice_with_mechanics(
+                issued_period,
+                accrual_period,
+                spend_period,
+                full_period_label,
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                START,
+                END,
             ),
-            "rolling12Months": partner_period_slice(
+            "rolling12Months": partner_slice_with_mechanics(
                 issued_r12,
                 accrual_r12,
                 spend_r12,
                 fmt_period_label(r12_start, END),
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                r12_start,
+                END,
             ),
-            "rolling3Months": partner_period_slice(
+            "rolling3Months": partner_slice_with_mechanics(
                 issued_r3,
                 accrual_r3,
                 spend_r3,
                 fmt_period_label(r3_start, END),
+                month_spend_cross,
+                month_spend_kasko,
+                month_spend_slider,
+                r3_start,
+                END,
             ),
             "last3Months": month_rows,
         },

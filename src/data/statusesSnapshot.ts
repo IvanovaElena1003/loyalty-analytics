@@ -21,7 +21,25 @@ export const STATUSES_SNAPSHOT = {
       "accrualSharePct": 81.6,
       "spendPartners": 2070,
       "accrualBaseForSpend": 3445,
-      "spendSharePct": 60.1
+      "spendSharePct": 60.1,
+      "spendByMechanic": {
+        "cross": {
+          "partners": 1364,
+          "pctOfAccrualBase": 39.6,
+          "pctOfSpenders": 65.9
+        },
+        "kasko": {
+          "partners": 72,
+          "pctOfAccrualBase": 2.1,
+          "pctOfSpenders": 3.5
+        },
+        "osagoSlider": {
+          "partners": 1598,
+          "pctOfAccrualBase": 46.4,
+          "pctOfSpenders": 77.2
+        },
+        "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+      }
     },
     "rolling12Months": {
       "periodLabel": "19.11.2025 – 18.11.2026",
@@ -30,7 +48,25 @@ export const STATUSES_SNAPSHOT = {
       "accrualSharePct": 82.2,
       "spendPartners": 2067,
       "accrualBaseForSpend": 3388,
-      "spendSharePct": 61.0
+      "spendSharePct": 61.0,
+      "spendByMechanic": {
+        "cross": {
+          "partners": 1357,
+          "pctOfAccrualBase": 40.1,
+          "pctOfSpenders": 65.7
+        },
+        "kasko": {
+          "partners": 72,
+          "pctOfAccrualBase": 2.1,
+          "pctOfSpenders": 3.5
+        },
+        "osagoSlider": {
+          "partners": 1598,
+          "pctOfAccrualBase": 47.2,
+          "pctOfSpenders": 77.3
+        },
+        "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+      }
     },
     "rolling3Months": {
       "periodLabel": "19.08.2026 – 18.11.2026",
@@ -39,7 +75,25 @@ export const STATUSES_SNAPSHOT = {
       "accrualSharePct": 78.3,
       "spendPartners": 1880,
       "accrualBaseForSpend": 2618,
-      "spendSharePct": 71.8
+      "spendSharePct": 71.8,
+      "spendByMechanic": {
+        "cross": {
+          "partners": 998,
+          "pctOfAccrualBase": 38.1,
+          "pctOfSpenders": 53.1
+        },
+        "kasko": {
+          "partners": 72,
+          "pctOfAccrualBase": 2.8,
+          "pctOfSpenders": 3.8
+        },
+        "osagoSlider": {
+          "partners": 1598,
+          "pctOfAccrualBase": 61.0,
+          "pctOfSpenders": 85.0
+        },
+        "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
+      }
     },
     "last3Months": [
       {

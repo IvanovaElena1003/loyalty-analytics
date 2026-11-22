@@ -89,6 +89,12 @@ function accrualPctAmongIssued(e: EngagementSlice): number | null {
   )
 }
 
+type MechanicSpendRow = {
+  partners: number
+  pctOfAccrualBase: number | null
+  pctOfSpenders: number | null
+}
+
 type PartnerPeriodSlice = {
   periodLabel: string
   accrualPartners: number
@@ -98,7 +104,19 @@ type PartnerPeriodSlice = {
   spendPartners: number
   accrualBaseForSpend: number
   spendSharePct: number | null
+  spendByMechanic?: {
+    cross: MechanicSpendRow
+    kasko: MechanicSpendRow
+    osagoSlider: MechanicSpendRow
+    noteMutual?: string
+  }
 }
+
+const MECHANIC_SPEND_LINES: { key: 'cross' | 'kasko' | 'osagoSlider'; label: string }[] = [
+  { key: 'cross', label: 'в т.ч. кросс (скидка СП / повыш. КВ)' },
+  { key: 'kasko', label: 'в т.ч. Каско ФЛ' },
+  { key: 'osagoSlider', label: 'в т.ч. ОСАГО пролонгация (ползунок)' },
+]
 
 function PartnerPeriodBlock({
   title,
@@ -111,6 +129,7 @@ function PartnerPeriodBlock({
 }) {
   const issued =
     slice.issuedPartners ?? slice.activePartners ?? 0
+  const spendMech = slice.spendByMechanic
   return (
   <>
       <p
@@ -124,25 +143,49 @@ function PartnerPeriodBlock({
       <table className="statuses-table w-full">
         <tbody>
           <tr>
-            <td className="text-left w-[55%]">Партнёров с начислением РБ</td>
+            <td className="text-left w-[55%]">Партнёров с начислением РБ (&gt;0 раз)</td>
             <td className="text-right tabular-nums">
               {fmtN(slice.accrualPartners)}{' '}
               <span className="ren-text-secondary text-[11px]">/ {fmtN(issued)}</span>
+              <span className="block text-[10px] ren-text-secondary font-normal mt-0.5">
+                оформивших ОСАГО и/или Каско ФЛ
+              </span>
             </td>
             <td className="text-right tabular-nums font-semibold ren-text-brand w-20">
               {fmtPctWhole(slice.accrualSharePct)}
             </td>
           </tr>
           <tr>
-            <td className="text-left">Партнёров со списанием (&gt;0)</td>
+            <td className="text-left">Партнёров со списанием (&gt;0 раз)</td>
             <td className="text-right tabular-nums">
               {fmtN(slice.spendPartners)}{' '}
               <span className="ren-text-secondary text-[11px]">/ {fmtN(slice.accrualBaseForSpend)}</span>
+              <span className="block text-[10px] ren-text-secondary font-normal mt-0.5">с накоплением</span>
             </td>
             <td className="text-right tabular-nums font-semibold ren-text-brand">
               {fmtPctWhole(slice.spendSharePct)}
             </td>
           </tr>
+          {spendMech
+            ? MECHANIC_SPEND_LINES.map(({ key, label }) => {
+                const row = spendMech[key]
+                if (!row) return null
+                return (
+                  <tr key={String(key)}>
+                    <td className="text-left pl-4 text-[11px] ren-text-secondary">{label}</td>
+                    <td className="text-right tabular-nums text-[11px]">
+                      {fmtN(row.partners)}{' '}
+                      <span className="ren-text-secondary">
+                        / {fmtN(slice.accrualBaseForSpend)}
+                      </span>
+                    </td>
+                    <td className="text-right tabular-nums text-[11px] font-semibold ren-text-brand">
+                      {fmtPctWhole(row.pctOfAccrualBase)}
+                    </td>
+                  </tr>
+                )
+              })
+            : null}
         </tbody>
       </table>
     </>
@@ -347,14 +390,16 @@ export default function StatusesTab() {
               slice={snap.partnerMetrics.rolling3Months as PartnerPeriodSlice}
             />
           )}
-          <p className="text-xs font-semibold ren-text-brand px-3 pt-3">Динамика · 3 полных месяца</p>
+          <p className="text-xs font-semibold ren-text-brand px-3 pt-3 border-t border-[var(--stroke-divider)]">
+            Динамика · 3 полных месяца
+          </p>
           <table className="statuses-table statuses-table--slice w-full">
             <thead>
               <tr>
                 <th className="text-left">Месяц</th>
-                <th className="text-right">С начисл.</th>
+                <th className="text-right">С начисл. (&gt;0 раз)</th>
                 <th className="text-right">% оформ.</th>
-                <th className="text-right">Со спис.</th>
+                <th className="text-right">Со спис. (&gt;0 раз)</th>
                 <th className="text-right">% от накопл.</th>
               </tr>
             </thead>
@@ -375,6 +420,14 @@ export default function StatusesTab() {
               ))}
             </tbody>
           </table>
+          <p className="text-[10px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
+            Знаменатель начисления — оформившие ОСАГО и/или Каско ФЛ в этом месяце; списания — накопившие к
+            концу месяца. Скользящие окна выше — другая логика (уникальные партнёры за период, не «помесячный
+            актив»).
+            {snap.partnerMetrics.fullPeriod.spendByMechanic?.noteMutual
+              ? ` ${snap.partnerMetrics.fullPeriod.spendByMechanic.noteMutual}`
+              : ''}
+          </p>
         </div>
       </div>
 
