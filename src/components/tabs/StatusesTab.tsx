@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react'
 import { STATUSES_SNAPSHOT } from '../../data/statusesSnapshot'
 import {
   MECHANIC_LABELS,
-  fmtPct,
   fmtRub,
   type MechanicKey,
 } from '../../utils/loyaltyBalances'
@@ -40,8 +39,6 @@ type MetricRowDef = {
   id: string
   label: string
   amountKey: string
-  countKey?: string
-  countSuffix?: string
   emphasis?: boolean
   isPct?: boolean
 }
@@ -50,38 +47,50 @@ const METRIC_ROWS: MetricRowDef[] = [
   { id: 'accOsago', label: 'Начисление ОСАГО ФЛ', amountKey: 'accOsago' },
   { id: 'accKasko', label: 'Начисление КАСКО ФЛ', amountKey: 'accKasko' },
   { id: 'accTotal', label: 'Начислено всего', amountKey: 'accTotal', emphasis: true },
-  { id: 'sd', label: 'Списание · кросс скидка (бесполис.)', amountKey: 'spendCrossDiscount', countKey: 'crossDiscountCnt', countSuffix: 'полисов' },
-  { id: 'skv', label: 'Списание · кросс повыш. КВ', amountKey: 'spendCrossKv', countKey: 'crossKvCnt', countSuffix: 'полисов' },
-  { id: 'ska', label: 'Списание КАСКО ФЛ', amountKey: 'spendKasko', countKey: 'kaskoSpendCnt', countSuffix: 'полисов' },
-  { id: 'sos', label: 'Списание ОСАГО пролонгация', amountKey: 'spendOsagoSlider', countKey: 'osagoSliderCnt', countSuffix: 'в окне дат' },
+  { id: 'sd', label: 'Списание · кросс скидка (бесполис.)', amountKey: 'spendCrossDiscount' },
+  { id: 'skv', label: 'Списание · кросс повыш. КВ', amountKey: 'spendCrossKv' },
+  { id: 'ska', label: 'Списание КАСКО ФЛ', amountKey: 'spendKasko' },
+  { id: 'sos', label: 'Списание ОСАГО пролонгация', amountKey: 'spendOsagoSlider' },
   { id: 'st', label: 'Списано всего', amountKey: 'spendTotal', emphasis: true },
   { id: 'util', label: 'Утилизация', amountKey: 'utilPct', isPct: true },
 ]
 
+const SPEND_ROW_IDS = new Set(['sd', 'skv', 'ska', 'sos', 'st'])
+
+/** Проценты на вкладке — только целые числа */
+function fmtPctWhole(v: number | null | undefined): string {
+  if (v == null || Number.isNaN(v)) return '—'
+  return `${Math.round(v)}%`
+}
+
 function cellAmount(row: RowTotals, key: string, isPct?: boolean): string {
-  if (isPct) return fmtPct(row[key] as number | null)
+  if (isPct) return fmtPctWhole(row[key] as number | null)
   return fmtRub(Number(row[key] ?? 0))
+}
+
+function metricSharePct(row: RowTotals, m: MetricRowDef): number | null {
+  if (m.isPct) return row.utilPct as number | null
+  if (m.id === 'accTotal' || m.id === 'st') return 100
+  const baseKey = SPEND_ROW_IDS.has(m.id) ? 'spendTotal' : 'accTotal'
+  const base = Number(row[baseKey] ?? 0)
+  if (base <= 0) return null
+  return (Number(row[m.amountKey] ?? 0) / base) * 100
 }
 
 function accrualPctAmongSellers(e: EngagementSlice): number | null {
   return e.pctWithAccrualAmongSellers ?? e.pctWithAccrualAmongActiveBoard
 }
 
-function noteForRow(row: RowTotals, countKey?: string, suffix?: string): string {
-  if (!countKey) return ''
-  const n = Number(row[countKey] ?? 0)
-  if (!n) return ''
-  return `${fmtN(n)} ${suffix ?? ''}`
-}
-
 function PeriodMetricCell({ row, m }: { row: RowTotals; m: MetricRowDef }) {
-  const note = noteForRow(row, m.countKey, m.countSuffix)
+  const share = metricSharePct(row, m)
   return (
     <td className="text-right tabular-nums">
       <span className={m.emphasis ? 'font-semibold ren-text-brand' : 'font-medium'}>
         {cellAmount(row, m.amountKey, m.isPct)}
       </span>
-      {note ? <div className="text-[10px] ren-text-secondary font-normal mt-0.5">{note}</div> : null}
+      {!m.isPct ? (
+        <div className="text-[10px] ren-text-secondary font-normal mt-0.5">{fmtPctWhole(share)}</div>
+      ) : null}
     </td>
   )
 }
@@ -104,6 +113,34 @@ export default function StatusesTab() {
         .filter(r => r.rollup === 'regions' && r.children?.length)
         .flatMap(r => r.children as RowTotals[]),
     [sliceRows],
+  )
+
+  const spendProductRows = useMemo(
+    () =>
+      [
+        {
+          label: 'ОСАГО пролонгация (ползунок)',
+          amount: snap.spendByProduct.osagoProlongation,
+          startKey: 'spendOsagoSlider' as MechanicKey,
+        },
+        {
+          label: 'КАСКО (кошелёк + скоринг)',
+          amount: snap.spendByProduct.kaskoWalletScoring,
+          startKey: 'spendKasko' as MechanicKey,
+        },
+        {
+          label: 'Кросс · скидка СП (бесполисные)',
+          amount: snap.spendByProduct.crossBespolisDiscount,
+          startKey: 'spendCrossDiscount' as MechanicKey,
+        },
+        {
+          label: 'Кросс · повыш. КВ (бесполисные)',
+          amount: snap.spendByProduct.crossBespolisKv,
+          startKey: 'spendCrossKv' as MechanicKey,
+        },
+        { label: 'Обучение', amount: snap.spendByProduct.training, startKey: null },
+      ] as const,
+    [snap.spendByProduct],
   )
 
   const engagementSlices = useMemo((): EngagementSlice[] => {
@@ -133,8 +170,8 @@ export default function StatusesTab() {
             <thead>
               <tr>
                 <th className="text-left">Показатель</th>
-                <th className="text-right w-32">Сумма / %</th>
-                <th className="text-right w-28">Кол-во</th>
+                <th className="text-right w-32">Сумма, ₽</th>
+                <th className="text-right w-24">% от итога</th>
               </tr>
             </thead>
             <tbody>
@@ -144,8 +181,8 @@ export default function StatusesTab() {
                   <td className="text-right tabular-nums font-medium">
                     {cellAmount(totalRow, m.amountKey, m.isPct)}
                   </td>
-                  <td className="text-right text-[var(--text-secondary)] text-[11px]">
-                    {noteForRow(totalRow, m.countKey, m.countSuffix)}
+                  <td className="text-right tabular-nums text-[var(--text-secondary)]">
+                    {m.isPct ? '—' : fmtPctWhole(metricSharePct(totalRow, m))}
                   </td>
                 </tr>
               ))}
@@ -203,22 +240,18 @@ export default function StatusesTab() {
             <thead>
               <tr>
                 <th className="text-left">Продукт / механика</th>
-                <th className="text-right w-36">Сумма, ₽</th>
+                <th className="text-right w-28">Дата запуска</th>
+                <th className="text-right w-36">Потрачено всего, ₽</th>
               </tr>
             </thead>
             <tbody>
-              {(
-                [
-                  ['ОСАГО пролонгация (ползунок)', snap.spendByProduct.osagoProlongation],
-                  ['КАСКО (кошелёк + скоринг)', snap.spendByProduct.kaskoWalletScoring],
-                  ['Кросс · скидка СП (бесполисные)', snap.spendByProduct.crossBespolisDiscount],
-                  ['Кросс · повыш. КВ (бесполисные)', snap.spendByProduct.crossBespolisKv],
-                  ['Обучение', snap.spendByProduct.training],
-                ] as const
-              ).map(([label, amount]) => (
-                <tr key={label}>
-                  <td>{label}</td>
-                  <td className="text-right tabular-nums font-medium">{fmtRub(amount)}</td>
+              {spendProductRows.map(row => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  <td className="text-right tabular-nums text-[11px]">
+                    {row.startKey ? fmtDateRu(startByKey[row.startKey]) : '—'}
+                  </td>
+                  <td className="text-right tabular-nums font-medium">{fmtRub(row.amount)}</td>
                 </tr>
               ))}
             </tbody>
@@ -260,7 +293,7 @@ export default function StatusesTab() {
                   </span>
                 </td>
                 <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtPct(snap.partnerMetrics.fullPeriod.accrualSharePct)}
+                  {fmtPctWhole(snap.partnerMetrics.fullPeriod.accrualSharePct)}
                 </td>
               </tr>
               <tr>
@@ -272,7 +305,7 @@ export default function StatusesTab() {
                   </span>
                 </td>
                 <td className="text-right tabular-nums font-semibold ren-text-brand">
-                  {fmtPct(snap.partnerMetrics.fullPeriod.spendSharePct)}
+                  {fmtPctWhole(snap.partnerMetrics.fullPeriod.spendSharePct)}
                 </td>
               </tr>
             </tbody>
@@ -295,11 +328,11 @@ export default function StatusesTab() {
                   <td className="text-right tabular-nums text-[11px]">
                     {fmtN(row.withAccrual)} / {fmtN(row.activePartners)}
                   </td>
-                  <td className="text-right tabular-nums font-semibold">{fmtPct(row.accrualSharePct)}</td>
+                  <td className="text-right tabular-nums font-semibold">{fmtPctWhole(row.accrualSharePct)}</td>
                   <td className="text-right tabular-nums text-[11px]">
                     {fmtN(row.withSpend)} / {fmtN(row.withAccrualEver)}
                   </td>
-                  <td className="text-right tabular-nums font-semibold">{fmtPct(row.spendShareOfAccrualsPct)}</td>
+                  <td className="text-right tabular-nums font-semibold">{fmtPctWhole(row.spendShareOfAccrualsPct)}</td>
                 </tr>
               ))}
             </tbody>
@@ -325,7 +358,7 @@ export default function StatusesTab() {
               <tr className="statuses-table__row--emphasis">
                 <td>Имеют накопления (начисление РБ)</td>
                 <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPct(snap.partnerEngagement.pctWithAccrualAmongSellers ?? snap.partnerEngagement.pctWithAccrualAmongActiveBoard)}
+                  {fmtPctWhole(snap.partnerEngagement.pctWithAccrualAmongSellers ?? snap.partnerEngagement.pctWithAccrualAmongActiveBoard)}
                 </td>
                 <td className="text-right text-[11px] ren-text-secondary">
                   {fmtN(snap.partnerEngagement.partnersWithAccrual)} /{' '}
@@ -335,7 +368,7 @@ export default function StatusesTab() {
               <tr className="statuses-table__row--emphasis">
                 <td>Списывают баллы</td>
                 <td className="text-right tabular-nums font-bold text-2xl">
-                  {fmtPct(snap.partnerEngagement.pctSpendAmongAccrual)}
+                  {fmtPctWhole(snap.partnerEngagement.pctSpendAmongAccrual)}
                 </td>
                 <td className="text-right text-[11px] ren-text-secondary">
                   {fmtN(snap.partnerEngagement.partnersWhoSpend)} /{' '}
@@ -387,7 +420,7 @@ export default function StatusesTab() {
                     <td>Имеют накопления</td>
                     {engagementSlices.map(s => (
                       <td key={s.region} className="text-right tabular-nums">
-                        <span className="font-bold">{fmtPct(accrualPctAmongSellers(s))}</span>
+                        <span className="font-bold">{fmtPctWhole(accrualPctAmongSellers(s))}</span>
                         <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
                           {fmtN(s.partnersWithAccrual)} / {fmtN(s.partnersWithOsago)}
                         </div>
@@ -398,7 +431,7 @@ export default function StatusesTab() {
                     <td>Списывают баллы</td>
                     {engagementSlices.map(s => (
                       <td key={s.region} className="text-right tabular-nums">
-                        <span className="font-bold">{fmtPct(s.pctSpendAmongAccrual)}</span>
+                        <span className="font-bold">{fmtPctWhole(s.pctSpendAmongAccrual)}</span>
                         <div className="text-[10px] ren-text-secondary font-normal mt-0.5">
                           {fmtN(s.partnersWhoSpend)} / {fmtN(s.partnersWithAccrual)}
                         </div>
@@ -485,13 +518,13 @@ export default function StatusesTab() {
               <tr>
                 <td>Кросс со списанием РБ (скидка или КВ)</td>
                 <td className="text-right tabular-nums">
-                  {fmtPct(snap.crossLoyalty.bespolis.pctWithRbSpendAmongCross)}
+                  {fmtPctWhole(snap.crossLoyalty.bespolis.pctWithRbSpendAmongCross)}
                 </td>
               </tr>
               <tr>
                 <td>Доля полисов со скидкой СП от всех кросс</td>
                 <td className="text-right tabular-nums">
-                  {fmtPct(snap.crossLoyalty.bespolis.pctDiscountShareOfCross)}
+                  {fmtPctWhole(snap.crossLoyalty.bespolis.pctDiscountShareOfCross)}
                 </td>
               </tr>
               <tr>
@@ -568,7 +601,7 @@ export default function StatusesTab() {
                     <td className="text-left font-medium">{String(r.region)}</td>
                     <td className="text-right tabular-nums">{fmtRub(Number(r.accTotal))}</td>
                     <td className="text-right tabular-nums ren-text-brand">{fmtRub(Number(r.spendTotal))}</td>
-                    <td className="text-right tabular-nums">{fmtPct(r.utilPct as number | null)}</td>
+                    <td className="text-right tabular-nums">{fmtPctWhole(r.utilPct as number | null)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -577,10 +610,6 @@ export default function StatusesTab() {
         </div>
       )}
 
-      <div className="ren-card ren-card__body text-xs ren-text-secondary">
-        <p className="font-semibold ren-text-brand mb-1">Методология</p>
-        <p>Рублёвый эквивалент РБ. Seller / Продавец исключены; субучётки → HeadPartnerCB. Окно: {snap.periodLabel}.</p>
-      </div>
     </div>
   )
 }
