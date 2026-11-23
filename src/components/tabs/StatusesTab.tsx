@@ -444,15 +444,17 @@ export default function StatusesTab() {
     }
   ).spendNthByMechanic
 
-  const cumulativeMonths = useMemo(
+  const monthlyDynamics = useMemo(
     () =>
       (
         snap as unknown as {
-          cumulativeMonthlyTop3?: { ym: string; label: string; throughLabel: string; slices: RowTotals[] }[]
+          monthlyDynamicsTop3?: { ym: string; label: string; slices: RowTotals[] }[]
         }
-      ).cumulativeMonthlyTop3 ?? [],
+      ).monthlyDynamicsTop3 ?? [],
     [snap],
   )
+
+  const monthDynRegions = ['Вся сеть', 'Москва', 'Санкт-Петербург', 'Регионы'] as const
 
   return (
     <div className="space-y-5 max-w-full">
@@ -474,25 +476,89 @@ export default function StatusesTab() {
         </div>
       </div>
 
-      {cumulativeMonths.length > 0 ? (
+      {monthlyDynamics.length > 0 ? (
         <div className="ren-card">
           <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
-            <h3 className="ren-card__title text-sm">Нарастающий итог по месяцам</h3>
+            <h3 className="ren-card__title text-sm">Динамика по месяцам · начислено и списано</h3>
             <p className="text-[11px] ren-text-secondary font-normal mt-1">
-              Суммы с {snap.periodLabel.split('–')[0]?.trim()} по конец каждого месяца (ОСАГО, Каско, кросс, ползунок по
-              датам котировок).
+              Суммы за каждый календарный месяц (ОСАГО, Каско, кросс, ползунок по датам в выгрузках), топ-3.
             </p>
           </div>
-          <div className="ren-card__body p-0 divide-y divide-[var(--stroke-divider)]">
-            {cumulativeMonths.map((m, i) => (
-              <details key={m.ym} className="group" open={i === cumulativeMonths.length - 1}>
-                <summary className="px-3 py-2.5 cursor-pointer list-none text-xs font-semibold ren-text-brand hover:bg-[var(--bg-subtle)]">
-                  {m.label}{' '}
-                  <span className="font-normal ren-text-secondary">· нарастающий итог по {m.throughLabel}</span>
-                </summary>
-                <PeriodMetricsTable slices={m.slices} />
-              </details>
-            ))}
+          <div className="ren-card__body p-0 overflow-x-auto">
+            <table className="statuses-table w-full min-w-[720px]">
+              <thead>
+                <tr>
+                  <th className="text-left sticky left-0 bg-[var(--bg-card)]" rowSpan={2}>
+                    Месяц
+                  </th>
+                  {monthDynRegions.map(r => (
+                    <th
+                      key={r}
+                      colSpan={2}
+                      className={`text-center text-[11px] border-l border-[var(--stroke-divider)]${
+                        isNetworkSlice(r) ? ' statuses-table__col-network' : ''
+                      }`}
+                    >
+                      {r}
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {monthDynRegions.flatMap(r => (
+                    [
+                      <th
+                        key={`${r}-acc`}
+                        className={`text-right text-[10px] font-normal ren-text-secondary${
+                          isNetworkSlice(r) ? ' statuses-table__col-network' : ''
+                        }`}
+                      >
+                        Начислено
+                      </th>,
+                      <th
+                        key={`${r}-sp`}
+                        className={`text-right text-[10px] font-normal ren-text-secondary border-r border-[var(--stroke-divider)]${
+                          isNetworkSlice(r) ? ' statuses-table__col-network' : ''
+                        }`}
+                      >
+                        Списано
+                      </th>,
+                    ] as const
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {monthlyDynamics.map(m => (
+                  <tr key={m.ym}>
+                    <td className="text-left text-[11px] font-medium sticky left-0 bg-[var(--bg-card)] whitespace-nowrap">
+                      {m.label}
+                    </td>
+                    {monthDynRegions.flatMap(r => {
+                      const slice = m.slices.find(s => String(s.region) === r) as RowTotals | undefined
+                      const acc = Number(slice?.accTotal ?? 0)
+                      const sp = Number(slice?.spendTotal ?? 0)
+                      return [
+                        <td
+                          key={`${m.ym}-${r}-acc`}
+                          className={`text-right tabular-nums text-[11px]${
+                            isNetworkSlice(r) ? ' statuses-table__col-network' : ''
+                          }`}
+                        >
+                          {acc > 0 ? fmtRub(acc) : '—'}
+                        </td>,
+                        <td
+                          key={`${m.ym}-${r}-sp`}
+                          className={`text-right tabular-nums text-[11px]${
+                            isNetworkSlice(r) ? ' statuses-table__col-network' : ''
+                          }`}
+                        >
+                          {sp > 0 ? fmtRub(sp) : '—'}
+                        </td>,
+                      ]
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}

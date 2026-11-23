@@ -1587,24 +1587,20 @@ def scan_monthly_deltas_top3(osago_paths: list[Path], fmap: dict[str, str]) -> d
     return buckets
 
 
-def build_cumulative_monthly_top3(osago_paths: list[Path], fmap: dict[str, str]) -> list[dict]:
+def build_monthly_dynamics_top3(osago_paths: list[Path], fmap: dict[str, str]) -> list[dict]:
+    """Объём начислений и списаний внутри каждого календарного месяца (не нарастающий итог)."""
     deltas = scan_monthly_deltas_top3(osago_paths, fmap)
     if not deltas:
         return []
     month_labels = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
-    running = {label: Totals() for label in REGION_SLICES}
     out: list[dict] = []
     for ym in sorted(deltas.keys()):
-        for label in REGION_SLICES:
-            merge_totals(running[label], deltas[ym][label])
         y, mo = map(int, ym.split("-"))
-        _, month_end = month_range(ym)
         out.append(
             {
                 "ym": ym,
                 "label": f"{month_labels[mo - 1]} {y}",
-                "throughLabel": fmt_period_label(START, month_end),
-                "slices": [{"region": label, **running[label].to_dict()} for label in REGION_SLICES],
+                "slices": [{"region": label, **deltas[ym][label].to_dict()} for label in REGION_SLICES],
             }
         )
     return out
@@ -1670,7 +1666,7 @@ def main() -> None:
         "note": "Обучение в xlsx лояльности не выделено — 0 ₽.",
     }
 
-    cumulative_monthly = build_cumulative_monthly_top3([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
+    monthly_dynamics = build_monthly_dynamics_top3([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
 
     snapshot = {
         "generatedAt": datetime.now().strftime("%Y-%m-%d"),
@@ -1678,7 +1674,7 @@ def main() -> None:
         "agentFilialMapSize": len(fmap),
         "spendByProduct": spend_by_product,
         "avgBonus": avg_bonus,
-        "cumulativeMonthlyTop3": cumulative_monthly,
+        "monthlyDynamicsTop3": monthly_dynamics,
         **extra,
         "meta": {
             "rowsOsagoAllStatuses": osago_rows[0],
