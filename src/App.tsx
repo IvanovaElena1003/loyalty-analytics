@@ -24,7 +24,7 @@ type Tab = 'upload' | 'funnel' | 'distribution' | 'statuses' | 'keymetrics' | 'm
 const TABS_FULL: { id: Tab; label: string; needsData?: true }[] = [
   { id: 'upload',       label: 'Загрузка' },
   { id: 'statuses',     label: 'Для статусов' },
-  { id: 'funnel',       label: 'Воронка',        needsData: true },
+  { id: 'funnel',       label: 'Воронка ОСАГО в Кросс Бесп', needsData: true },
   { id: 'distribution', label: 'Распределение',  needsData: true },
   { id: 'keymetrics',   label: 'Ключевые метрики', needsData: true },
   { id: 'methodology',  label: 'Методология' },
