@@ -486,7 +486,7 @@ export default function StatusesTab() {
           </div>
           <div className="ren-card__body p-0">
             <div className="overflow-x-auto border-b border-[var(--stroke-divider)]">
-              <table className="statuses-table w-full min-w-[720px]">
+              <table className="statuses-table statuses-table--slice w-full min-w-[720px]">
                 <thead>
                   <tr>
                     <th className="text-left sticky left-0 bg-[var(--bg-card)]" rowSpan={2}>
