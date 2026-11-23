@@ -29,7 +29,14 @@ PATH_KASKO = Path(
     "/Users/elenaivanova/Downloads/Статусы ЛК Партнера/Каско ФК17/"
     "Каско котировки лояльность 01.08-18.11.xlsx"
 )
-PATH_SLIDER = Path("/Users/elenaivanova/Downloads/Списание рен-бонусов ползунок_ОСАГО.xlsx")
+PATH_SLIDER_PRIMARY = Path("/Users/elenaivanova/Downloads/Списание рен-бонусов_ползунок_ОСАГО.xlsx")
+PATH_SLIDER_LEGACY = Path("/Users/elenaivanova/Downloads/Списание рен-бонусов ползунок_ОСАГО.xlsx")
+
+
+def resolve_slider_path() -> Path:
+    if PATH_SLIDER_PRIMARY.exists():
+        return PATH_SLIDER_PRIMARY
+    return PATH_SLIDER_LEGACY
 PATH_AGENTS = Path(
     "/Users/elenaivanova/Downloads/Базы партнеров/"
     "База партенров В2Partners от 08.06 за 2026 год\u00a0— усеченная.xlsx"
@@ -326,6 +333,7 @@ def process_slider(
     qt["dt"] = pd.to_datetime(qt.get("Дата и время"), errors="coerce")
     if qt["dt"].isna().all():
         qt["dt"] = pd.to_datetime(qt.get("Дата оформления"), errors="coerce")
+    quotes_have_cb = False
     for _, r in qt.iterrows():
         dt = r["dt"]
         if pd.isna(dt):
@@ -338,9 +346,20 @@ def process_slider(
             continue
         total.spend_osago_slider += spend
         total.osago_slider_cnt += 1
-        # без CashbookId в котировках — в филиалы не режем списание ползунка
+        cb_raw = r.get("Кэшбук")
+        if cb_raw is not None and not pd.isna(cb_raw):
+            cb = (
+                str(int(cb_raw))
+                if isinstance(cb_raw, float) and cb_raw == int(cb_raw)
+                else str(cb_raw).strip()
+            )
+            if cb:
+                quotes_have_cb = True
+                reg = filial_for(cb, fmap)
+                by_filial[reg].spend_osago_slider += spend
+                by_filial[reg].osago_slider_cnt += 1
 
-    if PATH_AGENTS.exists() and path.exists():
+    if PATH_AGENTS.exists() and path.exists() and not quotes_have_cb:
         try:
             ag = pd.read_excel(path, sheet_name="Агенты", header=0)
             for _, r in ag.iterrows():
@@ -512,10 +531,11 @@ def spend_mechanic_breakdown_sets(
 def slider_spend_partners_by_region(fmap: dict[str, str]) -> dict[str, set[str]]:
     """Партнёры со списанием ползунка — агрегат «Агенты» без дат (доля только за всё время / в объёме года)."""
     out: dict[str, set[str]] = {label: set() for label in REGION_SLICES}
-    if not PATH_SLIDER.exists():
+    path = resolve_slider_path()
+    if not path.exists():
         return out
     try:
-        ag = pd.read_excel(PATH_SLIDER, sheet_name="Агенты", header=0)
+        ag = pd.read_excel(path, sheet_name="Агенты", header=0)
     except Exception:
         return out
     for _, r in ag.iterrows():
@@ -944,13 +964,65 @@ def scan_slider_wallet_spend(
     month_spend: dict[str, set[str]],
     month_spend_slider: dict[str, set[str]],
     spend_ym: str,
-) -> None:
+    nth_full: dict[str, MechanicNthAgg],
+    nth_r12: dict[str, MechanicNthAgg],
+    nth_r3: dict[str, MechanicNthAgg],
+    r12_start: datetime,
+    r3_start: datetime,
+    fmap: dict[str, str],
+) -> bool:
+    """Котировки с датой и Кэшбук → помесячная активность. False = fallback на лист «Агенты» без дат."""
     if not path.exists():
-        return
+        return False
+    try:
+        qt = pd.read_excel(path, sheet_name="Котировки", header=0)
+    except Exception:
+        return False
+    has_cb_col = "Кэшбук" in qt.columns
+    qt["dt"] = pd.to_datetime(qt.get("Дата и время"), errors="coerce")
+    if qt["dt"].isna().all():
+        qt["dt"] = pd.to_datetime(qt.get("Дата оформления"), errors="coerce")
+    quote_rows = 0
+    for _, r in qt.iterrows():
+        dt = r["dt"]
+        if pd.isna(dt):
+            continue
+        dt_py = dt.to_pydatetime() if hasattr(dt, "to_pydatetime") else dt
+        if not in_window(dt_py):
+            continue
+        spend = to_num(r.get("Списано ренбонусов"))
+        if spend <= 0:
+            continue
+        cb_raw = r.get("Кэшбук") if has_cb_col else None
+        if cb_raw is None or pd.isna(cb_raw):
+            continue
+        cb = str(int(cb_raw)) if isinstance(cb_raw, float) and cb_raw == int(cb_raw) else str(cb_raw).strip()
+        if not cb:
+            continue
+        quote_rows += 1
+        ym = ym_str(dt_py)
+        wa = wallets[cb]
+        wa.spend_slider_amt += spend
+        if wa.spend_events == 0:
+            wa.spend_events = 1
+        else:
+            wa.spend_events += 1
+        month_spend[ym].add(cb)
+        month_spend_slider[ym].add(cb)
+        for reg in regions_for_wallet(cb, fmap):
+            nth_full[reg].slider_policies += 1
+            if dt_py >= r12_start:
+                nth_r12[reg].slider_policies += 1
+            if dt_py >= r3_start:
+                nth_r3[reg].slider_policies += 1
+
+    if quote_rows > 0:
+        return True
+
     try:
         ag = pd.read_excel(path, sheet_name="Агенты", header=0)
     except Exception:
-        return
+        return False
     for _, r in ag.iterrows():
         cb_raw = r.get("Кэшбук")
         if pd.isna(cb_raw):
@@ -967,9 +1039,9 @@ def scan_slider_wallet_spend(
             wa.spend_events = 1
         else:
             wa.spend_events += 1
-        # дата в агрегате агентов нет — относим к месяцу среза (конец периода)
         month_spend[spend_ym].add(cb)
         month_spend_slider[spend_ym].add(cb)
+    return False
 
 
 def load_active_agent_wallets() -> set[str]:
@@ -1127,7 +1199,20 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         fmap,
         months_observed,
     )
-    scan_slider_wallet_spend(PATH_SLIDER, wallets, month_spend, month_spend_slider, spend_ym)
+    slider_path = resolve_slider_path()
+    slider_quotes_dated = scan_slider_wallet_spend(
+        slider_path,
+        wallets,
+        month_spend,
+        month_spend_slider,
+        spend_ym,
+        nth_full,
+        nth_r12,
+        nth_r3,
+        r12_start,
+        r3_start,
+        fmap,
+    )
 
     issued_period = {cb for cb, wa in wallets.items() if cb and wa.has_issued}
     accrual_period = {cb for cb, wa in wallets.items() if cb and wa.has_accrual}
@@ -1193,7 +1278,6 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
     balance_stats = balance_stats_from_wallets(wallets)
 
-    slider_pt = slider_spend_partners_by_region(fmap)
     full_top3 = partner_metrics_by_top3(
         fmap,
         month_issued,
@@ -1230,9 +1314,11 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         END,
         fmt_period_label(r3_start, END),
     )
-    patch_osago_slider_on_slices(full_top3, slider_pt, unavailable=False)
-    patch_osago_slider_on_slices(r12_top3, slider_pt, unavailable=False)
-    patch_osago_slider_on_slices(r3_top3, slider_pt, unavailable=True)
+    if not slider_quotes_dated:
+        slider_pt = slider_spend_partners_by_region(fmap)
+        patch_osago_slider_on_slices(full_top3, slider_pt, unavailable=False)
+        patch_osago_slider_on_slices(r12_top3, slider_pt, unavailable=False)
+        patch_osago_slider_on_slices(r3_top3, slider_pt, unavailable=True)
 
     full_period = partner_slice_with_mechanics(
         issued_period,
@@ -1267,9 +1353,17 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         r3_start,
         END,
     )
-    patch_osago_slider_on_slice(full_period, slider_pt, unavailable=False)
-    patch_osago_slider_on_slice(rolling_12, slider_pt, unavailable=False)
-    patch_osago_slider_on_slice(rolling_3, slider_pt, unavailable=True)
+    if not slider_quotes_dated:
+        slider_pt = slider_spend_partners_by_region(fmap)
+        patch_osago_slider_on_slice(full_period, slider_pt, unavailable=False)
+        patch_osago_slider_on_slice(rolling_12, slider_pt, unavailable=False)
+        patch_osago_slider_on_slice(rolling_3, slider_pt, unavailable=True)
+
+    slider_note_3m = (
+        None
+        if slider_quotes_dated
+        else "ОСАГО ФЛ пролонгация: в котировках нет кешбука — «каждому N-му» и доля за 3 мес недоступны."
+    )
 
     return {
         "partnerBalanceMonthCount": len(months_observed),
@@ -1281,9 +1375,7 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
             "fullPeriodByTop3": spend_nth_rows(nth_full),
             "rolling12MonthsByTop3": spend_nth_rows(nth_r12),
             "rolling3MonthsByTop3": spend_nth_rows(nth_r3),
-            "noteSlider3m": (
-                "ОСАГО ФЛ пролонгация: дат в агрегате нет — «каждому N-му» только за всё время."
-            ),
+            "noteSlider3m": slider_note_3m,
         },
         "partnerMetrics": {
             "periodLabel": full_period_label,
@@ -1457,9 +1549,10 @@ def scan_monthly_deltas_top3(osago_paths: list[Path], fmap: dict[str, str]) -> d
             _bump_monthly(buckets, ym, cb, fmap, mut_kasko)
         wb.close()
 
-    if PATH_SLIDER.exists():
+    slider_path = resolve_slider_path()
+    if slider_path.exists():
         try:
-            qt = pd.read_excel(PATH_SLIDER, sheet_name="Котировки", header=0)
+            qt = pd.read_excel(slider_path, sheet_name="Котировки", header=0)
             qt["dt"] = pd.to_datetime(qt.get("Дата и время"), errors="coerce")
             if qt["dt"].isna().all():
                 qt["dt"] = pd.to_datetime(qt.get("Дата оформления"), errors="coerce")
@@ -1474,12 +1567,20 @@ def scan_monthly_deltas_top3(osago_paths: list[Path], fmap: dict[str, str]) -> d
                 if spend <= 0:
                     continue
                 ym = ym_str(dt_py)
+                cb = ""
+                cb_raw = r.get("Кэшбук") if "Кэшбук" in qt.columns else None
+                if cb_raw is not None and not pd.isna(cb_raw):
+                    cb = (
+                        str(int(cb_raw))
+                        if isinstance(cb_raw, float) and cb_raw == int(cb_raw)
+                        else str(cb_raw).strip()
+                    )
 
                 def mut_slider(t: Totals) -> None:
                     t.spend_osago_slider += spend
                     t.osago_slider_cnt += 1
 
-                _bump_monthly(buckets, ym, "", fmap, mut_slider)
+                _bump_monthly(buckets, ym, cb, fmap, mut_slider)
         except Exception:
             pass
 
@@ -1544,7 +1645,7 @@ def main() -> None:
     o25 = process_osago_workbook(PATH_OSAGO_2025, total, by_filial, starts, fmap, osago_rows)
     o26 = process_osago_workbook(PATH_OSAGO_2026, total, by_filial, starts, fmap, osago_rows)
     krng = process_kasko(PATH_KASKO, total, by_filial, starts, fmap, kasko_rows)
-    slider_range = process_slider(PATH_SLIDER, total, by_filial, fmap)
+    slider_range = process_slider(resolve_slider_path(), total, by_filial, fmap)
 
     starts["spendOsagoSlider"] = datetime(2026, 6, 8)
 
@@ -1560,13 +1661,6 @@ def main() -> None:
     if not balance_stats:
         balance_stats = balance_stats_from_wallets({})
     avg_bonus = build_avg_bonus(total, balance_stats, month_count)
-    slider_top3 = aggregate_slider_top3(by_filial)
-    for row in extra["spendNthByMechanic"]["fullPeriodByTop3"]:
-        reg = row["region"]
-        cnt = slider_top3.get(reg, 0)
-        row["mechanics"]["osagoSlider"]["events"] = cnt
-        base = row["mechanics"]["osagoSlider"]["baseIssuedOsago"]
-        row["mechanics"]["osagoSlider"]["everyNthClient"] = every_nth_client(base, cnt)
     spend_by_product = {
         "osagoProlongation": round(total.spend_osago_slider),
         "kaskoWalletScoring": round(total.spend_kasko),

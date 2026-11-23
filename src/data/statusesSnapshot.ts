@@ -696,13 +696,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 1681800,
           "spendCrossKv": 1782920,
           "spendKasko": 0,
-          "spendOsagoSlider": 0,
-          "spendTotal": 3464720,
-          "utilPct": 18.62,
+          "spendOsagoSlider": 8753,
+          "spendTotal": 3473473,
+          "utilPct": 18.67,
           "crossDiscountCnt": 1270,
           "crossKvCnt": 1348,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 11
         },
         {
           "region": "Санкт-Петербург",
@@ -712,13 +712,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 246470,
           "spendCrossKv": 660700,
           "spendKasko": 0,
-          "spendOsagoSlider": 0,
-          "spendTotal": 907170,
-          "utilPct": 14.41,
+          "spendOsagoSlider": 618,
+          "spendTotal": 907788,
+          "utilPct": 14.42,
           "crossDiscountCnt": 213,
           "crossKvCnt": 500,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 1
         },
         {
           "region": "Регионы",
@@ -728,13 +728,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 760070,
           "spendCrossKv": 1990170,
           "spendKasko": 0,
-          "spendOsagoSlider": 18851,
-          "spendTotal": 2769091,
-          "utilPct": 17.72,
+          "spendOsagoSlider": 9480,
+          "spendTotal": 2759720,
+          "utilPct": 17.66,
           "crossDiscountCnt": 583,
           "crossKvCnt": 1433,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 22
+          "osagoSliderCnt": 10
         }
       ]
     },
@@ -767,13 +767,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 2166240,
           "spendCrossKv": 2331590,
           "spendKasko": 0,
-          "spendOsagoSlider": 0,
-          "spendTotal": 4497830,
-          "utilPct": 20.07,
+          "spendOsagoSlider": 994930,
+          "spendTotal": 5492760,
+          "utilPct": 24.51,
           "crossDiscountCnt": 1596,
           "crossKvCnt": 1721,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 862
         },
         {
           "region": "Санкт-Петербург",
@@ -783,13 +783,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 363470,
           "spendCrossKv": 844620,
           "spendKasko": 0,
-          "spendOsagoSlider": 0,
-          "spendTotal": 1208090,
-          "utilPct": 15.8,
+          "spendOsagoSlider": 440462,
+          "spendTotal": 1648552,
+          "utilPct": 21.56,
           "crossDiscountCnt": 293,
           "crossKvCnt": 628,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 399
         },
         {
           "region": "Регионы",
@@ -799,13 +799,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 1041250,
           "spendCrossKv": 2751770,
           "spendKasko": 0,
-          "spendOsagoSlider": 2044993,
-          "spendTotal": 5838013,
-          "utilPct": 29.16,
+          "spendOsagoSlider": 609601,
+          "spendTotal": 4402621,
+          "utilPct": 21.99,
           "crossDiscountCnt": 775,
           "crossKvCnt": 1953,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 1790
+          "osagoSliderCnt": 529
         }
       ]
     },
@@ -838,13 +838,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 2712450,
           "spendCrossKv": 2907050,
           "spendKasko": 10500,
-          "spendOsagoSlider": 0,
-          "spendTotal": 5630000,
-          "utilPct": 21.39,
+          "spendOsagoSlider": 3374970,
+          "spendTotal": 9004970,
+          "utilPct": 34.22,
           "crossDiscountCnt": 1965,
           "crossKvCnt": 2115,
           "kaskoSpendCnt": 1,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 3063
         },
         {
           "region": "Санкт-Петербург",
@@ -854,13 +854,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 432200,
           "spendCrossKv": 1031060,
           "spendKasko": 0,
-          "spendOsagoSlider": 0,
-          "spendTotal": 1463260,
-          "utilPct": 16.36,
+          "spendOsagoSlider": 1513929,
+          "spendTotal": 2977189,
+          "utilPct": 33.3,
           "crossDiscountCnt": 340,
           "crossKvCnt": 754,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 1396
         },
         {
           "region": "Регионы",
@@ -870,13 +870,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 1395130,
           "spendCrossKv": 3536800,
           "spendKasko": 8503,
-          "spendOsagoSlider": 6914170,
-          "spendTotal": 11854603,
-          "utilPct": 49.5,
+          "spendOsagoSlider": 2025271,
+          "spendTotal": 6965704,
+          "utilPct": 29.08,
           "crossDiscountCnt": 1017,
           "crossKvCnt": 2490,
           "kaskoSpendCnt": 1,
-          "osagoSliderCnt": 6297
+          "osagoSliderCnt": 1838
         }
       ]
     },
@@ -909,13 +909,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 3281880,
           "spendCrossKv": 3458780,
           "spendKasko": 139023,
-          "spendOsagoSlider": 0,
-          "spendTotal": 6879683,
-          "utilPct": 22.49,
+          "spendOsagoSlider": 6042026,
+          "spendTotal": 12921709,
+          "utilPct": 42.24,
           "crossDiscountCnt": 2352,
           "crossKvCnt": 2492,
           "kaskoSpendCnt": 22,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 5664
         },
         {
           "region": "Санкт-Петербург",
@@ -925,13 +925,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 522090,
           "spendCrossKv": 1219680,
           "spendKasko": 44368,
-          "spendOsagoSlider": 0,
-          "spendTotal": 1786138,
-          "utilPct": 17.18,
+          "spendOsagoSlider": 2702344,
+          "spendTotal": 4488482,
+          "utilPct": 43.18,
           "crossDiscountCnt": 401,
           "crossKvCnt": 882,
           "kaskoSpendCnt": 6,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 2531
         },
         {
           "region": "Регионы",
@@ -941,13 +941,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 1931980,
           "spendCrossKv": 4359910,
           "spendKasko": 65566,
-          "spendOsagoSlider": 12513057,
-          "spendTotal": 18870513,
-          "utilPct": 67.06,
+          "spendOsagoSlider": 3768687,
+          "spendTotal": 10126143,
+          "utilPct": 35.99,
           "crossDiscountCnt": 1382,
           "crossKvCnt": 3049,
           "kaskoSpendCnt": 10,
-          "osagoSliderCnt": 11670
+          "osagoSliderCnt": 3475
         }
       ]
     },
@@ -980,13 +980,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 3744550,
           "spendCrossKv": 4019860,
           "spendKasko": 276331,
-          "spendOsagoSlider": 0,
-          "spendTotal": 8040741,
-          "utilPct": 22.94,
+          "spendOsagoSlider": 9098892,
+          "spendTotal": 17139633,
+          "utilPct": 48.9,
           "crossDiscountCnt": 2665,
           "crossKvCnt": 2874,
           "kaskoSpendCnt": 40,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 8653
         },
         {
           "region": "Санкт-Петербург",
@@ -996,13 +996,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 596260,
           "spendCrossKv": 1435820,
           "spendKasko": 105395,
-          "spendOsagoSlider": 0,
-          "spendTotal": 2137475,
-          "utilPct": 17.91,
+          "spendOsagoSlider": 3953391,
+          "spendTotal": 6090866,
+          "utilPct": 51.04,
           "crossDiscountCnt": 454,
           "crossKvCnt": 1028,
           "kaskoSpendCnt": 13,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 3761
         },
         {
           "region": "Регионы",
@@ -1012,13 +1012,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 2255680,
           "spendCrossKv": 5208210,
           "spendKasko": 265366,
-          "spendOsagoSlider": 18855419,
-          "spendTotal": 26584675,
-          "utilPct": 81.97,
+          "spendOsagoSlider": 5803136,
+          "spendTotal": 13532392,
+          "utilPct": 41.73,
           "crossDiscountCnt": 1602,
           "crossKvCnt": 3629,
           "kaskoSpendCnt": 40,
-          "osagoSliderCnt": 17640
+          "osagoSliderCnt": 5226
         }
       ]
     },
@@ -1051,13 +1051,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 4102240,
           "spendCrossKv": 4318530,
           "spendKasko": 342011,
-          "spendOsagoSlider": 0,
-          "spendTotal": 8762781,
-          "utilPct": 22.99,
+          "spendOsagoSlider": 11055186,
+          "spendTotal": 19817967,
+          "utilPct": 52.0,
           "crossDiscountCnt": 2906,
           "crossKvCnt": 3077,
           "kaskoSpendCnt": 48,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 10610
         },
         {
           "region": "Санкт-Петербург",
@@ -1067,13 +1067,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 641350,
           "spendCrossKv": 1572780,
           "spendKasko": 141232,
-          "spendOsagoSlider": 0,
-          "spendTotal": 2355362,
-          "utilPct": 18.13,
+          "spendOsagoSlider": 4796972,
+          "spendTotal": 7152334,
+          "utilPct": 55.07,
           "crossDiscountCnt": 485,
           "crossKvCnt": 1122,
           "kaskoSpendCnt": 17,
-          "osagoSliderCnt": 0
+          "osagoSliderCnt": 4618
         },
         {
           "region": "Регионы",
@@ -1083,13 +1083,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 2393240,
           "spendCrossKv": 5769290,
           "spendKasko": 424451,
-          "spendOsagoSlider": 22799742,
-          "spendTotal": 31386723,
-          "utilPct": 89.55,
+          "spendOsagoSlider": 6947584,
+          "spendTotal": 15534565,
+          "utilPct": 44.32,
           "crossDiscountCnt": 1696,
           "crossKvCnt": 4011,
           "kaskoSpendCnt": 68,
-          "osagoSliderCnt": 21504
+          "osagoSliderCnt": 6276
         }
       ]
     }
@@ -1108,7 +1108,7 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 15
           },
           "osagoSlider": {
-            "events": 21568,
+            "events": 21504,
             "baseIssuedOsago": 200752,
             "everyNthClient": 9
           },
@@ -1128,7 +1128,7 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 14
           },
           "osagoSlider": {
-            "events": 10676,
+            "events": 10610,
             "baseIssuedOsago": 84576,
             "everyNthClient": 8
           },
@@ -1148,7 +1148,7 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 21
           },
           "osagoSlider": {
-            "events": 4588,
+            "events": 4618,
             "baseIssuedOsago": 33850,
             "everyNthClient": 7
           },
@@ -1168,7 +1168,7 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 14
           },
           "osagoSlider": {
-            "events": 6304,
+            "events": 6276,
             "baseIssuedOsago": 82326,
             "everyNthClient": 13
           },
@@ -1190,9 +1190,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 14
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 21504,
             "baseIssuedOsago": 182969,
-            "everyNthClient": null
+            "everyNthClient": 9
           },
           "kaskoFl": {
             "events": 133,
@@ -1210,9 +1210,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 13
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 10610,
             "baseIssuedOsago": 77300,
-            "everyNthClient": null
+            "everyNthClient": 7
           },
           "kaskoFl": {
             "events": 48,
@@ -1230,9 +1230,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 20
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 4618,
             "baseIssuedOsago": 31288,
-            "everyNthClient": null
+            "everyNthClient": 7
           },
           "kaskoFl": {
             "events": 17,
@@ -1250,9 +1250,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 13
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 6276,
             "baseIssuedOsago": 74381,
-            "everyNthClient": null
+            "everyNthClient": 12
           },
           "kaskoFl": {
             "events": 68,
@@ -1272,9 +1272,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 12
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 17106,
             "baseIssuedOsago": 65467,
-            "everyNthClient": null
+            "everyNthClient": 4
           },
           "kaskoFl": {
             "events": 133,
@@ -1292,9 +1292,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 12
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 8474,
             "baseIssuedOsago": 27796,
-            "everyNthClient": null
+            "everyNthClient": 3
           },
           "kaskoFl": {
             "events": 48,
@@ -1312,9 +1312,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 20
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 3649,
             "baseIssuedOsago": 11352,
-            "everyNthClient": null
+            "everyNthClient": 3
           },
           "kaskoFl": {
             "events": 17,
@@ -1332,9 +1332,9 @@ export const STATUSES_SNAPSHOT = {
             "everyNthClient": 10
           },
           "osagoSlider": {
-            "events": 0,
+            "events": 4983,
             "baseIssuedOsago": 26319,
-            "everyNthClient": null
+            "everyNthClient": 5
           },
           "kaskoFl": {
             "events": 68,
@@ -1344,7 +1344,7 @@ export const STATUSES_SNAPSHOT = {
         }
       }
     ],
-    "noteSlider3m": "ОСАГО ФЛ пролонгация: дат в агрегате нет — «каждому N-му» только за всё время."
+    "noteSlider3m": null
   },
   "partnerMetrics": {
     "periodLabel": "30.07.2025 – 18.11.2026",
@@ -1408,25 +1408,24 @@ export const STATUSES_SNAPSHOT = {
       "accrualPartners": 2618,
       "issuedPartners": 3343,
       "accrualSharePct": 78.3,
-      "spendPartners": 1880,
+      "spendPartners": 1834,
       "accrualBaseForSpend": 2618,
-      "spendSharePct": 71.8,
+      "spendSharePct": 70.1,
       "spendByMechanic": {
         "cross": {
           "partners": 998,
           "pctOfAccrualBase": 38.1,
-          "pctOfSpenders": 53.1
+          "pctOfSpenders": 54.4
         },
         "kasko": {
           "partners": 72,
           "pctOfAccrualBase": 2.8,
-          "pctOfSpenders": 3.8
+          "pctOfSpenders": 3.9
         },
         "osagoSlider": {
-          "partners": 0,
-          "pctOfAccrualBase": null,
-          "pctOfSpenders": null,
-          "unavailable": true
+          "partners": 1530,
+          "pctOfAccrualBase": 58.4,
+          "pctOfSpenders": 83.4
         },
         "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
       }
@@ -1480,9 +1479,9 @@ export const STATUSES_SNAPSHOT = {
             "pctOfSpenders": 1.7
           },
           "osagoSlider": {
-            "partners": 789,
-            "pctOfAccrualBase": 44.6,
-            "pctOfSpenders": 79.4
+            "partners": 788,
+            "pctOfAccrualBase": 44.5,
+            "pctOfSpenders": 79.3
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1508,9 +1507,9 @@ export const STATUSES_SNAPSHOT = {
             "pctOfSpenders": 1.1
           },
           "osagoSlider": {
-            "partners": 314,
-            "pctOfAccrualBase": 57.2,
-            "pctOfSpenders": 84.2
+            "partners": 315,
+            "pctOfAccrualBase": 57.4,
+            "pctOfSpenders": 84.5
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1594,9 +1593,9 @@ export const STATUSES_SNAPSHOT = {
             "pctOfSpenders": 1.7
           },
           "osagoSlider": {
-            "partners": 789,
-            "pctOfAccrualBase": 45.3,
-            "pctOfSpenders": 79.6
+            "partners": 788,
+            "pctOfAccrualBase": 45.2,
+            "pctOfSpenders": 79.5
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1622,9 +1621,9 @@ export const STATUSES_SNAPSHOT = {
             "pctOfSpenders": 1.1
           },
           "osagoSlider": {
-            "partners": 314,
-            "pctOfAccrualBase": 57.8,
-            "pctOfSpenders": 84.2
+            "partners": 315,
+            "pctOfAccrualBase": 58.0,
+            "pctOfSpenders": 84.5
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1665,25 +1664,24 @@ export const STATUSES_SNAPSHOT = {
         "accrualPartners": 2618,
         "issuedPartners": 3343,
         "accrualSharePct": 78.3,
-        "spendPartners": 1880,
+        "spendPartners": 1834,
         "accrualBaseForSpend": 2618,
-        "spendSharePct": 71.8,
+        "spendSharePct": 70.1,
         "spendByMechanic": {
           "cross": {
             "partners": 998,
             "pctOfAccrualBase": 38.1,
-            "pctOfSpenders": 53.1
+            "pctOfSpenders": 54.4
           },
           "kasko": {
             "partners": 72,
             "pctOfAccrualBase": 2.8,
-            "pctOfSpenders": 3.8
+            "pctOfSpenders": 3.9
           },
           "osagoSlider": {
-            "partners": 0,
-            "pctOfAccrualBase": null,
-            "pctOfSpenders": null,
-            "unavailable": true
+            "partners": 1530,
+            "pctOfAccrualBase": 58.4,
+            "pctOfSpenders": 83.4
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1694,25 +1692,24 @@ export const STATUSES_SNAPSHOT = {
         "accrualPartners": 1297,
         "issuedPartners": 1650,
         "accrualSharePct": 78.6,
-        "spendPartners": 893,
+        "spendPartners": 865,
         "accrualBaseForSpend": 1297,
-        "spendSharePct": 68.9,
+        "spendSharePct": 66.7,
         "spendByMechanic": {
           "cross": {
             "partners": 430,
             "pctOfAccrualBase": 33.2,
-            "pctOfSpenders": 48.2
+            "pctOfSpenders": 49.7
           },
           "kasko": {
             "partners": 17,
             "pctOfAccrualBase": 1.3,
-            "pctOfSpenders": 1.9
+            "pctOfSpenders": 2.0
           },
           "osagoSlider": {
-            "partners": 0,
-            "pctOfAccrualBase": null,
-            "pctOfSpenders": null,
-            "unavailable": true
+            "partners": 749,
+            "pctOfAccrualBase": 57.7,
+            "pctOfSpenders": 86.6
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1723,14 +1720,14 @@ export const STATUSES_SNAPSHOT = {
         "accrualPartners": 416,
         "issuedPartners": 543,
         "accrualSharePct": 76.6,
-        "spendPartners": 343,
+        "spendPartners": 333,
         "accrualBaseForSpend": 416,
-        "spendSharePct": 82.5,
+        "spendSharePct": 80.0,
         "spendByMechanic": {
           "cross": {
             "partners": 133,
             "pctOfAccrualBase": 32.0,
-            "pctOfSpenders": 38.8
+            "pctOfSpenders": 39.9
           },
           "kasko": {
             "partners": 4,
@@ -1738,10 +1735,9 @@ export const STATUSES_SNAPSHOT = {
             "pctOfSpenders": 1.2
           },
           "osagoSlider": {
-            "partners": 0,
-            "pctOfAccrualBase": null,
-            "pctOfSpenders": null,
-            "unavailable": true
+            "partners": 304,
+            "pctOfAccrualBase": 73.1,
+            "pctOfSpenders": 91.3
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1752,25 +1748,24 @@ export const STATUSES_SNAPSHOT = {
         "accrualPartners": 905,
         "issuedPartners": 1150,
         "accrualSharePct": 78.7,
-        "spendPartners": 644,
+        "spendPartners": 636,
         "accrualBaseForSpend": 905,
-        "spendSharePct": 71.2,
+        "spendSharePct": 70.3,
         "spendByMechanic": {
           "cross": {
             "partners": 435,
             "pctOfAccrualBase": 48.1,
-            "pctOfSpenders": 67.5
+            "pctOfSpenders": 68.4
           },
           "kasko": {
             "partners": 51,
             "pctOfAccrualBase": 5.6,
-            "pctOfSpenders": 7.9
+            "pctOfSpenders": 8.0
           },
           "osagoSlider": {
-            "partners": 0,
-            "pctOfAccrualBase": null,
-            "pctOfSpenders": null,
-            "unavailable": true
+            "partners": 477,
+            "pctOfAccrualBase": 52.7,
+            "pctOfSpenders": 75.0
           },
           "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк."
         },
@@ -1784,9 +1779,9 @@ export const STATUSES_SNAPSHOT = {
         "withAccrual": 1646,
         "issuedPartners": 2219,
         "accrualSharePct": 74.2,
-        "withSpend": 531,
+        "withSpend": 1007,
         "withAccrualEver": 3092,
-        "spendShareOfAccrualsPct": 17.2
+        "spendShareOfAccrualsPct": 32.6
       },
       {
         "ym": "2026-09",
@@ -1794,9 +1789,9 @@ export const STATUSES_SNAPSHOT = {
         "withAccrual": 1659,
         "issuedPartners": 2292,
         "accrualSharePct": 72.4,
-        "withSpend": 553,
+        "withSpend": 1138,
         "withAccrualEver": 3212,
-        "spendShareOfAccrualsPct": 17.2
+        "spendShareOfAccrualsPct": 35.4
       },
       {
         "ym": "2026-10",
@@ -1804,9 +1799,9 @@ export const STATUSES_SNAPSHOT = {
         "withAccrual": 1719,
         "issuedPartners": 2384,
         "accrualSharePct": 72.1,
-        "withSpend": 549,
+        "withSpend": 1198,
         "withAccrualEver": 3373,
-        "spendShareOfAccrualsPct": 16.3
+        "spendShareOfAccrualsPct": 35.5
       }
     ]
   },
@@ -1829,14 +1824,14 @@ export const STATUSES_SNAPSHOT = {
       {
         "id": "mid",
         "label": "3–9 раз списали",
-        "partnerCount": 542,
-        "everyNthClient": 13
+        "partnerCount": 590,
+        "everyNthClient": 12
       },
       {
         "id": "high",
         "label": ">10 раз списали",
-        "partnerCount": 324,
-        "everyNthClient": 7
+        "partnerCount": 629,
+        "everyNthClient": 9
       }
     ]
   },
@@ -1861,14 +1856,14 @@ export const STATUSES_SNAPSHOT = {
         {
           "id": "mid",
           "label": "3–9 раз списали",
-          "partnerCount": 220,
+          "partnerCount": 253,
           "everyNthClient": 13
         },
         {
           "id": "high",
           "label": ">10 раз списали",
-          "partnerCount": 141,
-          "everyNthClient": 7
+          "partnerCount": 298,
+          "everyNthClient": 9
         }
       ]
     },
@@ -1892,14 +1887,14 @@ export const STATUSES_SNAPSHOT = {
         {
           "id": "mid",
           "label": "3–9 раз списали",
-          "partnerCount": 81,
-          "everyNthClient": 15
+          "partnerCount": 115,
+          "everyNthClient": 18
         },
         {
           "id": "high",
           "label": ">10 раз списали",
-          "partnerCount": 45,
-          "everyNthClient": 10
+          "partnerCount": 102,
+          "everyNthClient": 12
         }
       ]
     },
@@ -1923,14 +1918,14 @@ export const STATUSES_SNAPSHOT = {
         {
           "id": "mid",
           "label": "3–9 раз списали",
-          "partnerCount": 241,
-          "everyNthClient": 13
+          "partnerCount": 222,
+          "everyNthClient": 10
         },
         {
           "id": "high",
           "label": ">10 раз списали",
-          "partnerCount": 138,
-          "everyNthClient": 7
+          "partnerCount": 229,
+          "everyNthClient": 8
         }
       ]
     }
@@ -1987,13 +1982,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 4102240,
       "spendCrossKv": 4318530,
       "spendKasko": 342011,
-      "spendOsagoSlider": 11138415,
-      "spendTotal": 19901196,
-      "utilPct": 52.22,
+      "spendOsagoSlider": 11055186,
+      "spendTotal": 19817967,
+      "utilPct": 52.0,
       "crossDiscountCnt": 2906,
       "crossKvCnt": 3077,
       "kaskoSpendCnt": 48,
-      "osagoSliderCnt": 10676
+      "osagoSliderCnt": 10610
     },
     {
       "region": "Санкт-Петербург",
@@ -2003,13 +1998,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 641350,
       "spendCrossKv": 1572780,
       "spendKasko": 141232,
-      "spendOsagoSlider": 4751117,
-      "spendTotal": 7106479,
-      "utilPct": 54.71,
+      "spendOsagoSlider": 4796972,
+      "spendTotal": 7152334,
+      "utilPct": 55.07,
       "crossDiscountCnt": 485,
       "crossKvCnt": 1122,
       "kaskoSpendCnt": 17,
-      "osagoSliderCnt": 4588
+      "osagoSliderCnt": 4618
     },
     {
       "region": "Казань",
@@ -2019,13 +2014,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 444870,
       "spendCrossKv": 1269460,
       "spendKasko": 50199,
-      "spendOsagoSlider": 1687417,
-      "spendTotal": 3451946,
-      "utilPct": 41.14,
+      "spendOsagoSlider": 1683463,
+      "spendTotal": 3447992,
+      "utilPct": 41.1,
       "crossDiscountCnt": 313,
       "crossKvCnt": 864,
       "kaskoSpendCnt": 7,
-      "osagoSliderCnt": 1286
+      "osagoSliderCnt": 1280
     },
     {
       "region": "Екатеринбург",
@@ -2035,13 +2030,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 248320,
       "spendCrossKv": 1196680,
       "spendKasko": 152269,
-      "spendOsagoSlider": 1014305,
-      "spendTotal": 2611574,
-      "utilPct": 52.14,
+      "spendOsagoSlider": 1005578,
+      "spendTotal": 2602847,
+      "utilPct": 51.97,
       "crossDiscountCnt": 178,
       "crossKvCnt": 842,
       "kaskoSpendCnt": 21,
-      "osagoSliderCnt": 915
+      "osagoSliderCnt": 908
     },
     {
       "region": "Нижний Новгород",
@@ -2051,13 +2046,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 192230,
       "spendCrossKv": 525640,
       "spendKasko": 32449,
-      "spendOsagoSlider": 849908,
-      "spendTotal": 1600227,
-      "utilPct": 41.25,
+      "spendOsagoSlider": 845015,
+      "spendTotal": 1595334,
+      "utilPct": 41.12,
       "crossDiscountCnt": 147,
       "crossKvCnt": 366,
       "kaskoSpendCnt": 5,
-      "osagoSliderCnt": 845
+      "osagoSliderCnt": 842
     },
     {
       "region": "Челябинск",
@@ -2067,13 +2062,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 287750,
       "spendCrossKv": 665000,
       "spendKasko": 70444,
-      "spendOsagoSlider": 295169,
-      "spendTotal": 1318363,
-      "utilPct": 48.86,
+      "spendOsagoSlider": 293757,
+      "spendTotal": 1316951,
+      "utilPct": 48.81,
       "crossDiscountCnt": 205,
       "crossKvCnt": 460,
       "kaskoSpendCnt": 11,
-      "osagoSliderCnt": 228
+      "osagoSliderCnt": 227
     },
     {
       "region": "Самара",
@@ -2099,13 +2094,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 123040,
       "spendCrossKv": 252840,
       "spendKasko": 19894,
-      "spendOsagoSlider": 391649,
-      "spendTotal": 787423,
-      "utilPct": 48.61,
+      "spendOsagoSlider": 388376,
+      "spendTotal": 784150,
+      "utilPct": 48.4,
       "crossDiscountCnt": 86,
       "crossKvCnt": 176,
       "kaskoSpendCnt": 2,
-      "osagoSliderCnt": 309
+      "osagoSliderCnt": 307
     },
     {
       "region": "Омск",
@@ -2115,13 +2110,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 97330,
       "spendCrossKv": 243110,
       "spendKasko": 0,
-      "spendOsagoSlider": 326700,
-      "spendTotal": 667140,
-      "utilPct": 71.16,
+      "spendOsagoSlider": 325918,
+      "spendTotal": 666358,
+      "utilPct": 71.08,
       "crossDiscountCnt": 67,
       "crossKvCnt": 169,
       "kaskoSpendCnt": 0,
-      "osagoSliderCnt": 290
+      "osagoSliderCnt": 289
     },
     {
       "region": "Калининград",
@@ -2131,13 +2126,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 53340,
       "spendCrossKv": 88190,
       "spendKasko": 0,
-      "spendOsagoSlider": 455405,
-      "spendTotal": 596935,
-      "utilPct": 55.36,
+      "spendOsagoSlider": 452298,
+      "spendTotal": 593828,
+      "utilPct": 55.07,
       "crossDiscountCnt": 36,
       "crossKvCnt": 61,
       "kaskoSpendCnt": 0,
-      "osagoSliderCnt": 636
+      "osagoSliderCnt": 631
     },
     {
       "region": "Тольятти",
@@ -2147,13 +2142,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 102510,
       "spendCrossKv": 101710,
       "spendKasko": 16069,
-      "spendOsagoSlider": 353864,
-      "spendTotal": 574153,
-      "utilPct": 57.56,
+      "spendOsagoSlider": 352217,
+      "spendTotal": 572506,
+      "utilPct": 57.4,
       "crossDiscountCnt": 69,
       "crossKvCnt": 69,
       "kaskoSpendCnt": 3,
-      "osagoSliderCnt": 322
+      "osagoSliderCnt": 321
     },
     {
       "region": "Новосибирск",
@@ -2195,13 +2190,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 58960,
       "spendCrossKv": 56320,
       "spendKasko": 0,
-      "spendOsagoSlider": 215645,
-      "spendTotal": 330925,
-      "utilPct": 35.28,
+      "spendOsagoSlider": 215321,
+      "spendTotal": 330601,
+      "utilPct": 35.25,
       "crossDiscountCnt": 44,
       "crossKvCnt": 48,
       "kaskoSpendCnt": 0,
-      "osagoSliderCnt": 189
+      "osagoSliderCnt": 188
     },
     {
       "region": "Красноярск",
@@ -2259,13 +2254,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 23840,
       "spendCrossKv": 43000,
       "spendKasko": 0,
-      "spendOsagoSlider": 157579,
-      "spendTotal": 224419,
-      "utilPct": 29.42,
+      "spendOsagoSlider": 156542,
+      "spendTotal": 223382,
+      "utilPct": 29.28,
       "crossDiscountCnt": 16,
       "crossKvCnt": 30,
       "kaskoSpendCnt": 0,
-      "osagoSliderCnt": 136
+      "osagoSliderCnt": 135
     },
     {
       "region": "Волгоград",
@@ -2406,13 +2401,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 4102240,
       "spendCrossKv": 4318530,
       "spendKasko": 342011,
-      "spendOsagoSlider": 11138415,
-      "spendTotal": 19901196,
-      "utilPct": 52.22,
+      "spendOsagoSlider": 11055186,
+      "spendTotal": 19817967,
+      "utilPct": 52.0,
       "crossDiscountCnt": 2906,
       "crossKvCnt": 3077,
       "kaskoSpendCnt": 48,
-      "osagoSliderCnt": 10676
+      "osagoSliderCnt": 10610
     },
     {
       "region": "Санкт-Петербург",
@@ -2423,13 +2418,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 641350,
       "spendCrossKv": 1572780,
       "spendKasko": 141232,
-      "spendOsagoSlider": 4751117,
-      "spendTotal": 7106479,
-      "utilPct": 54.71,
+      "spendOsagoSlider": 4796972,
+      "spendTotal": 7152334,
+      "utilPct": 55.07,
       "crossDiscountCnt": 485,
       "crossKvCnt": 1122,
       "kaskoSpendCnt": 17,
-      "osagoSliderCnt": 4588
+      "osagoSliderCnt": 4618
     },
     {
       "region": "Регионы",
@@ -2443,13 +2438,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 444870,
           "spendCrossKv": 1269460,
           "spendKasko": 50199,
-          "spendOsagoSlider": 1687417,
-          "spendTotal": 3451946,
-          "utilPct": 41.14,
+          "spendOsagoSlider": 1683463,
+          "spendTotal": 3447992,
+          "utilPct": 41.1,
           "crossDiscountCnt": 313,
           "crossKvCnt": 864,
           "kaskoSpendCnt": 7,
-          "osagoSliderCnt": 1286
+          "osagoSliderCnt": 1280
         },
         {
           "region": "Екатеринбург",
@@ -2459,13 +2454,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 248320,
           "spendCrossKv": 1196680,
           "spendKasko": 152269,
-          "spendOsagoSlider": 1014305,
-          "spendTotal": 2611574,
-          "utilPct": 52.14,
+          "spendOsagoSlider": 1005578,
+          "spendTotal": 2602847,
+          "utilPct": 51.97,
           "crossDiscountCnt": 178,
           "crossKvCnt": 842,
           "kaskoSpendCnt": 21,
-          "osagoSliderCnt": 915
+          "osagoSliderCnt": 908
         },
         {
           "region": "Нижний Новгород",
@@ -2475,13 +2470,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 192230,
           "spendCrossKv": 525640,
           "spendKasko": 32449,
-          "spendOsagoSlider": 849908,
-          "spendTotal": 1600227,
-          "utilPct": 41.25,
+          "spendOsagoSlider": 845015,
+          "spendTotal": 1595334,
+          "utilPct": 41.12,
           "crossDiscountCnt": 147,
           "crossKvCnt": 366,
           "kaskoSpendCnt": 5,
-          "osagoSliderCnt": 845
+          "osagoSliderCnt": 842
         },
         {
           "region": "Челябинск",
@@ -2491,13 +2486,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 287750,
           "spendCrossKv": 665000,
           "spendKasko": 70444,
-          "spendOsagoSlider": 295169,
-          "spendTotal": 1318363,
-          "utilPct": 48.86,
+          "spendOsagoSlider": 293757,
+          "spendTotal": 1316951,
+          "utilPct": 48.81,
           "crossDiscountCnt": 205,
           "crossKvCnt": 460,
           "kaskoSpendCnt": 11,
-          "osagoSliderCnt": 228
+          "osagoSliderCnt": 227
         },
         {
           "region": "Самара",
@@ -2523,13 +2518,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 123040,
           "spendCrossKv": 252840,
           "spendKasko": 19894,
-          "spendOsagoSlider": 391649,
-          "spendTotal": 787423,
-          "utilPct": 48.61,
+          "spendOsagoSlider": 388376,
+          "spendTotal": 784150,
+          "utilPct": 48.4,
           "crossDiscountCnt": 86,
           "crossKvCnt": 176,
           "kaskoSpendCnt": 2,
-          "osagoSliderCnt": 309
+          "osagoSliderCnt": 307
         },
         {
           "region": "Омск",
@@ -2539,13 +2534,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 97330,
           "spendCrossKv": 243110,
           "spendKasko": 0,
-          "spendOsagoSlider": 326700,
-          "spendTotal": 667140,
-          "utilPct": 71.16,
+          "spendOsagoSlider": 325918,
+          "spendTotal": 666358,
+          "utilPct": 71.08,
           "crossDiscountCnt": 67,
           "crossKvCnt": 169,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 290
+          "osagoSliderCnt": 289
         },
         {
           "region": "Калининград",
@@ -2555,13 +2550,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 53340,
           "spendCrossKv": 88190,
           "spendKasko": 0,
-          "spendOsagoSlider": 455405,
-          "spendTotal": 596935,
-          "utilPct": 55.36,
+          "spendOsagoSlider": 452298,
+          "spendTotal": 593828,
+          "utilPct": 55.07,
           "crossDiscountCnt": 36,
           "crossKvCnt": 61,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 636
+          "osagoSliderCnt": 631
         },
         {
           "region": "Тольятти",
@@ -2571,13 +2566,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 102510,
           "spendCrossKv": 101710,
           "spendKasko": 16069,
-          "spendOsagoSlider": 353864,
-          "spendTotal": 574153,
-          "utilPct": 57.56,
+          "spendOsagoSlider": 352217,
+          "spendTotal": 572506,
+          "utilPct": 57.4,
           "crossDiscountCnt": 69,
           "crossKvCnt": 69,
           "kaskoSpendCnt": 3,
-          "osagoSliderCnt": 322
+          "osagoSliderCnt": 321
         },
         {
           "region": "Новосибирск",
@@ -2619,13 +2614,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 58960,
           "spendCrossKv": 56320,
           "spendKasko": 0,
-          "spendOsagoSlider": 215645,
-          "spendTotal": 330925,
-          "utilPct": 35.28,
+          "spendOsagoSlider": 215321,
+          "spendTotal": 330601,
+          "utilPct": 35.25,
           "crossDiscountCnt": 44,
           "crossKvCnt": 48,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 189
+          "osagoSliderCnt": 188
         },
         {
           "region": "Красноярск",
@@ -2683,13 +2678,13 @@ export const STATUSES_SNAPSHOT = {
           "spendCrossDiscount": 23840,
           "spendCrossKv": 43000,
           "spendKasko": 0,
-          "spendOsagoSlider": 157579,
-          "spendTotal": 224419,
-          "utilPct": 29.42,
+          "spendOsagoSlider": 156542,
+          "spendTotal": 223382,
+          "utilPct": 29.28,
           "crossDiscountCnt": 16,
           "crossKvCnt": 30,
           "kaskoSpendCnt": 0,
-          "osagoSliderCnt": 136
+          "osagoSliderCnt": 135
         },
         {
           "region": "Волгоград",
@@ -2826,13 +2821,13 @@ export const STATUSES_SNAPSHOT = {
       "spendCrossDiscount": 2393240,
       "spendCrossKv": 5769290,
       "spendKasko": 424451,
-      "spendOsagoSlider": 6976740,
-      "spendTotal": 15563721,
-      "utilPct": 44.41,
+      "spendOsagoSlider": 6947584,
+      "spendTotal": 15534565,
+      "utilPct": 44.32,
       "crossDiscountCnt": 1696,
       "crossKvCnt": 4011,
       "kaskoSpendCnt": 68,
-      "osagoSliderCnt": 6304
+      "osagoSliderCnt": 6276
     }
   ]
 } as const
