@@ -60,6 +60,7 @@ type MechanicSpendRow = {
   partners: number
   pctOfAccrualBase: number | null
   pctOfSpenders: number | null
+  unavailable?: boolean
 }
 
 type PartnerPeriodSlice = {
@@ -209,6 +210,18 @@ function PartnerWindowRegionTable({
                     </td>
                   )
                 }
+                if (key === 'osagoSlider' && row.unavailable) {
+                  return (
+                    <td
+                      key={String(s.region)}
+                      className={`text-right text-[10px] ren-text-secondary leading-snug${
+                        isNetworkSlice(s.region) ? ' statuses-table__col-network' : ''
+                      }`}
+                    >
+                      нет возможности узнать долю
+                    </td>
+                  )
+                }
                 return (
                   <PartnerSliceMetricCell
                     key={String(s.region)}
@@ -316,6 +329,44 @@ function isNetworkSlice(region: unknown): boolean {
   return String(region) === 'Вся сеть'
 }
 
+function PeriodMetricsTable({ slices }: { slices: RowTotals[] }) {
+  return (
+    <table className="statuses-table statuses-table--slice w-full">
+      <thead>
+        <tr>
+          <th className="text-left">Показатель</th>
+          {slices.map(s => {
+            const net = isNetworkSlice(s.region)
+            return (
+              <th
+                key={String(s.region)}
+                className={`text-right text-[11px]${net ? ' statuses-table__col-network' : ''}`}
+              >
+                {String(s.region)}
+              </th>
+            )
+          })}
+        </tr>
+      </thead>
+      <tbody>
+        {METRIC_ROWS.map(m => (
+          <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
+            <td className="text-left">{m.label}</td>
+            {slices.map(s => (
+              <PeriodMetricCell
+                key={String(s.region)}
+                row={s}
+                m={m}
+                networkColumn={isNetworkSlice(s.region)}
+              />
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 function PeriodMetricCell({
   row,
   m,
@@ -393,6 +444,16 @@ export default function StatusesTab() {
     }
   ).spendNthByMechanic
 
+  const cumulativeMonths = useMemo(
+    () =>
+      (
+        snap as unknown as {
+          cumulativeMonthlyTop3?: { ym: string; label: string; throughLabel: string; slices: RowTotals[] }[]
+        }
+      ).cumulativeMonthlyTop3 ?? [],
+    [snap],
+  )
+
   return (
     <div className="space-y-5 max-w-full">
       <p className="text-sm ren-text-secondary">
@@ -405,45 +466,36 @@ export default function StatusesTab() {
           <h3 className="ren-card__title text-sm">За всё время ({snap.periodLabel})</h3>
         </div>
         <div className="ren-card__body p-0">
-          <table className="statuses-table statuses-table--slice w-full">
-            <thead>
-              <tr>
-                <th className="text-left">Показатель</th>
-                {periodSlices.map(s => {
-                  const net = isNetworkSlice(s.region)
-                  return (
-                    <th
-                      key={String(s.region)}
-                      className={`text-right text-[11px]${net ? ' statuses-table__col-network' : ''}`}
-                    >
-                      {String(s.region)}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {METRIC_ROWS.map(m => (
-                <tr key={m.id} className={m.emphasis ? 'statuses-table__row--emphasis' : ''}>
-                  <td className="text-left">{m.label}</td>
-                  {periodSlices.map(s => (
-                    <PeriodMetricCell
-                      key={String(s.region)}
-                      row={s}
-                      m={m}
-                      networkColumn={isNetworkSlice(s.region)}
-                    />
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <PeriodMetricsTable slices={periodSlices} />
           <p className="text-[11px] ren-text-secondary px-3 py-2 border-t border-[var(--stroke-divider)]">
             Строки в выгрузке: ОСАГО {fmtN(snap.meta.rowsOsagoAllStatuses)}, КАСКО {fmtN(snap.meta.rowsKaskoAllStatuses)}.
             Ползунок: {snap.meta.sliderDataRange}. {snap.meta.osago2025Note}
           </p>
         </div>
       </div>
+
+      {cumulativeMonths.length > 0 ? (
+        <div className="ren-card">
+          <div className="ren-card__header border-b border-[var(--stroke-divider)] py-2">
+            <h3 className="ren-card__title text-sm">Нарастающий итог по месяцам</h3>
+            <p className="text-[11px] ren-text-secondary font-normal mt-1">
+              Суммы с {snap.periodLabel.split('–')[0]?.trim()} по конец каждого месяца (ОСАГО, Каско, кросс, ползунок по
+              датам котировок).
+            </p>
+          </div>
+          <div className="ren-card__body p-0 divide-y divide-[var(--stroke-divider)]">
+            {cumulativeMonths.map((m, i) => (
+              <details key={m.ym} className="group" open={i === cumulativeMonths.length - 1}>
+                <summary className="px-3 py-2.5 cursor-pointer list-none text-xs font-semibold ren-text-brand hover:bg-[var(--bg-subtle)]">
+                  {m.label}{' '}
+                  <span className="font-normal ren-text-secondary">· нарастающий итог по {m.throughLabel}</span>
+                </summary>
+                <PeriodMetricsTable slices={m.slices} />
+              </details>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {/* Спискание по продуктам (₽) */}
       <div className="ren-card">

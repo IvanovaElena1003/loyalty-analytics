@@ -9,6 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import median
+from typing import Callable
 
 import openpyxl
 import pandas as pd
@@ -506,6 +507,61 @@ def spend_mechanic_breakdown_sets(
         "osagoSlider": row(slider),
         "noteMutual": "Механики не взаимоисключающие: один партнёр может попасть в несколько строк.",
     }
+
+
+def slider_spend_partners_by_region(fmap: dict[str, str]) -> dict[str, set[str]]:
+    """Партнёры со списанием ползунка — агрегат «Агенты» без дат (доля только за всё время / в объёме года)."""
+    out: dict[str, set[str]] = {label: set() for label in REGION_SLICES}
+    if not PATH_SLIDER.exists():
+        return out
+    try:
+        ag = pd.read_excel(PATH_SLIDER, sheet_name="Агенты", header=0)
+    except Exception:
+        return out
+    for _, r in ag.iterrows():
+        cb_raw = r.get("Кэшбук")
+        if pd.isna(cb_raw):
+            continue
+        cb = str(int(cb_raw)) if isinstance(cb_raw, float) and cb_raw == int(cb_raw) else str(cb_raw).strip()
+        if not cb or to_num(r.get("Списано ренбонусов")) <= 0:
+            continue
+        top3 = wallet_top3_region(cb, fmap)
+        out["Вся сеть"].add(cb)
+        out[top3].add(cb)
+    return out
+
+
+def osago_slider_mechanic_row(partners_n: int, accrual_n: int, spend_n: int, unavailable: bool = False) -> dict:
+    if unavailable:
+        return {
+            "partners": 0,
+            "pctOfAccrualBase": None,
+            "pctOfSpenders": None,
+            "unavailable": True,
+        }
+    return {
+        "partners": partners_n,
+        "pctOfAccrualBase": round(partners_n / accrual_n * 100, 1) if accrual_n else None,
+        "pctOfSpenders": round(partners_n / spend_n * 100, 1) if spend_n else None,
+    }
+
+
+def patch_osago_slider_on_slices(slices: list[dict], slider_pt: dict[str, set[str]], unavailable: bool = False) -> None:
+    for sl in slices:
+        reg = str(sl.get("region") or "Вся сеть")
+        n = 0 if unavailable else len(slider_pt.get(reg, set()))
+        mech = sl.get("spendByMechanic") or {}
+        mech["osagoSlider"] = osago_slider_mechanic_row(
+            n,
+            int(sl.get("accrualBaseForSpend") or 0),
+            int(sl.get("spendPartners") or 0),
+            unavailable=unavailable,
+        )
+        sl["spendByMechanic"] = mech
+
+
+def patch_osago_slider_on_slice(sl: dict, slider_pt: dict[str, set[str]], unavailable: bool = False) -> None:
+    patch_osago_slider_on_slices([sl], slider_pt, unavailable=unavailable)
 
 
 def spend_mechanic_breakdown(
@@ -1137,6 +1193,84 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
 
     balance_stats = balance_stats_from_wallets(wallets)
 
+    slider_pt = slider_spend_partners_by_region(fmap)
+    full_top3 = partner_metrics_by_top3(
+        fmap,
+        month_issued,
+        month_accrual,
+        month_spend,
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        START,
+        END,
+        full_period_label,
+    )
+    r12_top3 = partner_metrics_by_top3(
+        fmap,
+        month_issued,
+        month_accrual,
+        month_spend,
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        r12_start,
+        END,
+        fmt_period_label(r12_start, END),
+    )
+    r3_top3 = partner_metrics_by_top3(
+        fmap,
+        month_issued,
+        month_accrual,
+        month_spend,
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        r3_start,
+        END,
+        fmt_period_label(r3_start, END),
+    )
+    patch_osago_slider_on_slices(full_top3, slider_pt, unavailable=False)
+    patch_osago_slider_on_slices(r12_top3, slider_pt, unavailable=False)
+    patch_osago_slider_on_slices(r3_top3, slider_pt, unavailable=True)
+
+    full_period = partner_slice_with_mechanics(
+        issued_period,
+        accrual_period,
+        spend_period,
+        full_period_label,
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        START,
+        END,
+    )
+    rolling_12 = partner_slice_with_mechanics(
+        issued_r12,
+        accrual_r12,
+        spend_r12,
+        fmt_period_label(r12_start, END),
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        r12_start,
+        END,
+    )
+    rolling_3 = partner_slice_with_mechanics(
+        issued_r3,
+        accrual_r3,
+        spend_r3,
+        fmt_period_label(r3_start, END),
+        month_spend_cross,
+        month_spend_kasko,
+        month_spend_slider,
+        r3_start,
+        END,
+    )
+    patch_osago_slider_on_slice(full_period, slider_pt, unavailable=False)
+    patch_osago_slider_on_slice(rolling_12, slider_pt, unavailable=False)
+    patch_osago_slider_on_slice(rolling_3, slider_pt, unavailable=True)
+
     return {
         "partnerBalanceMonthCount": len(months_observed),
         "partnerBalanceStats": balance_stats,
@@ -1154,75 +1288,12 @@ def scan_osago_partner_and_cross(paths: list[Path], fmap: dict[str, str]) -> dic
         "partnerMetrics": {
             "periodLabel": full_period_label,
             "method": "Начисление: ≥1 РБ по ОСАГО и/или Каско ФЛ / оформили ОСАГО и/или Каско. Списание: ≥1 по любой механике / с накоплением.",
-            "fullPeriod": partner_slice_with_mechanics(
-                issued_period,
-                accrual_period,
-                spend_period,
-                full_period_label,
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                START,
-                END,
-            ),
-            "rolling12Months": partner_slice_with_mechanics(
-                issued_r12,
-                accrual_r12,
-                spend_r12,
-                fmt_period_label(r12_start, END),
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                r12_start,
-                END,
-            ),
-            "rolling3Months": partner_slice_with_mechanics(
-                issued_r3,
-                accrual_r3,
-                spend_r3,
-                fmt_period_label(r3_start, END),
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                r3_start,
-                END,
-            ),
-            "fullPeriodByTop3": partner_metrics_by_top3(
-                fmap,
-                month_issued,
-                month_accrual,
-                month_spend,
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                START,
-                END,
-                full_period_label,
-            ),
-            "rolling12MonthsByTop3": partner_metrics_by_top3(
-                fmap,
-                month_issued,
-                month_accrual,
-                month_spend,
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                r12_start,
-                END,
-                fmt_period_label(r12_start, END),
-            ),
-            "rolling3MonthsByTop3": partner_metrics_by_top3(
-                fmap,
-                month_issued,
-                month_accrual,
-                month_spend,
-                month_spend_cross,
-                month_spend_kasko,
-                month_spend_slider,
-                r3_start,
-                END,
-                fmt_period_label(r3_start, END),
-            ),
+            "fullPeriod": full_period,
+            "rolling12Months": rolling_12,
+            "rolling3Months": rolling_3,
+            "fullPeriodByTop3": full_top3,
+            "rolling12MonthsByTop3": r12_top3,
+            "rolling3MonthsByTop3": r3_top3,
             "last3Months": month_rows,
         },
         "partnerEngagement": engagement,
@@ -1283,6 +1354,159 @@ def balance_stats_from_wallets(wallets: dict[str, WalletAgg]) -> dict[str, int |
         "allPartnersCount": n_all,
         "positiveBalanceCount": len(positive),
     }
+
+
+def _bump_monthly(
+    buckets: dict[str, dict[str, Totals]],
+    ym: str,
+    cb: str,
+    fmap: dict[str, str],
+    mutate: Callable[[Totals], None],
+) -> None:
+    if ym not in buckets:
+        buckets[ym] = {label: Totals() for label in REGION_SLICES}
+    for reg in regions_for_wallet(cb, fmap):
+        mutate(buckets[ym][reg])
+
+
+def scan_monthly_deltas_top3(osago_paths: list[Path], fmap: dict[str, str]) -> dict[str, dict[str, Totals]]:
+    buckets: dict[str, dict[str, Totals]] = {}
+    for path in osago_paths:
+        if not path.exists():
+            continue
+        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        for sheet_name in wb.sheetnames:
+            sh = wb[sheet_name]
+            it = sh.iter_rows(values_only=True)
+            try:
+                header = next(it)
+            except StopIteration:
+                continue
+            idx = header_map(header)
+            for row in it:
+                if not row:
+                    continue
+                if str(cell(row, idx, "Role") or "").strip() in SELLER_ROLES:
+                    continue
+                state = str(cell(row, idx, "State") or "")
+                if state in EXCLUDED or state != ISSUED:
+                    continue
+                dt = parse_dt(cell(row, idx, "CreateDate"))
+                if dt is None or not in_window(dt):
+                    continue
+                cb = wallet_key(row, idx) or ""
+                ym = ym_str(dt)
+
+                def mut_acc(t: Totals) -> None:
+                    lp = to_num(cell(row, idx, "LoyaltyPointsInLK"))
+                    if not is_null(cell(row, idx, "LoyaltyPointsInLK")) and lp > 0:
+                        t.acc_osago += lp
+
+                _bump_monthly(buckets, ym, cb, fmap, mut_acc)
+
+                if str(cell(row, idx, "CrossIsBought") or "").strip() != "Да":
+                    continue
+                pp_raw = cell(row, idx, "PolicyPrice")
+                pp = to_num(pp_raw) if not is_null(pp_raw) else BASE_PRICE
+                fp = to_num(cell(row, idx, "FinalPrice"))
+
+                def mut_cross(t: Totals) -> None:
+                    if not is_null(cell(row, idx, "FinalPrice")) and fp != pp:
+                        disc = pp - fp
+                        if disc > 0:
+                            t.spend_cross_discount += disc
+                            t.cross_discount_cnt += 1
+                    kv = to_num(cell(row, idx, "ChargedToIncreasedKV"))
+                    if not is_null(cell(row, idx, "ChargedToIncreasedKV")) and kv != 0:
+                        t.spend_cross_kv += abs(kv)
+                        t.cross_kv_cnt += 1
+
+                _bump_monthly(buckets, ym, cb, fmap, mut_cross)
+        wb.close()
+
+    if PATH_KASKO.exists():
+        wb = openpyxl.load_workbook(PATH_KASKO, read_only=True, data_only=True)
+        sh = wb[wb.sheetnames[0]]
+        it = sh.iter_rows(values_only=True)
+        header = next(it)
+        idx = header_map(header)
+        for row in it:
+            if not row:
+                continue
+            if str(cell(row, idx, "Role") or "").strip() in SELLER_ROLES:
+                continue
+            state = str(cell(row, idx, "State") or "")
+            if state in EXCLUDED or state != ISSUED:
+                continue
+            dt = parse_dt(cell(row, idx, "CreateDate"))
+            if dt is None or not in_window(dt):
+                continue
+            cb = wallet_key(row, idx) or ""
+            ym = ym_str(dt)
+
+            def mut_kasko(t: Totals) -> None:
+                lpo = to_num(cell(row, idx, "LoyaltyPointsOut"))
+                ov = to_num(cell(row, idx, "OriginalValue"))
+                if lpo > 0 and ov > 0:
+                    t.acc_kasko += ov * lpo
+                spend = to_num(cell(row, idx, "WalletBonuses")) + to_num(cell(row, idx, "ScoringBonuses"))
+                if spend > 0:
+                    t.spend_kasko += spend
+                    t.kasko_spend_cnt += 1
+
+            _bump_monthly(buckets, ym, cb, fmap, mut_kasko)
+        wb.close()
+
+    if PATH_SLIDER.exists():
+        try:
+            qt = pd.read_excel(PATH_SLIDER, sheet_name="Котировки", header=0)
+            qt["dt"] = pd.to_datetime(qt.get("Дата и время"), errors="coerce")
+            if qt["dt"].isna().all():
+                qt["dt"] = pd.to_datetime(qt.get("Дата оформления"), errors="coerce")
+            for _, r in qt.iterrows():
+                dt = r["dt"]
+                if pd.isna(dt):
+                    continue
+                dt_py = dt.to_pydatetime() if hasattr(dt, "to_pydatetime") else dt
+                if not in_window(dt_py):
+                    continue
+                spend = to_num(r.get("Списано ренбонусов"))
+                if spend <= 0:
+                    continue
+                ym = ym_str(dt_py)
+
+                def mut_slider(t: Totals) -> None:
+                    t.spend_osago_slider += spend
+                    t.osago_slider_cnt += 1
+
+                _bump_monthly(buckets, ym, "", fmap, mut_slider)
+        except Exception:
+            pass
+
+    return buckets
+
+
+def build_cumulative_monthly_top3(osago_paths: list[Path], fmap: dict[str, str]) -> list[dict]:
+    deltas = scan_monthly_deltas_top3(osago_paths, fmap)
+    if not deltas:
+        return []
+    month_labels = ["янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"]
+    running = {label: Totals() for label in REGION_SLICES}
+    out: list[dict] = []
+    for ym in sorted(deltas.keys()):
+        for label in REGION_SLICES:
+            merge_totals(running[label], deltas[ym][label])
+        y, mo = map(int, ym.split("-"))
+        _, month_end = month_range(ym)
+        out.append(
+            {
+                "ym": ym,
+                "label": f"{month_labels[mo - 1]} {y}",
+                "throughLabel": fmt_period_label(START, month_end),
+                "slices": [{"region": label, **running[label].to_dict()} for label in REGION_SLICES],
+            }
+        )
+    return out
 
 
 def build_avg_bonus(total: Totals, balance: dict[str, int | float], month_count: int) -> dict:
@@ -1352,12 +1576,15 @@ def main() -> None:
         "note": "Обучение в xlsx лояльности не выделено — 0 ₽.",
     }
 
+    cumulative_monthly = build_cumulative_monthly_top3([PATH_OSAGO_2025, PATH_OSAGO_2026], fmap)
+
     snapshot = {
         "generatedAt": datetime.now().strftime("%Y-%m-%d"),
         "periodLabel": "30.07.2025 – 18.11.2026",
         "agentFilialMapSize": len(fmap),
         "spendByProduct": spend_by_product,
         "avgBonus": avg_bonus,
+        "cumulativeMonthlyTop3": cumulative_monthly,
         **extra,
         "meta": {
             "rowsOsagoAllStatuses": osago_rows[0],
