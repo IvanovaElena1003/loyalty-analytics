@@ -62,24 +62,15 @@ const ROWS: RowDef[] = [
   { kind: 'sub', label: '% Базовый «Каско от бесполисных»', getCount: m => m.cross_base,     getPct: m => pct(m.cross_base,     m.cross_total), higherIsBetter: false },
   { kind: 'sub', label: '% Скидка (Рен-бонусы)',            getCount: m => m.cross_discount,  getPct: m => pct(m.cross_discount,  m.cross_total), hl: 'amber', higherIsBetter: true },
   { kind: 'sub', label: '% Повышенное КВ',                  getCount: m => m.cross_incr_kv,   getPct: m => pct(m.cross_incr_kv,   m.cross_total), hl: 'green', higherIsBetter: true },
-  { kind: 'sep', label: '' },
-
-  { kind: 'section', label: 'Рен-бонусы' },
-  { kind: 'data', label: 'Кол-во начислений (событий)',      getCount: m => m.accrual_count },
-  { kind: 'data', label: 'Всего начислено бонусов',          getBig: m => m.bonus_accrued },
-  { kind: 'data', label: 'Всего списано бонусов',            getBig: m => m.bonus_spent_total, getPct: m => pct(m.bonus_spent_total, m.bonus_accrued) },
-  { kind: 'sub',  label: '— в скидку Кросс-Каско',          getBig: m => m.bonus_spent_discount, getPct: m => pct(m.bonus_spent_discount, m.bonus_spent_total) },
-  { kind: 'sub',  label: '— в повышенное КВ Кросс-Каско',   getBig: m => m.bonus_spent_kv,       getPct: m => pct(m.bonus_spent_kv,       m.bonus_spent_total) },
 ]
 
 /** Верхняя воронка: до блока «Из чего состоит Кросс-Каско» */
 const ROWS_FUNNEL_MAIN = ROWS.slice(0, ROWS.findIndex(r => r.kind === 'section' && r.label === 'Из чего состоит Кросс-Каско'))
 
 const idxCrossComposition = ROWS.findIndex(r => r.kind === 'section' && r.label === 'Из чего состоит Кросс-Каско')
-const idxBonuses = ROWS.findIndex(r => r.kind === 'section' && r.label === 'Рен-бонусы')
 
 /** Состав кросса (таблица + график) */
-const ROWS_CROSS_COMPOSITION = ROWS.slice(idxCrossComposition, idxBonuses)
+const ROWS_CROSS_COMPOSITION = ROWS.slice(idxCrossComposition)
 
 /** Состав кросса по регионам (филиал): итого кроссов + доли */
 const ROWS_CROSS_BY_REGION: RowDef[] = [
@@ -95,9 +86,6 @@ const ROWS_CROSS_BY_REGION: RowDef[] = [
   { kind: 'sub', label: '% Скидка (Рен-бонусы)', getCount: m => m.cross_discount, getPct: m => pct(m.cross_discount, m.cross_total), hl: 'amber', higherIsBetter: true },
   { kind: 'sub', label: '% Повышенное КВ', getCount: m => m.cross_incr_kv, getPct: m => pct(m.cross_incr_kv, m.cross_total), hl: 'green', higherIsBetter: true },
 ]
-
-/** Рен-бонусы — отдельный блок ниже */
-const ROWS_BONUSES = ROWS.slice(idxBonuses)
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmtN = (v: number) => v.toLocaleString('ru-RU')
@@ -488,12 +476,6 @@ export default function FunnelTab({ result, agentRows, lockedCurator }: FunnelTa
       )}
     </div>
 
-    <div className="ren-card">
-      <div className="ren-card__header border-b border-[var(--stroke-divider)]">
-        <h3 className="ren-card__title text-sm">Рен-бонусы</h3>
-      </div>
-      {renderFunnelTable(ROWS_BONUSES)}
-    </div>
     </div>
   )
 }
